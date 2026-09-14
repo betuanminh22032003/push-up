@@ -67,6 +67,8 @@
   }
   #hudActions button:active { opacity: 0.6; }
   #hudCopied { font-size: 11px; color: #4ADE80; text-align: center; margin-top: 6px; min-height: 14px; }
+  #hudSys { font-size: 10px; color: #55555E; text-align: center; letter-spacing: 0.4px; }
+  #hudSys .warn { color: #FBBF24; }
 </style>
 </head>
 <body>
@@ -92,6 +94,7 @@
       <button id="hudCopy" type="button">Copy log</button>
     </div>
     <div id="hudCopied"></div>
+    <div id="hudSys"></div>
   </div>
 
 <script>
@@ -131,6 +134,8 @@ let landmarker = null;
 let timer = null;
 let stream = null;
 let paused = false;
+let wakeLock = null;
+let delegateUsed = null;
 let lastVideoTime = -1;
 let lastInferenceAt = 0;
 let consecutiveErrors = 0;
@@ -142,6 +147,63 @@ function send(payload) {
   } catch (e) {
     /* standalone browser */
   }
+}
+
+/**
+ * Hold the screen awake.
+ *
+ * Doing push-ups means not touching the phone, so the display sleeps on its
+ * usual ~30s timeout and takes the camera with it — the page looks like it
+ * "switched itself off" moments after the model finished loading. The app has
+ * expo-keep-awake for this; the page needs its own.
+ *
+ * The lock is released automatically whenever the page is hidden, so it has to
+ * be taken again every time we become visible, not just once at startup.
+ */
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => {
+      wakeLock = null;
+      updateSysLine();
+    });
+  } catch (e) {
+    wakeLock = null; // denied, or not allowed in this context
+  }
+  updateSysLine();
+}
+
+/**
+ * Coming back from a hidden state: the wake lock is gone, the video element is
+ * usually paused, and the interval may have been throttled to a standstill.
+ * Restore all three rather than leaving a frozen preview on screen.
+ */
+async function handleVisible() {
+  if (document.visibilityState !== 'visible') return;
+  acquireWakeLock();
+  try {
+    if (videoEl.srcObject && videoEl.paused) await videoEl.play();
+  } catch (e) {
+    /* autoplay policy — the track listener below reports a dead camera */
+  }
+  if (landmarker && analyzer && !timer) {
+    timer = setInterval(tick, FRAME_INTERVAL_MS);
+  }
+}
+
+/** Report a camera that has stopped for good, instead of showing black. */
+function watchStream(mediaStream) {
+  mediaStream.getVideoTracks().forEach((track) => {
+    track.addEventListener('ended', () => {
+      setStatus('The camera stopped. Tap here to restart.', true);
+      statusEl.onclick = () => {
+        statusEl.onclick = null;
+        location.reload();
+      };
+      send({ type: 'status', phase: 'error', message: 'camera track ended' });
+    });
+  });
 }
 
 function setStatus(text, isError) {
@@ -216,6 +278,24 @@ const hudTilt = document.getElementById('hudTilt');
 const hudFps = document.getElementById('hudFps');
 const hudBarFill = document.getElementById('hudBarFill');
 const hudCopied = document.getElementById('hudCopied');
+const hudSys = document.getElementById('hudSys');
+
+/**
+ * Surfaces the two things that silently kill a session: the screen sleeping,
+ * and which inference delegate actually loaded. Without this a phone that
+ * switched itself off looks identical to one that crashed.
+ */
+function updateSysLine() {
+  if (!hudSys) return;
+  const lockOn = !!wakeLock;
+  const lockSupported = 'wakeLock' in navigator;
+  const lockText = !lockSupported
+    ? '<span class="warn">screen lock: unsupported — set display timeout to Never</span>'
+    : lockOn
+      ? 'screen: staying awake'
+      : '<span class="warn">screen: may sleep</span>';
+  hudSys.innerHTML = lockText + ' &middot; ' + (delegateUsed || '—');
+}
 
 let hudEnabled = false;
 let fpsWindow = [];
@@ -401,16 +481,32 @@ async function start() {
       audio: false,
     });
     videoEl.srcObject = stream;
+    watchStream(stream);
     await videoEl.play();
+    await acquireWakeLock();
 
     setStatus('Loading model…');
     const vision = await import(CDN + '/vision_bundle.mjs');
     const fileset = await vision.FilesetResolver.forVisionTasks(CDN + '/wasm');
-    landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numPoses: 1,
-    });
+
+    // The GPU delegate is faster but fails or crashes outright on a fair
+    // number of Android GPUs. Falling back to CPU costs frames; not falling
+    // back costs the whole feature.
+    const makeLandmarker = (delegate) =>
+      vision.PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: delegate },
+        runningMode: 'VIDEO',
+        numPoses: 1,
+      });
+
+    try {
+      landmarker = await makeLandmarker('GPU');
+      delegateUsed = 'GPU';
+    } catch (gpuError) {
+      setStatus('GPU unavailable, loading on CPU…');
+      landmarker = await makeLandmarker('CPU');
+      delegateUsed = 'CPU';
+    }
 
     analyzer = createPushupAnalyzer({
       aspect: (videoEl.videoWidth || 640) / (videoEl.videoHeight || 480),
@@ -423,6 +519,7 @@ async function start() {
     // would just get in the way. Opened directly in a browser it is the point.
     hudEnabled = !window.ReactNativeWebView || /[?&]debug=1/.test(location.search);
     hudEl.classList.toggle('hidden', !hudEnabled);
+    updateSysLine();
 
     timer = setInterval(tick, FRAME_INTERVAL_MS);
   } catch (e) {
@@ -456,8 +553,18 @@ function handleCommand(rawData) {
 window.addEventListener('message', (e) => handleCommand(e.data));
 document.addEventListener('message', (e) => handleCommand(e.data));
 
-window.addEventListener('pagehide', () => {
+document.addEventListener('visibilitychange', handleVisible);
+
+/**
+ * Only tear down on a real unload. The previous version stopped every track on
+ * any `pagehide`, which also fires when the page goes into the back/forward
+ * cache — so returning to it restored a page whose camera had been killed for
+ * good, with nothing left to restart it.
+ */
+window.addEventListener('pagehide', (event) => {
+  if (event.persisted) return; // bfcache: we may be coming right back
   if (timer) clearInterval(timer);
+  timer = null;
   if (stream) stream.getTracks().forEach((t) => t.stop());
 });
 
