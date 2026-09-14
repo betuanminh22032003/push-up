@@ -10,37 +10,24 @@
  * itself is the real thing, unmodified.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const read = (rel) => readFileSync(path.join(root, rel), 'utf8');
-const asModule = (source) => import('data:text/javascript,' + encodeURIComponent(source));
+import {
+  read,
+  bundle,
+  asModule,
+  stripImport,
+  createHarness,
+  MEMORY_ASYNC_STORAGE,
+} from './load.mjs';
 
 // --- load app modules ------------------------------------------------------
-// stats.js imports './time', which Node cannot resolve without an extension.
-// Concatenating the two sources into one module satisfies the dependency
-// without touching either file.
 const timeSrc = read('src/utils/time.js');
-const statsSrc = read('src/utils/stats.js').replace(/^import .* from '\.\/time';$/m, '');
-const time = await asModule(timeSrc);
-const stats = await asModule(timeSrc + '\n' + statsSrc);
+const time = await bundle(timeSrc);
+const stats = await bundle(timeSrc, stripImport(read('src/utils/stats.js'), './time'));
 
-// sessions.js imports the native AsyncStorage; swap in an in-memory store with
-// the same contract so the real read/write logic is exercised.
-const MEMORY_SHIM =
-  'const _m = new Map();\n' +
-  'const AsyncStorage = {\n' +
-  '  getItem: async (k) => (_m.has(k) ? _m.get(k) : null),\n' +
-  '  setItem: async (k, v) => { _m.set(k, String(v)); },\n' +
-  '  removeItem: async (k) => { _m.delete(k); },\n' +
-  '};\n' +
-  'export const __mem = _m;';
 const store = await asModule(
   read('src/storage/sessions.js').replace(
     "import AsyncStorage from '@react-native-async-storage/async-storage';",
-    MEMORY_SHIM,
+    MEMORY_ASYNC_STORAGE,
   ),
 );
 
@@ -48,19 +35,7 @@ const { formatDuration, dayKey, shiftDayKey, formatSessionDate } = time;
 const { computeStats } = stats;
 
 // --- harness ---------------------------------------------------------------
-let passed = 0;
-let failed = 0;
-const check = async (name, fn) => {
-  try {
-    await fn();
-    passed += 1;
-    console.log('  ok    ' + name);
-  } catch (error) {
-    failed += 1;
-    console.log('  FAIL  ' + name + '\n        ' + error.message.split('\n')[0]);
-  }
-};
-const group = (name) => console.log('\n' + name);
+const { state, group, check } = createHarness();
 
 // --- time ------------------------------------------------------------------
 group('time');
@@ -255,5 +230,5 @@ await check('settings round-trip and merge onto defaults', async () => {
 });
 
 // --- result ----------------------------------------------------------------
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed === 0 ? 0 : 1);
+console.log(`\n${state.passed} passed, ${state.failed} failed`);
+process.exit(state.failed === 0 ? 0 : 1);

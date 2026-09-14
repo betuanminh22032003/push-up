@@ -20,7 +20,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs && node scripts/verify-pose.mjs"
   },
   "private": true
 }
