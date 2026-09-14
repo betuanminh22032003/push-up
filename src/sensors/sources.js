@@ -146,8 +146,10 @@ const tapSource = {
  * all — PoseStage owns the camera loop and reports finished reps directly,
  * because the analyser needs the whole skeleton, not a single boolean.
  *
- * Offered only where it actually works. Native needs per-frame pixel access,
- * which expo-camera does not provide and Expo Go cannot load; see PoseStage.js.
+ * Runs everywhere, by two different routes. On web the page owns the camera
+ * directly; on native it runs inside a WebView, because expo-camera exposes no
+ * frame processor and Expo Go cannot load a native module that does. Either
+ * way the counting rules come from the same src/pose/ modules.
  */
 const aiSource = {
   id: 'ai',
@@ -156,11 +158,10 @@ const aiSource = {
   isTapDriven: false,
   isPoseDriven: true,
   async isAvailableAsync() {
-    return (
-      Platform.OS === 'web' &&
-      typeof navigator !== 'undefined' &&
-      !!navigator.mediaDevices?.getUserMedia
-    );
+    if (Platform.OS === 'web') {
+      return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+    }
+    return true;
   },
   subscribe() {
     return () => {};

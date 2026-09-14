@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+export const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const read = (rel) => readFileSync(path.join(root, rel), 'utf8');
 

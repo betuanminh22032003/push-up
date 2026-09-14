@@ -38,7 +38,7 @@ is feeding it.
 
 | Source | Platform | How it works |
 | --- | --- | --- |
-| `ai` | Web | Camera + MediaPipe pose detection. Counts from body position and checks form. See below. |
+| `ai` | All | Camera + MediaPipe pose detection. Counts from body position and checks form. Native runs it in a WebView so it works in Expo Go. See below. |
 | `light` | Android | Ambient light sensor. It sits in the same earpiece cutout as the proximity sensor, so covering it is a faithful stand-in. |
 | `tap` | All | The screen is the sensor — touch with your nose at the bottom of each rep, release on the way up. |
 
@@ -92,23 +92,53 @@ for its WASM loader, which Metro's static analysis rejects outright. Building
 the import through `new Function` hides it from that analysis. The WASM and the
 model already come from the network, so this adds no new runtime dependency.
 
-**Native needs a development build.** `expo-camera` exposes no frame processor —
-`CameraView` does photo capture, recording and barcode scanning, but gives no
-access to live pixels — and Expo Go cannot load a native module that would. The
-AI source is therefore offered only where it works, rather than appearing and
-then failing. To wire it up:
+**Native runs in Expo Go, via a WebView.** `expo-camera` exposes no frame
+processor — `CameraView` does photo capture, recording and barcode scanning, but
+gives no access to live pixels — and Expo Go cannot load a native module that
+would. A WebView is the one route to live ML that works in Expo Go, so
+`src/pose/PoseStage.js` loads a page that owns the camera and reports finished
+reps back over `postMessage`.
+
+That page is **generated, not hand-written**: `npm run build:pose` inlines
+`geometry.js`, `landmarks.js` and `pushupAnalyzer.js` into
+`src/pose/web/pose.template.html` and writes `docs/pose.html`. The phone and the
+test suite therefore run byte-identical counting rules. `npm run verify` fails
+if the published page has drifted from the modules.
+
+The page must be served over **HTTPS** — `getUserMedia` only runs in a secure
+context, which rules out both `source={{ html }}` (opaque origin; getUserMedia
+hangs) and Metro's dev server (reached from the phone as `http://192.168.x.x`,
+not a secure origin). See `src/config.js` for the URL and the GitHub Pages
+setup.
+
+### Setting it up for Expo Go
+
+1. `npm install`
+2. `npm run build:pose`
+3. Commit and push `docs/pose.html`
+4. On GitHub: **Settings → Pages → Source: Deploy from a branch → Branch:
+   `master`, Folder: `/docs`**
+5. Confirm `https://<user>.github.io/push-up/pose.html` opens and asks for camera
+6. Point `POSE_PAGE_URL` in `src/config.js` at it if your URL differs
+7. `npx expo start`, scan the QR in Expo Go, pick **AI camera**, press Start
+
+### Going faster later
+
+For full native speed, a development build with VisionCamera avoids the WebView
+entirely. **EAS Build compiles in the cloud, so no Android Studio or JDK is
+needed locally** — only a free Expo account:
 
 ```bash
+npm i -g eas-cli && eas login
 npx expo install expo-dev-client react-native-vision-camera \
   react-native-fast-tflite vision-camera-resize-plugin
-npx expo prebuild && npx expo run:android
+eas build --profile development --platform android
 ```
 
-Then replace `src/pose/PoseStage.js` with a VisionCamera frame processor that
-resizes each frame to the model input, runs MoveNet through fast-tflite, and
-feeds the keypoints through `fromMoveNet()` into the same analyser. The
-analyser, counter, storage and stats need no changes — that is what the
-normalised schema buys.
+Then swap `PoseStage.js` for a VisionCamera frame processor that resizes each
+frame to the model input, runs MoveNet through fast-tflite, and feeds the
+keypoints through `fromMoveNet()` into the same analyser. The analyser, counter,
+storage and stats need no changes — that is what the normalised schema buys.
 
 ## Stats
 

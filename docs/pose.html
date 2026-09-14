@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>PUPG pose detector</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: #000; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  #video, #overlay {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  /* Mirrored so moving left on screen matches moving left in life. */
+  #video.mirrored, #overlay.mirrored { transform: scaleX(-1); }
+  #overlay { pointer-events: none; }
+  #status {
+    position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center;
+    padding: 24px; text-align: center;
+    background: rgba(10,10,11,0.86); color: #8A8A93;
+    font-size: 14px; line-height: 1.5;
+  }
+  #status.hidden { display: none; }
+  #status.error { color: #F87171; }
+</style>
+</head>
+<body>
+  <video id="video" class="mirrored" playsinline muted autoplay></video>
+  <canvas id="overlay" class="mirrored"></canvas>
+  <div id="status">Starting camera…</div>
+
+<script>
+/* ------------------------------------------------------------------------
+ * Shared detection core, injected verbatim by scripts/build-pose-page.mjs
+ * from src/pose/{geometry,landmarks,pushupAnalyzer}.js.
+ *
+ * DO NOT EDIT the injected block: edit those modules and rebuild. They are
+ * the same files the Node test suite exercises, so this page and the app
+ * count push-ups by identical rules.
+ * --------------------------------------------------------------------- */
+/**
+ * Geometry helpers over normalised pose landmarks.
+ *
+ * Landmarks arrive normalised per axis (x and y both 0..1), which silently
+ * distorts angles on any non-square frame: on a 16:9 image one unit of x is
+ * 1.78x wider than one unit of y, so an arm at a true 90 degrees measures as
+ * something else. Every function here takes the frame's aspect ratio
+ * (width / height) and restores real proportions before measuring.
+ */
+
+/** Euclidean distance, aspect-corrected. */
+function distance(a, b, aspect = 1) {
+  if (!a || !b) return null;
+  const dx = (a.x - b.x) * aspect;
+  const dy = a.y - b.y;
+  return Math.hypot(dx, dy);
+}
+
+/**
+ * Interior angle at vertex `b`, in degrees (0..180), between rays b->a and b->c.
+ * Returns null if any point is missing or two points coincide.
+ */
+function angleAt(a, b, c, aspect = 1) {
+  if (!a || !b || !c) return null;
+
+  const abx = (a.x - b.x) * aspect;
+  const aby = a.y - b.y;
+  const cbx = (c.x - b.x) * aspect;
+  const cby = c.y - b.y;
+
+  const magAB = Math.hypot(abx, aby);
+  const magCB = Math.hypot(cbx, cby);
+  if (magAB === 0 || magCB === 0) return null;
+
+  const cosine = (abx * cbx + aby * cby) / (magAB * magCB);
+  // Floating point can push the quotient a hair outside acos's domain.
+  return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI;
+}
+
+/** True when every joint named is present and confident enough. */
+function allVisible(pose, joints, minVisibility) {
+  return joints.every((j) => pose[j] && pose[j].score >= minVisibility);
+}
+
+/** Mean of the values that are actually numbers; null when none are. */
+function meanDefined(values) {
+  const defined = values.filter((v) => Number.isFinite(v));
+  if (defined.length === 0) return null;
+  return defined.reduce((sum, v) => sum + v, 0) / defined.length;
+}
+
+/**
+ * Angle of the torso against the horizontal, in degrees (0..90).
+ *
+ * A push-up is performed roughly horizontal. A near-vertical torso means the
+ * subject is standing, so whatever the arms are doing is not a push-up — this
+ * is what stops arm-waving at the camera from running up a count.
+ */
+function torsoTiltFromHorizontal(pose, aspect = 1) {
+  const shoulder = midpoint(pose.leftShoulder, pose.rightShoulder, aspect);
+  const hip = midpoint(pose.leftHip, pose.rightHip, aspect);
+  if (!shoulder || !hip) return null;
+
+  const dx = Math.abs(shoulder.x - hip.x) * aspect;
+  const dy = Math.abs(shoulder.y - hip.y);
+  if (dx === 0 && dy === 0) return null;
+
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+/** Midpoint of two joints; falls back to whichever one exists. */
+function midpoint(a, b) {
+  if (a && b) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, score: Math.min(a.score, b.score) };
+  return a || b || null;
+}
+
+/**
+ * A single normalised skeleton shape, so the rep analyser never learns which
+ * model produced a frame.
+ *
+ * Pose models disagree on both the number of keypoints and their order:
+ * MediaPipe BlazePose emits 33, MoveNet emits 17, and the indices do not line
+ * up. Everything downstream consumes the named joints below instead, with one
+ * adapter per model translating into it.
+ *
+ * Coordinates are normalised to the image: x and y in 0..1, origin top-left.
+ * `score` is 0..1 confidence. A joint the model could not place is `null`.
+ */
+
+const JOINTS = [
+  'nose',
+  'leftShoulder',
+  'rightShoulder',
+  'leftElbow',
+  'rightElbow',
+  'leftWrist',
+  'rightWrist',
+  'leftHip',
+  'rightHip',
+  'leftKnee',
+  'rightKnee',
+  'leftAnkle',
+  'rightAnkle',
+];
+
+/** MediaPipe Pose Landmarker (BlazePose, 33 points) -> joint name. */
+const MEDIAPIPE_INDEX = {
+  nose: 0,
+  leftShoulder: 11,
+  rightShoulder: 12,
+  leftElbow: 13,
+  rightElbow: 14,
+  leftWrist: 15,
+  rightWrist: 16,
+  leftHip: 23,
+  rightHip: 24,
+  leftKnee: 25,
+  rightKnee: 26,
+  leftAnkle: 27,
+  rightAnkle: 28,
+};
+
+/** MoveNet / PoseNet (COCO, 17 points) -> joint name. */
+const MOVENET_INDEX = {
+  nose: 0,
+  leftShoulder: 5,
+  rightShoulder: 6,
+  leftElbow: 7,
+  rightElbow: 8,
+  leftWrist: 9,
+  rightWrist: 10,
+  leftHip: 11,
+  rightHip: 12,
+  leftKnee: 13,
+  rightKnee: 14,
+  leftAnkle: 15,
+  rightAnkle: 16,
+};
+
+function point(raw, scoreKey) {
+  if (!raw) return null;
+  const x = raw.x;
+  const y = raw.y;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const score = raw[scoreKey];
+  return { x, y, score: Number.isFinite(score) ? score : 1 };
+}
+
+function adapt(indexMap, scoreKey) {
+  return (raw) => {
+    const pose = {};
+    if (!Array.isArray(raw)) {
+      for (const joint of JOINTS) pose[joint] = null;
+      return pose;
+    }
+    for (const joint of JOINTS) {
+      pose[joint] = point(raw[indexMap[joint]], scoreKey);
+    }
+    return pose;
+  };
+}
+
+/**
+ * MediaPipe reports `visibility`; MoveNet reports `score`. Both mean "how sure
+ * am I this joint is where I say it is", which is what the analyser gates on.
+ */
+const fromMediaPipe = adapt(MEDIAPIPE_INDEX, 'visibility');
+const fromMoveNet = adapt(MOVENET_INDEX, 'score');
+
+/** Bones to draw for the skeleton overlay. */
+const SKELETON_BONES = [
+  ['leftShoulder', 'rightShoulder'],
+  ['leftShoulder', 'leftElbow'],
+  ['leftElbow', 'leftWrist'],
+  ['rightShoulder', 'rightElbow'],
+  ['rightElbow', 'rightWrist'],
+  ['leftShoulder', 'leftHip'],
+  ['rightShoulder', 'rightHip'],
+  ['leftHip', 'rightHip'],
+  ['leftHip', 'leftKnee'],
+  ['leftKnee', 'leftAnkle'],
+  ['rightHip', 'rightKnee'],
+  ['rightKnee', 'rightAnkle'],
+];
+
+
+/**
+ * Counts push-ups from a stream of pose frames.
+ *
+ * The signal is the elbow angle (shoulder-elbow-wrist): ~170 degrees at the top
+ * of a push-up, ~80 at the bottom. A rep is one down-then-up cycle, counted on
+ * the way back up so the number matches completed reps rather than attempts —
+ * the same rule the proximity path uses.
+ *
+ * Four things keep the count honest:
+ *
+ *   hysteresis     separate down/up thresholds, so an angle hovering on one
+ *                  boundary cannot oscillate and inflate the count
+ *   minPhaseMs     a phase must hold before it is committed, rejecting jitter
+ *                  from a single bad inference
+ *   minRepMs       the same 500ms floor between reps used elsewhere
+ *   form gates     torso must be roughly horizontal and the body straight,
+ *                  so arm-waving at the camera counts nothing
+ *
+ * The analyser is pure and deterministic: same frames in, same reps out, with
+ * all timing taken from the caller's timestamps rather than the clock. That is
+ * what makes it testable without a camera.
+ */
+
+const DEFAULTS = {
+  /** Elbow angle at or below which the arms count as bent (bottom). */
+  downAngle: 100,
+  /** Elbow angle at or above which the arms count as extended (top). */
+  upAngle: 150,
+  /** A dip past this that never reaches downAngle is a partial rep. */
+  partialAngle: 135,
+  /** Minimum landmark confidence before a joint is trusted. */
+  minVisibility: 0.4,
+  /** How long a phase must hold before it is committed. */
+  minPhaseMs: 150,
+  /** Minimum gap between two counted reps. */
+  minRepMs: 500,
+  /** Shoulder-hip-knee angle below which the body is sagging or piking. */
+  straightBodyMinAngle: 150,
+  /** Reject reps performed with a bent body. */
+  requireStraightBody: true,
+  /** Torso must be within this many degrees of horizontal. */
+  maxTorsoTilt: 45,
+  /** Frame aspect ratio (width / height) for angle correction. */
+  aspect: 1,
+};
+
+const ISSUES = {
+  SHALLOW: 'shallow',
+  BODY_SAG: 'bodySag',
+  NOT_HORIZONTAL: 'notHorizontal',
+  LOST_TRACKING: 'lostTracking',
+};
+
+const ARM_JOINTS = {
+  left: ['leftShoulder', 'leftElbow', 'leftWrist'],
+  right: ['rightShoulder', 'rightElbow', 'rightWrist'],
+};
+
+const BODY_JOINTS = {
+  left: ['leftShoulder', 'leftHip', 'leftKnee'],
+  right: ['rightShoulder', 'rightHip', 'rightKnee'],
+};
+
+function elbowAngle(pose, side, opts) {
+  const joints = ARM_JOINTS[side];
+  if (!allVisible(pose, joints, opts.minVisibility)) return null;
+  const [shoulder, elbow, wrist] = joints.map((j) => pose[j]);
+  return angleAt(shoulder, elbow, wrist, opts.aspect);
+}
+
+function bodyAngle(pose, side, opts) {
+  const joints = BODY_JOINTS[side];
+  if (!allVisible(pose, joints, opts.minVisibility)) return null;
+  const [shoulder, hip, knee] = joints.map((j) => pose[j]);
+  return angleAt(shoulder, hip, knee, opts.aspect);
+}
+
+/**
+ * Measure one frame without any state. Exported so the UI can show live angles
+ * and so the thresholds can be inspected in isolation.
+ */
+function measureFrame(pose, options = {}) {
+  const opts = { ...DEFAULTS, ...options };
+  if (!pose) return { tracking: false, elbow: null, body: null, torsoTilt: null };
+
+  const elbow = meanDefined([elbowAngle(pose, 'left', opts), elbowAngle(pose, 'right', opts)]);
+  const body = meanDefined([bodyAngle(pose, 'left', opts), bodyAngle(pose, 'right', opts)]);
+  const torsoTilt = torsoTiltFromHorizontal(pose, opts.aspect);
+
+  return { tracking: elbow !== null, elbow, body, torsoTilt };
+}
+
+function createPushupAnalyzer(options = {}) {
+  const opts = { ...DEFAULTS, ...options };
+
+  let phase = 'unknown'; // 'unknown' | 'up' | 'down'
+  let reps = 0;
+  let lastRepAt = -Infinity;
+
+  let candidate = null; // phase we are waiting to confirm
+  let candidateSince = 0;
+
+  // Per-rep accumulators, reset when a descent begins.
+  let minElbowInRep = Infinity;
+  let worstBodyInRep = Infinity;
+  let sawNotHorizontal = false;
+
+  // A dip taken while still in the 'up' phase, i.e. one that never got deep
+  // enough to commit a descent. Tracked outside the phase machine because a
+  // shallow dip produces no phase change for the machine to react to.
+  let inDip = false;
+  let dipMin = Infinity;
+
+  function resetRepAccumulators() {
+    minElbowInRep = Infinity;
+    worstBodyInRep = Infinity;
+    sawNotHorizontal = false;
+  }
+
+  function clearDip() {
+    inDip = false;
+    dipMin = Infinity;
+  }
+
+  function result(extra) {
+    return {
+      reps,
+      phase,
+      repCompleted: false,
+      partialRep: false,
+      issues: [],
+      elbow: null,
+      body: null,
+      torsoTilt: null,
+      tracking: false,
+      ...extra,
+    };
+  }
+
+  return {
+    get reps() {
+      return reps;
+    },
+
+    get phase() {
+      return phase;
+    },
+
+    reset() {
+      phase = 'unknown';
+      reps = 0;
+      lastRepAt = -Infinity;
+      candidate = null;
+      candidateSince = 0;
+      clearDip();
+      resetRepAccumulators();
+    },
+
+    /**
+     * Feed one pose frame.
+     * @param {object} pose       normalised joints (see ./landmarks)
+     * @param {number} timestamp  milliseconds, monotonic
+     */
+    push(pose, timestamp) {
+      const { tracking, elbow, body, torsoTilt } = measureFrame(pose, opts);
+
+      if (!tracking) {
+        // Hold the phase rather than guessing: a dropped frame mid-descent
+        // must not be read as the subject having come back up.
+        candidate = null;
+        return result({
+          tracking: false,
+          issues: [ISSUES.LOST_TRACKING],
+          elbow,
+          body,
+          torsoTilt,
+        });
+      }
+
+      const horizontal = torsoTilt === null || torsoTilt <= opts.maxTorsoTilt;
+      if (!horizontal) sawNotHorizontal = true;
+
+      minElbowInRep = Math.min(minElbowInRep, elbow);
+      if (Number.isFinite(body)) worstBodyInRep = Math.min(worstBodyInRep, body);
+
+      // Instantaneous reading; null in the hysteresis band, where we hold.
+      let observed = null;
+      if (elbow <= opts.downAngle) observed = 'down';
+      else if (elbow >= opts.upAngle) observed = 'up';
+
+      let repCompleted = false;
+      let partialRep = false;
+      const issues = [];
+
+      // Shallow-dip detection, before the phase machine. Bending to 130 and
+      // coming back never crosses a threshold, so the machine sees nothing —
+      // but "go lower" is exactly the feedback that moment calls for.
+      if (phase === 'up') {
+        if (elbow < opts.upAngle) {
+          inDip = true;
+          dipMin = Math.min(dipMin, elbow);
+        } else if (inDip) {
+          const wasShallow = dipMin <= opts.partialAngle;
+          clearDip();
+          if (wasShallow) {
+            partialRep = true;
+            issues.push(ISSUES.SHALLOW);
+          }
+        }
+      }
+
+      if (observed && observed !== phase) {
+        if (candidate !== observed) {
+          candidate = observed;
+          candidateSince = timestamp;
+        }
+
+        if (timestamp - candidateSince >= opts.minPhaseMs) {
+          const previous = phase;
+          phase = observed;
+          candidate = null;
+
+          if (phase === 'down') {
+            // A real descent supersedes any dip we were tracking, so it must
+            // not also be reported as a shallow rep on the way back up.
+            clearDip();
+            resetRepAccumulators();
+            minElbowInRep = elbow;
+            if (Number.isFinite(body)) worstBodyInRep = body;
+            if (!horizontal) sawNotHorizontal = true;
+          }
+
+          if (phase === 'up' && previous === 'down') {
+            // A full cycle finished. Decide whether it earns a count.
+            if (sawNotHorizontal) {
+              issues.push(ISSUES.NOT_HORIZONTAL);
+            } else if (
+              opts.requireStraightBody &&
+              Number.isFinite(worstBodyInRep) &&
+              worstBodyInRep < opts.straightBodyMinAngle
+            ) {
+              issues.push(ISSUES.BODY_SAG);
+            } else if (timestamp - lastRepAt >= opts.minRepMs) {
+              reps += 1;
+              lastRepAt = timestamp;
+              repCompleted = true;
+            }
+            clearDip();
+            resetRepAccumulators();
+          }
+        }
+      } else if (observed === phase) {
+        candidate = null;
+      }
+
+      return result({
+        tracking: true,
+        phase,
+        reps,
+        repCompleted,
+        partialRep,
+        issues,
+        elbow,
+        body,
+        torsoTilt,
+      });
+    },
+  };
+}
+
+
+/* ------------------------------------------------------------------------
+ * Page: camera, MediaPipe, skeleton overlay, and the bridge to React Native.
+ * --------------------------------------------------------------------- */
+const MEDIAPIPE_VERSION = '1.0.1';
+const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MEDIAPIPE_VERSION;
+const MODEL_URL =
+  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+
+const TARGET_FPS = 30;
+const FRAME_INTERVAL_MS = Math.round(1000 / TARGET_FPS);
+const STALE_FRAME_MS = 250;
+const DRAW_MIN_SCORE = 0.4;
+const MAX_CONSECUTIVE_ERRORS = 30;
+
+const ACCENT = '#4ADE80';
+const FAINT = '#55555E';
+
+const videoEl = document.getElementById('video');
+const canvasEl = document.getElementById('overlay');
+const statusEl = document.getElementById('status');
+
+let analyzer = null;
+let landmarker = null;
+let timer = null;
+let stream = null;
+let paused = false;
+let lastVideoTime = -1;
+let lastInferenceAt = 0;
+let consecutiveErrors = 0;
+
+/** Post a message to the React Native host (no-op in a plain browser). */
+function send(payload) {
+  try {
+    window.ReactNativeWebView?.postMessage(JSON.stringify(payload));
+  } catch (e) {
+    /* standalone browser */
+  }
+}
+
+function setStatus(text, isError) {
+  if (!text) {
+    statusEl.classList.add('hidden');
+    return;
+  }
+  statusEl.textContent = text;
+  statusEl.classList.remove('hidden');
+  statusEl.classList.toggle('error', !!isError);
+}
+
+function draw(pose, tracking) {
+  const width = videoEl.videoWidth;
+  const height = videoEl.videoHeight;
+  if (!width || !height) return;
+  if (canvasEl.width !== width || canvasEl.height !== height) {
+    canvasEl.width = width;
+    canvasEl.height = height;
+  }
+
+  const ctx = canvasEl.getContext('2d');
+  ctx.clearRect(0, 0, width, height);
+  if (!pose) return;
+
+  const at = (joint) => {
+    const p = pose[joint];
+    if (!p || p.score < DRAW_MIN_SCORE) return null;
+    return { x: p.x * width, y: p.y * height };
+  };
+
+  const colour = tracking ? ACCENT : FAINT;
+  ctx.strokeStyle = colour;
+  ctx.fillStyle = colour;
+  ctx.lineWidth = Math.max(2, width / 180);
+  ctx.lineCap = 'round';
+
+  for (const bone of SKELETON_BONES) {
+    const a = at(bone[0]);
+    const b = at(bone[1]);
+    if (!a || !b) continue;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  for (const joint of Object.keys(pose)) {
+    const p = at(joint);
+    if (!p) continue;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(3, width / 240), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function tick() {
+  if (!landmarker || !analyzer || videoEl.readyState < 2) return;
+
+  const now = performance.now();
+  const isNewFrame = videoEl.currentTime !== lastVideoTime;
+  const isStale = now - lastInferenceAt >= STALE_FRAME_MS;
+  if (!isNewFrame && !isStale) return;
+
+  lastVideoTime = videoEl.currentTime;
+  lastInferenceAt = now;
+
+  try {
+    const detection = landmarker.detectForVideo(videoEl, now);
+    const raw = detection && detection.landmarks && detection.landmarks[0];
+    const pose = raw ? fromMediaPipe(raw) : null;
+
+    if (paused) {
+      draw(pose, !!pose);
+    } else {
+      const result = pose
+        ? analyzer.push(pose, now)
+        : { tracking: false, issues: [ISSUES.LOST_TRACKING], reps: analyzer.reps };
+
+      if (result.repCompleted) {
+        send({ type: 'rep', reps: result.reps, elbow: result.elbow });
+      }
+      send({
+        type: 'frame',
+        tracking: !!result.tracking,
+        phase: result.phase,
+        issues: result.issues || [],
+        reps: result.reps,
+      });
+      draw(pose, result.tracking);
+    }
+    consecutiveErrors = 0;
+  } catch (e) {
+    consecutiveErrors += 1;
+    if (consecutiveErrors === MAX_CONSECUTIVE_ERRORS) {
+      setStatus('Pose detection keeps failing: ' + (e && e.message ? e.message : e), true);
+      send({ type: 'status', phase: 'error', message: String(e && e.message ? e.message : e) });
+    }
+  }
+}
+
+async function start() {
+  try {
+    setStatus('Starting camera…');
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error(
+        'This page must be served over HTTPS for camera access (getUserMedia is unavailable).',
+      );
+    }
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    });
+    videoEl.srcObject = stream;
+    await videoEl.play();
+
+    setStatus('Loading model…');
+    const vision = await import(CDN + '/vision_bundle.mjs');
+    const fileset = await vision.FilesetResolver.forVisionTasks(CDN + '/wasm');
+    landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
+      runningMode: 'VIDEO',
+      numPoses: 1,
+    });
+
+    analyzer = createPushupAnalyzer({
+      aspect: (videoEl.videoWidth || 640) / (videoEl.videoHeight || 480),
+    });
+
+    setStatus(null);
+    send({ type: 'status', phase: 'ready' });
+    timer = setInterval(tick, FRAME_INTERVAL_MS);
+  } catch (e) {
+    const message =
+      e && e.name === 'NotAllowedError'
+        ? 'Camera permission denied. Allow camera access, then reload.'
+        : (e && e.message) || 'Could not start the camera.';
+    setStatus(message, true);
+    send({ type: 'status', phase: 'error', message });
+  }
+}
+
+/** Commands from the React Native host. */
+function handleCommand(rawData) {
+  let msg;
+  try {
+    msg = JSON.parse(rawData);
+  } catch (e) {
+    return;
+  }
+  if (msg.type === 'pause') paused = true;
+  else if (msg.type === 'resume') paused = false;
+  else if (msg.type === 'reset') analyzer && analyzer.reset();
+  else if (msg.type === 'mirror') {
+    videoEl.classList.toggle('mirrored', !!msg.value);
+    canvasEl.classList.toggle('mirrored', !!msg.value);
+  }
+}
+
+// RN delivers injected messages on window on Android and document on iOS.
+window.addEventListener('message', (e) => handleCommand(e.data));
+document.addEventListener('message', (e) => handleCommand(e.data));
+
+window.addEventListener('pagehide', () => {
+  if (timer) clearInterval(timer);
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+});
+
+start();
+</script>
+</body>
+</html>
