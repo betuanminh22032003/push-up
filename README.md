@@ -38,6 +38,7 @@ is feeding it.
 
 | Source | Platform | How it works |
 | --- | --- | --- |
+| `ai` | Web | Camera + MediaPipe pose detection. Counts from body position and checks form. See below. |
 | `light` | Android | Ambient light sensor. It sits in the same earpiece cutout as the proximity sensor, so covering it is a faithful stand-in. |
 | `tap` | All | The screen is the sensor — touch with your nose at the bottom of each rep, release on the way up. |
 
@@ -51,6 +52,63 @@ To use **real proximity hardware** (and get it on iOS), make a development build
 and register a native module as a third source — see the `NATIVE_PROXIMITY`
 block at the bottom of `src/sensors/sources.js`. It is a change to that one
 file; the detector, counter, and persistence are untouched.
+
+## AI camera detection
+
+Counts push-ups from body position, the way Push & Post does, and judges form
+on every rep.
+
+The signal is the **elbow angle** (shoulder-elbow-wrist): roughly 170 degrees at
+the top of a push-up, 80 at the bottom. A rep is one down-then-up cycle counted
+on the way up. Four guards keep the count honest:
+
+| Guard | Rejects |
+| --- | --- |
+| Hysteresis | separate down (100°) and up (150°) thresholds, so an angle sitting on one boundary cannot oscillate and inflate the count |
+| `minPhaseMs` 150 ms | a single bad inference flipping the phase |
+| `minRepMs` 500 ms | the same rep floor the sensor path uses |
+| Form gates | torso must be within 45° of horizontal and the body straighter than 150°, so waving an arm at the camera counts nothing |
+
+Rejected reps are not silent — the screen says *Go lower*, *Keep your body
+straight*, *Get into a push-up position*, or *Step into frame*.
+
+Angles are **aspect-corrected**. Landmarks arrive normalised per axis (x and y
+both 0..1), which silently distorts every angle on a non-square frame: at 16:9
+one unit of x is 1.78× wider than one unit of y, so a true 90° elbow measures as
+something else. `src/pose/geometry.js` restores real proportions first.
+
+### Model independence
+
+Pose models disagree on keypoint count and order — MediaPipe BlazePose emits 33,
+MoveNet 17, and the indices do not line up. `src/pose/landmarks.js` normalises
+both into one named-joint skeleton, so the analyser never learns which model
+produced a frame and swapping models touches nothing else.
+
+### Where it runs
+
+**Web** uses MediaPipe Pose Landmarker. The library is fetched from a CDN at
+runtime rather than bundled: every build it ships contains `import(t.toString())`
+for its WASM loader, which Metro's static analysis rejects outright. Building
+the import through `new Function` hides it from that analysis. The WASM and the
+model already come from the network, so this adds no new runtime dependency.
+
+**Native needs a development build.** `expo-camera` exposes no frame processor —
+`CameraView` does photo capture, recording and barcode scanning, but gives no
+access to live pixels — and Expo Go cannot load a native module that would. The
+AI source is therefore offered only where it works, rather than appearing and
+then failing. To wire it up:
+
+```bash
+npx expo install expo-dev-client react-native-vision-camera \
+  react-native-fast-tflite vision-camera-resize-plugin
+npx expo prebuild && npx expo run:android
+```
+
+Then replace `src/pose/PoseStage.js` with a VisionCamera frame processor that
+resizes each frame to the model input, runs MoveNet through fast-tflite, and
+feeds the keypoints through `fromMoveNet()` into the same analyser. The
+analyser, counter, storage and stats need no changes — that is what the
+normalised schema buys.
 
 ## Stats
 
@@ -88,7 +146,13 @@ src/
     useWorkoutTimer.js      wall-clock elapsed time, pause-aware
     useSessions.js          session list + derived stats
     useFeedback.js          haptics + click on each rep
-  sensors/sources.js        proximity sources (light / tap) + extension point
+  pose/
+    pushupAnalyzer.js       elbow-angle state machine, form gates (pure)
+    landmarks.js            BlazePose/MoveNet -> one named-joint skeleton
+    geometry.js             aspect-corrected angles
+    PoseStage.web.js        camera + MediaPipe + skeleton overlay
+    PoseStage.js            native: explains the dev-build requirement
+  sensors/sources.js        detection sources (ai / light / tap) + extension point
   storage/sessions.js       AsyncStorage read/write
   utils/
     time.js                 MM:SS, local day keys
@@ -116,10 +180,23 @@ assets/rep.wav              70 ms click played on each rep
 npm run verify
 ```
 
-24 assertions over duration formatting, local day keys, DST and year
-boundaries, streak edge cases, the storage round-trip, and corrupt-data
-handling. Plain Node, no test framework.
+48 assertions, plain Node, no test framework.
 
-Behaviour was driven live in the browser: rep counting, the 80 ms and 500 ms
+`verify.mjs` (24) — duration formatting, local day keys, DST and year
+boundaries, streak edge cases, the storage round-trip, corrupt-data handling.
+
+`verify-pose.mjs` (24) — synthesises skeletons at exact known angles, checked
+against the geometry first, then replays push-ups frame by frame: counting,
+variable frame rate, shallow reps, body sag, upright arm curls, single-frame
+glitches, hysteresis oscillation, rep debounce, and tracking dropout.
+
+Driven live in the browser: rep counting via the tap path, the 80 ms and 500 ms
 guards measured across repeated trials, pause freezing both count and clock,
 resume, finish, persistence shape, and multi-day streak arithmetic.
+
+For the camera path, the whole pipeline was exercised against a synthetic video
+stream — CDN library load under Metro, WASM init, model download, the 30fps
+inference loop, landmark normalisation, coaching output, pause keeping the
+camera alive, and finish. **Real body detection is not verified**: that needs a
+person doing push-ups in front of a webcam. The rep logic downstream of the
+landmarks is what the 24 pose assertions cover.

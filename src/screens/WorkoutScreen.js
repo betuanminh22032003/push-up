@@ -18,12 +18,22 @@ import { useFeedback } from '../hooks/useFeedback';
 import { useRepDetector } from '../hooks/useRepDetector';
 import { useSessions } from '../hooks/useSessions';
 import { useWorkoutTimer } from '../hooks/useWorkoutTimer';
+import { PoseStage } from '../pose/PoseStage';
+import { ISSUES } from '../pose/pushupAnalyzer';
 import { SOURCES, getSourceById, resolveDefaultSource } from '../sensors/sources';
 import { loadSettings, saveSettings } from '../storage/sessions';
 import { colors, radius, spacing, type } from '../theme/theme';
 import { formatDuration } from '../utils/time';
 
 const KEEP_AWAKE_TAG = 'pupg-workout';
+
+/** What to tell the user when the analyser rejects or cannot read a rep. */
+const COACH_COPY = {
+  [ISSUES.LOST_TRACKING]: 'Step into frame',
+  [ISSUES.NOT_HORIZONTAL]: 'Get into a push-up position',
+  [ISSUES.BODY_SAG]: 'Keep your body straight',
+  [ISSUES.SHALLOW]: 'Go lower',
+};
 
 const STATUS_META = {
   idle: { label: 'IDLE', color: colors.textDim },
@@ -41,6 +51,7 @@ export function WorkoutScreen() {
   const [sourceConfig, setSourceConfig] = useState(null);
   const [availableSourceIds, setAvailableSourceIds] = useState([]);
   const [notice, setNotice] = useState(null);
+  const [coach, setCoach] = useState(null);
 
   const [settings, setSettings] = useState({ soundEnabled: true, hapticsEnabled: true });
 
@@ -60,6 +71,16 @@ export function WorkoutScreen() {
     setReps((n) => n + 1);
     repFeedback();
   }, [repFeedback]);
+
+  /**
+   * Live coaching from the pose analyser. This runs on every camera frame, so
+   * it only touches state when the message actually changes — setting the same
+   * string 30 times a second would re-render the whole screen for nothing.
+   */
+  const handlePoseFrame = useCallback((frame) => {
+    const next = frame.repCompleted ? null : COACH_COPY[frame.issues?.[0]] ?? null;
+    setCoach((prev) => (prev === next ? prev : next));
+  }, []);
 
   const { isNear, onTouchStart, onTouchEnd, reset: resetDetector } = useRepDetector({
     source,
@@ -162,6 +183,7 @@ export function WorkoutScreen() {
     setStatus('idle');
     setReps(0);
     repsRef.current = 0;
+    setCoach(null);
     resetTimer();
     resetDetector();
   }, [resetTimer, resetDetector]);
@@ -207,6 +229,7 @@ export function WorkoutScreen() {
 
   const statusMeta = STATUS_META[status];
   const tapActive = !!source.isTapDriven && status === 'active';
+  const poseActive = !!source.isPoseDriven && (status === 'active' || status === 'paused');
   const selectableSources = SOURCES.filter((s) => availableSourceIds.includes(s.id));
 
   return (
@@ -263,6 +286,15 @@ export function WorkoutScreen() {
         accessibilityRole={tapActive ? 'button' : undefined}
         accessibilityLabel={tapActive ? `Tap to count a rep. ${reps} counted.` : undefined}
       >
+        {poseActive ? (
+          <PoseStage
+            active
+            paused={status === 'paused'}
+            onRep={handleRep}
+            onFrame={handlePoseFrame}
+          />
+        ) : null}
+
         <View style={[styles.statusPill, { borderColor: statusMeta.color }]}>
           <View style={[styles.statusDot, { backgroundColor: statusMeta.color }]} />
           <Text style={[styles.statusText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
@@ -280,6 +312,12 @@ export function WorkoutScreen() {
           <Text style={styles.stageHint}>
             {isNear ? 'HOLD, THEN RELEASE' : 'TOUCH TO COUNT'}
           </Text>
+        ) : null}
+
+        {poseActive && coach ? (
+          <View style={styles.coachPill}>
+            <Text style={styles.coachText}>{coach}</Text>
+          </View>
         ) : null}
       </View>
 
@@ -432,7 +470,26 @@ const styles = StyleSheet.create({
   statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: spacing.sm },
   statusText: { ...type.label },
 
-  counter: { ...type.counter, color: colors.text, marginTop: spacing.sm },
+  counter: {
+    ...type.counter,
+    color: colors.text,
+    marginTop: spacing.sm,
+    // Keeps the count readable over a bright camera frame.
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 12,
+  },
+  coachPill: {
+    position: 'absolute',
+    bottom: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(10,10,11,0.82)',
+    borderWidth: 1,
+    borderColor: colors.warn,
+  },
+  coachText: { ...type.label, color: colors.warn },
   timer: { ...type.timer, color: colors.textDim, marginTop: -spacing.sm },
   stageHint: { ...type.label, color: colors.textFaint, marginTop: spacing.lg },
 

@@ -141,7 +141,33 @@ const tapSource = {
   },
 };
 
-export const SOURCES = [lightSource, tapSource];
+/**
+ * Camera pose detection. Unlike the others this emits no near/far stream at
+ * all — PoseStage owns the camera loop and reports finished reps directly,
+ * because the analyser needs the whole skeleton, not a single boolean.
+ *
+ * Offered only where it actually works. Native needs per-frame pixel access,
+ * which expo-camera does not provide and Expo Go cannot load; see PoseStage.js.
+ */
+const aiSource = {
+  id: 'ai',
+  label: 'AI camera',
+  hint: 'Prop the phone up so your whole body is in frame from the side, then push up. Form is checked on every rep.',
+  isTapDriven: false,
+  isPoseDriven: true,
+  async isAvailableAsync() {
+    return (
+      Platform.OS === 'web' &&
+      typeof navigator !== 'undefined' &&
+      !!navigator.mediaDevices?.getUserMedia
+    );
+  },
+  subscribe() {
+    return () => {};
+  },
+};
+
+export const SOURCES = [aiSource, lightSource, tapSource];
 
 export function getSourceById(id) {
   return SOURCES.find((s) => s.id === id) || tapSource;
