@@ -73,7 +73,17 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
 
   if (!active) return null;
 
-  if (permission && !permission.granted) {
+  // useCameraPermissions resolves asynchronously and is null on first render.
+  // The WebView must not mount during that window: it would call getUserMedia
+  // before Android had granted CAMERA to the host app, and the page only runs
+  // start() once — so it would sit on "permission denied" forever, even after
+  // the user allowed access a moment later. Mounting only once `granted` is
+  // true also means a later grant mounts a fresh WebView that starts cleanly.
+  if (!permission) {
+    return <Overlay loading title="Starting camera" body="Checking camera permission…" />;
+  }
+
+  if (!permission.granted) {
     return (
       <Overlay
         title="Camera access needed"
