@@ -27,6 +27,9 @@ import { formatDuration } from '../utils/time';
 
 const KEEP_AWAKE_TAG = 'pupg-workout';
 
+/** How long a coaching message stays up after the frame that produced it. */
+const COACH_STICKY_MS = 2200;
+
 /** What to tell the user when the analyser rejects or cannot read a rep. */
 const COACH_COPY = {
   [ISSUES.LOST_TRACKING]: 'Step into frame',
@@ -76,10 +79,30 @@ export function WorkoutScreen() {
    * Live coaching from the pose analyser. This runs on every camera frame, so
    * it only touches state when the message actually changes — setting the same
    * string 30 times a second would re-render the whole screen for nothing.
+   *
+   * Messages are held for a beat rather than mirrored frame by frame. The
+   * analyser reports "shallow" and "bodySag" only on the frame where the rep
+   * finishes, so rendering issues raw would flash the advice for ~33ms and
+   * clear it, which nobody can read. A counted rep clears it immediately,
+   * since that is the answer to the advice.
    */
+  const coachUntilRef = useRef(0);
   const handlePoseFrame = useCallback((frame) => {
-    const next = frame.repCompleted ? null : COACH_COPY[frame.issues?.[0]] ?? null;
-    setCoach((prev) => (prev === next ? prev : next));
+    const now = Date.now();
+    const issue = COACH_COPY[frame.issues?.[0]] ?? null;
+
+    let next;
+    if (frame.repCompleted) {
+      next = null;
+      coachUntilRef.current = 0;
+    } else if (issue) {
+      next = issue;
+      coachUntilRef.current = now + COACH_STICKY_MS;
+    } else {
+      next = now < coachUntilRef.current ? undefined : null; // undefined = keep
+    }
+
+    if (next !== undefined) setCoach((prev) => (prev === next ? prev : next));
   }, []);
 
   const { isNear, onTouchStart, onTouchEnd, reset: resetDetector } = useRepDetector({

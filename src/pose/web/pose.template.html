@@ -29,12 +29,70 @@
   }
   #status.hidden { display: none; }
   #status.error { color: #F87171; }
+
+  /* Diagnostic HUD: what the model actually reads, live, while you train. */
+  #hud {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(10,10,11,0.86);
+    border-top: 1px solid #26262C;
+    color: #F5F5F7; font-variant-numeric: tabular-nums;
+  }
+  #hud.hidden { display: none; }
+  #hudTop { display: flex; align-items: baseline; gap: 14px; }
+  #hudReps { font-size: 40px; font-weight: 700; line-height: 1; }
+  #hudPhase {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.4px;
+    padding: 3px 9px; border-radius: 999px; border: 1px solid #55555E; color: #8A8A93;
+  }
+  #hudPhase.down { border-color: #FBBF24; color: #FBBF24; }
+  #hudPhase.up { border-color: #4ADE80; color: #4ADE80; }
+  #hudIssue { margin-left: auto; font-size: 12px; color: #FBBF24; text-align: right; }
+  #hudGrid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 6px; margin-top: 10px;
+  }
+  .cell { background: #131316; border: 1px solid #26262C; border-radius: 8px; padding: 6px 4px; text-align: center; }
+  .cell .k { display: block; font-size: 9px; letter-spacing: 1px; color: #55555E; }
+  .cell .v { display: block; font-size: 17px; font-weight: 600; margin-top: 2px; }
+  .cell .v.ok { color: #4ADE80; }
+  .cell .v.bad { color: #F87171; }
+  #hudBar { height: 6px; background: #26262C; border-radius: 3px; margin-top: 10px; overflow: hidden; }
+  #hudBarFill { height: 100%; width: 0%; background: #4ADE80; transition: width 80ms linear; }
+  #hudActions { display: flex; gap: 8px; margin-top: 10px; }
+  #hudActions button {
+    flex: 1; padding: 10px; font-size: 13px; font-weight: 600;
+    background: #1C1C21; color: #F5F5F7;
+    border: 1px solid #26262C; border-radius: 8px;
+  }
+  #hudActions button:active { opacity: 0.6; }
+  #hudCopied { font-size: 11px; color: #4ADE80; text-align: center; margin-top: 6px; min-height: 14px; }
 </style>
 </head>
 <body>
   <video id="video" class="mirrored" playsinline muted autoplay></video>
   <canvas id="overlay" class="mirrored"></canvas>
   <div id="status">Starting camera…</div>
+
+  <div id="hud" class="hidden">
+    <div id="hudTop">
+      <span id="hudReps">0</span>
+      <span id="hudPhase">—</span>
+      <span id="hudIssue"></span>
+    </div>
+    <div id="hudGrid">
+      <div class="cell"><span class="k">ELBOW</span><span class="v" id="hudElbow">—</span></div>
+      <div class="cell"><span class="k">BODY</span><span class="v" id="hudBody">—</span></div>
+      <div class="cell"><span class="k">TILT</span><span class="v" id="hudTilt">—</span></div>
+      <div class="cell"><span class="k">FPS</span><span class="v" id="hudFps">—</span></div>
+    </div>
+    <div id="hudBar"><div id="hudBarFill"></div></div>
+    <div id="hudActions">
+      <button id="hudReset" type="button">Reset</button>
+      <button id="hudCopy" type="button">Copy log</button>
+    </div>
+    <div id="hudCopied"></div>
+  </div>
 
 <script>
 /* ------------------------------------------------------------------------
@@ -140,6 +198,148 @@ function draw(pose, tracking) {
   }
 }
 
+/* --- diagnostic HUD ---------------------------------------------------- */
+
+/**
+ * Shown when the page is opened directly in a browser, or with ?debug=1.
+ * Inside the app the WebView is covered by the app's own counter, so the HUD
+ * would only be in the way. Opening the URL in a phone browser is therefore
+ * the way to see what the model actually reads while training.
+ */
+const hudEl = document.getElementById('hud');
+const hudReps = document.getElementById('hudReps');
+const hudPhase = document.getElementById('hudPhase');
+const hudIssue = document.getElementById('hudIssue');
+const hudElbow = document.getElementById('hudElbow');
+const hudBody = document.getElementById('hudBody');
+const hudTilt = document.getElementById('hudTilt');
+const hudFps = document.getElementById('hudFps');
+const hudBarFill = document.getElementById('hudBarFill');
+const hudCopied = document.getElementById('hudCopied');
+
+let hudEnabled = false;
+let fpsWindow = [];
+
+/**
+ * Coaching messages must outlive the frame that produced them.
+ *
+ * The analyser reports "shallow" or "bodySag" only on the frame where the rep
+ * finishes, so showing issues raw would flash the advice for one frame (~33ms)
+ * and clear it — unreadable. Hold the last message briefly instead, and drop it
+ * the moment a rep counts, since that is the answer to it.
+ */
+const ISSUE_STICKY_MS = 2200;
+let stickyIssue = null;
+let stickyIssueAt = 0;
+/** Angle trace, so a real set can be sent back and thresholds tuned on data. */
+const trace = [];
+const TRACE_LIMIT = 6000;
+
+const ISSUE_TEXT = {
+  lostTracking: 'Step into frame',
+  notHorizontal: 'Get into push-up position',
+  bodySag: 'Keep your body straight',
+  shallow: 'Go lower',
+};
+
+function updateHud(result) {
+  if (!hudEnabled) return;
+
+  const now = performance.now();
+  fpsWindow.push(now);
+  while (fpsWindow.length && now - fpsWindow[0] > 1000) fpsWindow.shift();
+
+  const fmt = (v) => (Number.isFinite(v) ? Math.round(v) + '°' : '—');
+  hudReps.textContent = result.reps != null ? result.reps : 0;
+  hudPhase.textContent = (result.phase || 'unknown').toUpperCase();
+  hudPhase.className = result.phase === 'down' ? 'down' : result.phase === 'up' ? 'up' : '';
+  hudElbow.textContent = fmt(result.elbow);
+  hudBody.textContent = fmt(result.body);
+  hudTilt.textContent = fmt(result.torsoTilt);
+  hudFps.textContent = fpsWindow.length;
+
+  hudElbow.className = 'v' + (Number.isFinite(result.elbow)
+    ? (result.elbow <= DEFAULTS.downAngle ? ' ok' : '') : ' bad');
+  hudBody.className = 'v' + (Number.isFinite(result.body)
+    ? (result.body < DEFAULTS.straightBodyMinAngle ? ' bad' : ' ok') : '');
+  hudTilt.className = 'v' + (Number.isFinite(result.torsoTilt)
+    ? (result.torsoTilt > DEFAULTS.maxTorsoTilt ? ' bad' : ' ok') : '');
+
+  const issue = (result.issues || [])[0];
+  if (result.repCompleted) {
+    stickyIssue = null;
+  } else if (issue) {
+    stickyIssue = ISSUE_TEXT[issue] || issue;
+    stickyIssueAt = now;
+  } else if (stickyIssue && now - stickyIssueAt > ISSUE_STICKY_MS) {
+    stickyIssue = null;
+  }
+  hudIssue.textContent = stickyIssue || '';
+
+  // Depth bar: full at the down threshold, empty when fully extended.
+  if (Number.isFinite(result.elbow)) {
+    const span = DEFAULTS.upAngle - DEFAULTS.downAngle;
+    const pct = Math.max(0, Math.min(1, (DEFAULTS.upAngle - result.elbow) / span)) * 100;
+    hudBarFill.style.width = pct.toFixed(0) + '%';
+    hudBarFill.style.background = pct >= 100 ? '#4ADE80' : '#FBBF24';
+  }
+
+  if (trace.length < TRACE_LIMIT) {
+    trace.push({
+      t: Math.round(now),
+      elbow: Number.isFinite(result.elbow) ? +result.elbow.toFixed(1) : null,
+      body: Number.isFinite(result.body) ? +result.body.toFixed(1) : null,
+      tilt: Number.isFinite(result.torsoTilt) ? +result.torsoTilt.toFixed(1) : null,
+      phase: result.phase,
+      reps: result.reps,
+      rep: !!result.repCompleted,
+      issues: result.issues && result.issues.length ? result.issues : undefined,
+    });
+  }
+}
+
+document.getElementById('hudReset').addEventListener('click', () => {
+  if (analyzer) analyzer.reset();
+  trace.length = 0;
+  hudCopied.textContent = 'reset';
+  setTimeout(() => { hudCopied.textContent = ''; }, 1200);
+});
+
+document.getElementById('hudCopy').addEventListener('click', async () => {
+  const counted = trace.filter((r) => r.rep).length;
+  const elbows = trace.map((r) => r.elbow).filter((v) => v != null);
+  const payload = {
+    thresholds: {
+      downAngle: DEFAULTS.downAngle,
+      upAngle: DEFAULTS.upAngle,
+      straightBodyMinAngle: DEFAULTS.straightBodyMinAngle,
+      maxTorsoTilt: DEFAULTS.maxTorsoTilt,
+    },
+    summary: {
+      frames: trace.length,
+      countedReps: counted,
+      minElbow: elbows.length ? Math.min.apply(null, elbows) : null,
+      maxElbow: elbows.length ? Math.max.apply(null, elbows) : null,
+      trackedFrames: elbows.length,
+    },
+    trace: trace,
+  };
+  const text = JSON.stringify(payload);
+  try {
+    await navigator.clipboard.writeText(text);
+    hudCopied.textContent = 'Copied ' + trace.length + ' frames, ' + counted + ' reps';
+  } catch (e) {
+    // Clipboard needs a user gesture and permission; fall back to selectable text.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;bottom:0;left:0;width:100%;height:120px;z-index:99';
+    document.body.appendChild(ta);
+    ta.select();
+    hudCopied.textContent = 'Select the text below and copy it';
+  }
+  setTimeout(() => { hudCopied.textContent = ''; }, 4000);
+});
+
 function tick() {
   if (!landmarker || !analyzer || videoEl.readyState < 2) return;
 
@@ -173,6 +373,7 @@ function tick() {
         issues: result.issues || [],
         reps: result.reps,
       });
+      updateHud(result);
       draw(pose, result.tracking);
     }
     consecutiveErrors = 0;
@@ -217,6 +418,12 @@ async function start() {
 
     setStatus(null);
     send({ type: 'status', phase: 'ready' });
+
+    // Inside the app the WebView sits behind the app's own counter, so the HUD
+    // would just get in the way. Opened directly in a browser it is the point.
+    hudEnabled = !window.ReactNativeWebView || /[?&]debug=1/.test(location.search);
+    hudEl.classList.toggle('hidden', !hudEnabled);
+
     timer = setInterval(tick, FRAME_INTERVAL_MS);
   } catch (e) {
     const message =
