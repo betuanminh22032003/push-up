@@ -315,6 +315,8 @@ const hudDeepestK = document.getElementById('hudDeepestK');
  * the measurement, or a threshold that is simply wrong for this setup.
  */
 let deepestElbow = Infinity;
+let lastNeeded = null;
+let prevPhase = null;
 
 /** Summary of the run, kept so a closed page still has something to report. */
 const SUMMARY_KEY = 'pupg:lastPoseSession';
@@ -330,7 +332,7 @@ function persistSummary(reps) {
       tracked: trackedFrames,
       deepestElbow: Number.isFinite(deepestElbow) ? Math.round(deepestElbow) : null,
       reps: reps,
-      needed: DEFAULTS.downAngle,
+      needed: lastNeeded == null ? DEFAULTS.downAngle : Math.round(lastNeeded),
       delegate: delegateUsed,
     }));
   } catch (e) {
@@ -415,8 +417,13 @@ function updateHud(result) {
     trackedFrames += 1;
     deepestElbow = Math.min(deepestElbow, result.elbow);
   }
-  // A counted rep proves the depth was fine, so start measuring the next one.
-  if (result.repCompleted) deepestElbow = Infinity;
+  // Reset at the start of a descent, not when a rep completes: resetting on
+  // completion immediately replaced a good depth with the angle of someone
+  // standing at the top, which then rendered red and read as a failure. Held
+  // this way, the cell shows the depth of the rep just finished until the next
+  // one begins.
+  if (result.phase === 'down' && prevPhase !== 'down') deepestElbow = Infinity;
+  prevPhase = result.phase;
 
   hudReps.textContent = result.reps != null ? result.reps : 0;
   hudPhase.textContent = (result.phase || 'unknown').toUpperCase();
@@ -425,12 +432,16 @@ function updateHud(result) {
   hudBody.textContent = fmt(result.body);
   hudTilt.textContent = fmt(result.torsoTilt);
 
+  // The target is whatever the analyser is currently using, which adapts to
+  // the range this person actually moves through.
+  const needed = result.thresholds ? result.thresholds.down : DEFAULTS.downAngle;
   hudDeepest.textContent = Number.isFinite(deepestElbow) ? Math.round(deepestElbow) + '°' : '—';
-  hudDeepestK.textContent = 'DEEPEST / ' + DEFAULTS.downAngle + '°';
+  hudDeepestK.textContent =
+    'DEEPEST / ' + Math.round(needed) + '°' +
+    (result.thresholds && result.thresholds.adapted ? ' AUTO' : '');
   hudDeepest.className =
-    'v' + (Number.isFinite(deepestElbow)
-      ? (deepestElbow <= DEFAULTS.downAngle ? ' ok' : ' bad')
-      : '');
+    'v' + (Number.isFinite(deepestElbow) ? (deepestElbow <= needed ? ' ok' : ' bad') : '');
+  lastNeeded = needed;
 
   if (now - lastSummaryWrite > 2000) {
     lastSummaryWrite = now;

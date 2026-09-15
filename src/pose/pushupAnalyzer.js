@@ -24,7 +24,32 @@ import { allVisible, angleAt, meanDefined, torsoTiltFromHorizontal } from './geo
  */
 
 export const DEFAULTS = {
-  /** Elbow angle at or below which the arms count as bent (bottom). */
+  /**
+   * Adapt the thresholds to the range of movement actually observed.
+   *
+   * Fixed angles do not survive the projection: the elbow angle is measured on
+   * a flat image, so a camera off the plane of the arm flattens it. Someone
+   * going properly to the floor can measure 115 degrees, never cross a fixed
+   * 100-degree threshold, and get no reps and no explanation. Deriving the
+   * thresholds from each person's own observed range removes that failure,
+   * and removes the per-setup tuning it would otherwise need.
+   */
+  autoCalibrate: true,
+  /** How far back the observed range is measured. */
+  calibrationWindowMs: 20000,
+  /** Movement smaller than this is not a rep, it is noise or fidgeting. */
+  minRangeDeg: 25,
+  /** Where in the observed range the down/up thresholds sit. */
+  rangeFraction: 0.3,
+  /**
+   * Absolute limits the adapted thresholds may not cross. Without these,
+   * adapting to a tiny range would make a shallow twitch count as a full rep —
+   * the arms still have to actually bend.
+   */
+  downAngleCeiling: 120,
+  upAngleFloor: 140,
+
+  /** Fallback thresholds, used until a range is known (or with autoCalibrate off). */
   downAngle: 100,
   /** Elbow angle at or above which the arms count as extended (top). */
   upAngle: 150,
@@ -113,6 +138,47 @@ export function createPushupAnalyzer(options = {}) {
   let inDip = false;
   let dipMin = Infinity;
 
+  /** Recent elbow angles, for deriving this person's range of movement. */
+  let samples = [];
+
+  /**
+   * Thresholds for the current frame: adapted to the observed range once there
+   * is enough of it, otherwise the fixed fallbacks. Clamped so a small range
+   * cannot turn a twitch into a rep.
+   */
+  function thresholdsFor(elbow, timestamp) {
+    if (!opts.autoCalibrate) {
+      return { down: opts.downAngle, up: opts.upAngle, adapted: false };
+    }
+
+    samples.push({ t: timestamp, elbow });
+    const cutoff = timestamp - opts.calibrationWindowMs;
+    if (samples.length > 4 && samples[0].t < cutoff) {
+      samples = samples.filter((s) => s.t >= cutoff);
+    }
+
+    let min = Infinity;
+    let max = -Infinity;
+    for (const s of samples) {
+      if (s.elbow < min) min = s.elbow;
+      if (s.elbow > max) max = s.elbow;
+    }
+
+    const range = max - min;
+    if (!Number.isFinite(range) || range < opts.minRangeDeg) {
+      return { down: opts.downAngle, up: opts.upAngle, adapted: false };
+    }
+
+    const margin = range * opts.rangeFraction;
+    return {
+      down: Math.min(min + margin, opts.downAngleCeiling),
+      up: Math.max(max - margin, opts.upAngleFloor),
+      adapted: true,
+      observedMin: min,
+      observedMax: max,
+    };
+  }
+
   function resetRepAccumulators() {
     minElbowInRep = Infinity;
     worstBodyInRep = Infinity;
@@ -135,6 +201,7 @@ export function createPushupAnalyzer(options = {}) {
       body: null,
       torsoTilt: null,
       tracking: false,
+      thresholds: null,
       ...extra,
     };
   }
@@ -154,6 +221,7 @@ export function createPushupAnalyzer(options = {}) {
       lastRepAt = -Infinity;
       candidate = null;
       candidateSince = 0;
+      samples = [];
       clearDip();
       resetRepAccumulators();
     },
@@ -185,10 +253,12 @@ export function createPushupAnalyzer(options = {}) {
       minElbowInRep = Math.min(minElbowInRep, elbow);
       if (Number.isFinite(body)) worstBodyInRep = Math.min(worstBodyInRep, body);
 
+      const limits = thresholdsFor(elbow, timestamp);
+
       // Instantaneous reading; null in the hysteresis band, where we hold.
       let observed = null;
-      if (elbow <= opts.downAngle) observed = 'down';
-      else if (elbow >= opts.upAngle) observed = 'up';
+      if (elbow <= limits.down) observed = 'down';
+      else if (elbow >= limits.up) observed = 'up';
 
       let repCompleted = false;
       let partialRep = false;
@@ -198,11 +268,13 @@ export function createPushupAnalyzer(options = {}) {
       // coming back never crosses a threshold, so the machine sees nothing —
       // but "go lower" is exactly the feedback that moment calls for.
       if (phase === 'up') {
-        if (elbow < opts.upAngle) {
+        if (elbow < limits.up) {
           inDip = true;
           dipMin = Math.min(dipMin, elbow);
         } else if (inDip) {
-          const wasShallow = dipMin <= opts.partialAngle;
+          // "Too shallow to count" is relative to where the down threshold
+          // actually sits, so the advice stays honest under adaptation.
+          const wasShallow = dipMin <= limits.down + (opts.upAngle - opts.partialAngle);
           clearDip();
           if (wasShallow) {
             partialRep = true;
@@ -265,6 +337,7 @@ export function createPushupAnalyzer(options = {}) {
         elbow,
         body,
         torsoTilt,
+        thresholds: limits,
       });
     },
   };

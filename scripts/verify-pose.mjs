@@ -339,12 +339,70 @@ await check('reset clears reps and phase', () => {
   assert.equal(a.phase, 'unknown');
 });
 
-await check('thresholds are configurable', () => {
-  // A coach wanting strict depth sets a lower bottom; 95 no longer qualifies.
-  const strict = createPushupAnalyzer({ downAngle: 80 });
+group('pose: adaptive thresholds');
+
+await check('a shallow-measuring rep still counts, because it is this person\'s full range', () => {
+  // The reported failure: real push-ups that only measure 115 degrees because
+  // the camera flattens the angle. A fixed 100-degree threshold counts none.
+  const fixed = createPushupAnalyzer({ autoCalibrate: false });
+  let t = 0;
+  for (let i = 0; i < 3; i++) t = run(fixed, cycle({ bottom: 115 }), t).endedAt;
+  assert.equal(fixed.reps, 0, 'fixed thresholds miss the whole set');
+
+  const adaptive = createPushupAnalyzer();
+  t = 0;
+  for (let i = 0; i < 3; i++) t = run(adaptive, cycle({ bottom: 115 }), t).endedAt;
+  assert.equal(adaptive.reps, 3, 'adapting to the observed range counts them');
+});
+
+await check('adaptation does not make a twitch into a rep', () => {
+  // Range far too small to be a push-up, however consistent it is.
+  const a = createPushupAnalyzer();
+  let t = 0;
+  for (let i = 0; i < 4; i++) t = run(a, cycle({ top: 172, bottom: 158 }), t).endedAt;
+  assert.equal(a.reps, 0);
+});
+
+await check('the absolute ceiling still rejects a genuinely shallow rep', () => {
+  // 130 degrees is a wide enough range to adapt to, but the arms have barely
+  // bent — the clamp is what stops this counting.
+  const a = createPushupAnalyzer();
+  let t = 0;
+  for (let i = 0; i < 3; i++) t = run(a, cycle({ bottom: 130 }), t).endedAt;
+  assert.equal(a.reps, 0);
+});
+
+await check('deep reps still count, and thresholds are reported', () => {
+  const a = createPushupAnalyzer();
+  const { events } = run(a, cycle({ bottom: 80 }));
+  assert.equal(a.reps, 1);
+  const withThresholds = events.find((e) => e.thresholds);
+  assert.ok(withThresholds, 'thresholds are exposed for the UI');
+  assert.ok(withThresholds.thresholds.down <= DEFAULTS.downAngleCeiling);
+});
+
+await check('autoCalibrate can be switched off for fixed thresholds', () => {
+  const a = createPushupAnalyzer({ autoCalibrate: false });
+  assert.equal(run(a, cycle({ bottom: 85 })).reps, 1);
+});
+
+group('pose: configuration');
+
+await check('fixed thresholds are configurable when adaptation is off', () => {
+  // With autoCalibrate off, downAngle is the threshold; a coach wanting strict
+  // depth lowers it and 95 degrees no longer qualifies.
+  const strict = createPushupAnalyzer({ autoCalibrate: false, downAngle: 80 });
   assert.equal(run(strict, cycle({ bottom: 95 })).reps, 0);
-  const relaxed = createPushupAnalyzer({ downAngle: 110 });
+  const relaxed = createPushupAnalyzer({ autoCalibrate: false, downAngle: 110 });
   assert.equal(run(relaxed, cycle({ bottom: 95 })).reps, 1);
+});
+
+await check('the adaptation ceiling is configurable', () => {
+  // Someone filming from an angle that flattens further can raise the ceiling.
+  const strict = createPushupAnalyzer({ downAngleCeiling: 100 });
+  assert.equal(run(strict, cycle({ bottom: 115 })).reps, 0);
+  const lenient = createPushupAnalyzer({ downAngleCeiling: 130 });
+  assert.equal(run(lenient, cycle({ bottom: 115 })).reps, 1);
 });
 
 await check('form gating can be switched off', () => {
