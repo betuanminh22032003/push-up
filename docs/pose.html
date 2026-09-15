@@ -84,12 +84,35 @@
   #hudCopied { font-size: 11px; color: #4ADE80; text-align: center; margin-top: 6px; min-height: 14px; }
   #hudSys { font-size: 10px; color: #55555E; text-align: center; letter-spacing: 0.4px; }
   #hudSys .warn { color: #FBBF24; }
+
+  /*
+   * Setup coach. "Zero reps" has four different causes that look identical on
+   * screen — no person found, arms out of frame, not in a push-up position, or
+   * still learning the range. Naming the actual one is the difference between
+   * a user who can fix it and a user who just sees nothing happen.
+   */
+  #coach {
+    position: absolute; left: 12px; right: 12px;
+    top: 50%; transform: translateY(-50%);
+    padding: 18px 20px; border-radius: 16px;
+    background: rgba(10,10,11,0.88); border: 1px solid #26262C;
+    text-align: center;
+  }
+  #coach.hidden { display: none; }
+  #coach.good { border-color: #4ADE80; }
+  #coachTitle { font-size: 18px; font-weight: 700; color: #F5F5F7; }
+  #coachBody { font-size: 13px; color: #8A8A93; margin-top: 6px; line-height: 1.45; }
 </style>
 </head>
 <body>
   <video id="video" class="mirrored" playsinline muted autoplay></video>
   <canvas id="overlay" class="mirrored"></canvas>
   <div id="status">Starting camera…</div>
+
+  <div id="coach" class="hidden">
+    <div id="coachTitle"></div>
+    <div id="coachBody"></div>
+  </div>
 
   <div id="hud" class="hidden">
     <div id="hudTop">
@@ -862,6 +885,7 @@ function persistSummary(reps) {
       reps: reps,
       needed: lastNeeded == null ? DEFAULTS.downAngle : Math.round(lastNeeded),
       delegate: delegateUsed,
+      stuckAt: coachState,
     }));
   } catch (e) {
     /* private mode */
@@ -876,8 +900,9 @@ function showLastSummary() {
     const s = JSON.parse(raw);
     if (!s || !s.frames) return;
     const deep = s.deepestElbow == null ? 'never tracked' : s.deepestElbow + '° deepest';
+    const why = s.stuckAt && s.stuckAt !== 'ready' ? ' — stuck at: ' + s.stuckAt : '';
     hudCopied.textContent =
-      'Last run: ' + s.reps + ' reps, ' + deep + ' (need ' + s.needed + '°)';
+      'Last run: ' + s.reps + ' reps, ' + deep + ' (need ' + s.needed + '°)' + why;
     setTimeout(() => { hudCopied.textContent = ''; }, 8000);
   } catch (e) {
     /* ignore */
@@ -930,6 +955,68 @@ const ISSUE_TEXT = {
   bodySag: 'Keep your body straight',
   shallow: 'Go lower',
 };
+
+const coachEl = document.getElementById('coach');
+const coachTitleEl = document.getElementById('coachTitle');
+const coachBodyEl = document.getElementById('coachBody');
+
+const SETUP_HELP = {
+  noPose: ['No one in frame',
+    'Prop the phone so your whole body is visible, about 2m away, and make sure the room is lit.'],
+  noArms: ['Arms out of frame',
+    'Your shoulder, elbow and wrist all have to be visible. Move the phone back or turn it sideways.'],
+  notHorizontal: ['Get into a push-up position',
+    'Lie face down with your body roughly level. Standing in front of the camera will not count.'],
+  calibrating: ['Learning your range',
+    'Do one full push-up — all the way down, all the way up — and counting starts.'],
+};
+
+let coachState = null;
+let coachSince = 0;
+
+/**
+ * Work out which of the four silent failures is happening, rather than leaving
+ * the screen at zero with no explanation.
+ */
+function setupState(pose, result) {
+  if (!pose) return 'noPose';
+  const seen = (j) => pose[j] && pose[j].score >= DEFAULTS.minVisibility;
+  const arm = (side) =>
+    seen(side + 'Shoulder') && seen(side + 'Elbow') && seen(side + 'Wrist');
+  if (!arm('left') && !arm('right')) return 'noArms';
+  if (Number.isFinite(result.torsoTilt) && result.torsoTilt > DEFAULTS.maxTorsoTilt) {
+    return 'notHorizontal';
+  }
+  if (result.thresholds && !result.thresholds.adapted) return 'calibrating';
+  return 'ready';
+}
+
+/** Debounced so a single dropped frame does not flash a setup warning. */
+function updateCoach(pose, result, now) {
+  if (!hudEnabled) return;
+  const state = setupState(pose, result);
+
+  if (state !== coachState) {
+    coachState = state;
+    coachSince = now;
+  }
+  const settled = now - coachSince > 700;
+
+  if (state === 'ready' || !settled) {
+    if (state === 'ready') coachEl.classList.add('hidden');
+    return;
+  }
+
+  const help = SETUP_HELP[state];
+  if (!help) {
+    coachEl.classList.add('hidden');
+    return;
+  }
+  coachTitleEl.textContent = help[0];
+  coachBodyEl.textContent = help[1];
+  coachEl.classList.toggle('good', state === 'calibrating');
+  coachEl.classList.remove('hidden');
+}
 
 function updateHud(result) {
   if (!hudEnabled) return;
@@ -1096,6 +1183,7 @@ function tick() {
         reps: result.reps,
       });
       updateHud(result);
+      updateCoach(pose, result, now);
       draw(pose, result.tracking);
     }
     consecutiveErrors = 0;
