@@ -4,7 +4,7 @@ import { useCameraPermissions } from 'expo-camera';
 import { WebView } from 'react-native-webview';
 
 import { POSE_PAGE_URL } from '../config';
-import { colors, spacing, type } from '../theme/theme';
+import { colors, radius, spacing, type } from '../theme/theme';
 
 /**
  * Camera pose detection on native, via a WebView running MediaPipe.
@@ -26,6 +26,7 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
   const webviewRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [ready, setReady] = useState(false);
+  const [cameraUp, setCameraUp] = useState(false);
   const [failure, setFailure] = useState(null);
 
   const onRepRef = useRef(onRep);
@@ -62,7 +63,12 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
     } else if (message.type === 'frame') {
       onFrameRef.current?.(message);
     } else if (message.type === 'status') {
-      if (message.phase === 'ready') {
+      if (message.phase === 'camera') {
+        // Camera is live but the model is still downloading. Stop covering the
+        // preview: these are the seconds when someone positions the phone.
+        setCameraUp(true);
+      } else if (message.phase === 'ready') {
+        setCameraUp(true);
         setReady(true);
         setFailure(null);
       } else if (message.phase === 'error') {
@@ -122,9 +128,21 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
 
       {failure ? (
         <Overlay title="Detector problem" body={failure} tone="error" />
-      ) : !ready ? (
-        <Overlay loading title="Starting camera" body="Loading the pose model…" />
-      ) : null}
+      ) : ready ? null : cameraUp ? (
+        <Banner text="Loading the model… you can frame yourself now" />
+      ) : (
+        <Overlay loading title="Starting camera" body="Asking for the camera…" />
+      )}
+    </View>
+  );
+}
+
+/** Non-blocking status, for when the camera behind it should stay visible. */
+function Banner({ text }) {
+  return (
+    <View style={styles.banner}>
+      <ActivityIndicator color={colors.accent} size="small" />
+      <Text style={styles.bannerText}>{text}</Text>
     </View>
   );
 }
@@ -155,6 +173,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10,10,11,0.86)',
   },
   spinner: { marginBottom: spacing.md },
+  banner: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(10,10,11,0.82)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  bannerText: { ...type.body, fontSize: 13, color: colors.textDim, flex: 1 },
   title: { ...type.title, fontSize: 17, color: colors.textDim, textAlign: 'center' },
   titleError: { color: colors.danger },
   body: {

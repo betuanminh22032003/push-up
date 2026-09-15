@@ -29,6 +29,21 @@
   }
   #status.hidden { display: none; }
   #status.error { color: #F87171; }
+  /*
+   * Once the camera is live there is something worth looking at, so the status
+   * stops covering it and becomes a banner. Framing yourself is the whole job
+   * of those few seconds while the model downloads.
+   */
+  #status.compact {
+    inset: auto 0 auto 0;
+    top: calc(12px + env(safe-area-inset-top));
+    margin: 0 12px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    background: rgba(10,10,11,0.82);
+    border: 1px solid #26262C;
+    font-size: 13px;
+  }
 
   /* Diagnostic HUD: what the model actually reads, live, while you train. */
   #hud {
@@ -661,7 +676,13 @@ function watchStream(mediaStream) {
   });
 }
 
-function setStatus(text, isError) {
+/**
+ * @param {string|null} text     message, or null to hide
+ * @param {boolean} isError      render in the error colour
+ * @param {boolean} compact      banner across the top instead of a full cover,
+ *                               for when the camera behind it should stay visible
+ */
+function setStatus(text, isError, compact) {
   if (!text) {
     statusEl.classList.add('hidden');
     return;
@@ -669,6 +690,7 @@ function setStatus(text, isError) {
   statusEl.textContent = text;
   statusEl.classList.remove('hidden');
   statusEl.classList.toggle('error', !!isError);
+  statusEl.classList.toggle('compact', !!compact);
 }
 
 function draw(pose, tracking) {
@@ -940,7 +962,11 @@ async function start() {
     await videoEl.play();
     await acquireWakeLock();
 
-    setStatus('Loading model…');
+    // The camera is live from here on, so uncover it: the model download takes
+    // a few seconds and that is exactly when someone wants to see the frame to
+    // position the phone. Tell the app host too, so it can do the same.
+    send({ type: 'status', phase: 'camera' });
+    setStatus('Loading model… you can frame yourself now', false, true);
     const vision = await import(CDN + '/vision_bundle.mjs');
     const fileset = await vision.FilesetResolver.forVisionTasks(CDN + '/wasm');
 
@@ -958,7 +984,7 @@ async function start() {
       landmarker = await makeLandmarker('GPU');
       delegateUsed = 'GPU';
     } catch (gpuError) {
-      setStatus('GPU unavailable, loading on CPU…');
+      setStatus('GPU unavailable, loading on CPU…', false, true);
       landmarker = await makeLandmarker('CPU');
       delegateUsed = 'CPU';
     }

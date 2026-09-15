@@ -77,7 +77,8 @@ export function PoseStage({ active, paused, onRep, onFrame, analyzerOptions }) {
   const timerRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
 
-  const [phase, setPhase] = useState('loading'); // loading | ready | error
+  // loading -> camera (stream live, model still downloading) -> ready | error
+  const [phase, setPhase] = useState('loading');
   const [error, setError] = useState(null);
 
   // Held in refs so a new callback identity never restarts the camera. Pausing
@@ -214,6 +215,11 @@ export function PoseStage({ active, paused, onRep, onFrame, analyzerOptions }) {
         await video.play();
         if (cancelled) return;
 
+        // Stop covering the preview: the model download takes a few seconds,
+        // and that is exactly when someone needs to see the frame to position
+        // themselves.
+        setPhase('camera');
+
         const { FilesetResolver, PoseLandmarker } = await loadVision();
         if (cancelled) return;
 
@@ -275,11 +281,15 @@ export function PoseStage({ active, paused, onRep, onFrame, analyzerOptions }) {
     <div style={styles.wrap}>
       <video ref={videoRef} playsInline muted style={styles.video} />
       <canvas ref={canvasRef} style={styles.canvas} />
-      {phase !== 'ready' ? (
+      {phase === 'error' ? (
         <div style={styles.overlay}>
-          <span style={styles.overlayText}>
-            {phase === 'error' ? error : 'Starting camera and loading model...'}
-          </span>
+          <span style={{ ...styles.overlayText, color: colors.danger }}>{error}</span>
+        </div>
+      ) : phase === 'camera' ? (
+        <div style={styles.banner}>Loading the model… you can frame yourself now</div>
+      ) : phase !== 'ready' ? (
+        <div style={styles.overlay}>
+          <span style={styles.overlayText}>Starting camera…</span>
         </div>
       ) : null}
     </div>
@@ -324,4 +334,17 @@ const styles = {
     background: 'rgba(10,10,11,0.78)',
   },
   overlayText: { color: colors.textDim, fontSize: 14, lineHeight: 1.5 },
+  banner: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    padding: '9px 14px',
+    borderRadius: 999,
+    background: 'rgba(10,10,11,0.82)',
+    border: `1px solid ${colors.border}`,
+    color: colors.textDim,
+    fontSize: 13,
+    textAlign: 'center',
+  },
 };
