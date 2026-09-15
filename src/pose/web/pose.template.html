@@ -99,10 +99,11 @@
     </div>
     <div id="hudGrid">
       <div class="cell"><span class="k">ELBOW</span><span class="v" id="hudElbow">—</span></div>
+      <div class="cell"><span class="k" id="hudDeepestK">DEEPEST</span><span class="v" id="hudDeepest">—</span></div>
       <div class="cell"><span class="k">BODY</span><span class="v" id="hudBody">—</span></div>
       <div class="cell"><span class="k">TILT</span><span class="v" id="hudTilt">—</span></div>
-      <div class="cell"><span class="k">FPS</span><span class="v" id="hudFps">—</span></div>
     </div>
+    <div id="hudFps" hidden></div>
     <div id="hudBar"><div id="hudBarFill"></div></div>
     <div id="hudActions">
       <button id="hudReset" type="button">Reset</button>
@@ -301,6 +302,57 @@ const hudFps = document.getElementById('hudFps');
 const hudBarFill = document.getElementById('hudBarFill');
 const hudCopied = document.getElementById('hudCopied');
 const hudSys = document.getElementById('hudSys');
+const hudDeepest = document.getElementById('hudDeepest');
+const hudDeepestK = document.getElementById('hudDeepestK');
+
+/**
+ * Deepest elbow angle reached, against the angle actually required.
+ *
+ * This is the one number that explains a silent failure. If a rep never gets
+ * below downAngle the analyser makes no phase transition at all, so it reports
+ * no issue and no rep — the screen just sits there. Seeing "118 / need 100"
+ * says immediately whether the problem is depth, the camera angle flattening
+ * the measurement, or a threshold that is simply wrong for this setup.
+ */
+let deepestElbow = Infinity;
+
+/** Summary of the run, kept so a closed page still has something to report. */
+const SUMMARY_KEY = 'pupg:lastPoseSession';
+let sessionFrames = 0;
+let trackedFrames = 0;
+let lastSummaryWrite = 0;
+
+function persistSummary(reps) {
+  try {
+    localStorage.setItem(SUMMARY_KEY, JSON.stringify({
+      when: new Date().toISOString(),
+      frames: sessionFrames,
+      tracked: trackedFrames,
+      deepestElbow: Number.isFinite(deepestElbow) ? Math.round(deepestElbow) : null,
+      reps: reps,
+      needed: DEFAULTS.downAngle,
+      delegate: delegateUsed,
+    }));
+  } catch (e) {
+    /* private mode */
+  }
+}
+
+/** Show what happened last time, so a failed run is not lost on reload. */
+function showLastSummary() {
+  try {
+    const raw = localStorage.getItem(SUMMARY_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (!s || !s.frames) return;
+    const deep = s.deepestElbow == null ? 'never tracked' : s.deepestElbow + '° deepest';
+    hudCopied.textContent =
+      'Last run: ' + s.reps + ' reps, ' + deep + ' (need ' + s.needed + '°)';
+    setTimeout(() => { hudCopied.textContent = ''; }, 8000);
+  } catch (e) {
+    /* ignore */
+  }
+}
 
 /**
  * Surfaces the two things that silently kill a session: the screen sleeping,
@@ -316,7 +368,12 @@ function updateSysLine() {
     : lockOn
       ? 'screen: staying awake'
       : '<span class="warn">screen: may sleep</span>';
-  hudSys.innerHTML = lockText + ' &middot; ' + (delegateUsed || '—');
+  const fps = fpsWindow.length ? fpsWindow.length + 'fps' : '—';
+  const tracked = sessionFrames
+    ? Math.round((trackedFrames / sessionFrames) * 100) + '% tracked'
+    : 'no frames';
+  hudSys.innerHTML =
+    lockText + ' &middot; ' + (delegateUsed || '—') + ' &middot; ' + fps + ' &middot; ' + tracked;
 }
 
 let hudEnabled = false;
@@ -352,13 +409,34 @@ function updateHud(result) {
   while (fpsWindow.length && now - fpsWindow[0] > 1000) fpsWindow.shift();
 
   const fmt = (v) => (Number.isFinite(v) ? Math.round(v) + '°' : '—');
+
+  sessionFrames += 1;
+  if (Number.isFinite(result.elbow)) {
+    trackedFrames += 1;
+    deepestElbow = Math.min(deepestElbow, result.elbow);
+  }
+  // A counted rep proves the depth was fine, so start measuring the next one.
+  if (result.repCompleted) deepestElbow = Infinity;
+
   hudReps.textContent = result.reps != null ? result.reps : 0;
   hudPhase.textContent = (result.phase || 'unknown').toUpperCase();
   hudPhase.className = result.phase === 'down' ? 'down' : result.phase === 'up' ? 'up' : '';
   hudElbow.textContent = fmt(result.elbow);
   hudBody.textContent = fmt(result.body);
   hudTilt.textContent = fmt(result.torsoTilt);
-  hudFps.textContent = fpsWindow.length;
+
+  hudDeepest.textContent = Number.isFinite(deepestElbow) ? Math.round(deepestElbow) + '°' : '—';
+  hudDeepestK.textContent = 'DEEPEST / ' + DEFAULTS.downAngle + '°';
+  hudDeepest.className =
+    'v' + (Number.isFinite(deepestElbow)
+      ? (deepestElbow <= DEFAULTS.downAngle ? ' ok' : ' bad')
+      : '');
+
+  if (now - lastSummaryWrite > 2000) {
+    lastSummaryWrite = now;
+    persistSummary(result.reps || 0);
+    updateSysLine(); // refresh fps and tracked-percentage
+  }
 
   hudElbow.className = 'v' + (Number.isFinite(result.elbow)
     ? (result.elbow <= DEFAULTS.downAngle ? ' ok' : '') : ' bad');
@@ -403,6 +481,9 @@ function updateHud(result) {
 document.getElementById('hudReset').addEventListener('click', () => {
   if (analyzer) analyzer.reset();
   trace.length = 0;
+  deepestElbow = Infinity;
+  sessionFrames = 0;
+  trackedFrames = 0;
   hudCopied.textContent = 'reset';
   setTimeout(() => { hudCopied.textContent = ''; }, 1200);
 });
@@ -546,6 +627,7 @@ async function start() {
     hudEnabled = !window.ReactNativeWebView || /[?&]debug=1/.test(location.search);
     hudEl.classList.toggle('hidden', !hudEnabled);
     updateSysLine();
+    if (hudEnabled) showLastSummary();
 
     timer = setInterval(tick, FRAME_INTERVAL_MS);
   } catch (e) {
@@ -579,7 +661,15 @@ function handleCommand(rawData) {
 window.addEventListener('message', (e) => handleCommand(e.data));
 document.addEventListener('message', (e) => handleCommand(e.data));
 
-document.addEventListener('visibilitychange', handleVisible);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    // Last chance to record the run: on mobile a page is often never given a
+    // real unload, so a summary written only every 2s would lose the ending.
+    persistSummary(analyzer ? analyzer.reps : 0);
+  } else {
+    handleVisible();
+  }
+});
 
 /**
  * Only tear down on a real unload. The previous version stopped every track on
@@ -588,6 +678,7 @@ document.addEventListener('visibilitychange', handleVisible);
  * good, with nothing left to restart it.
  */
 window.addEventListener('pagehide', (event) => {
+  persistSummary(analyzer ? analyzer.reps : 0);
   if (event.persisted) return; // bfcache: we may be coming right back
   if (timer) clearInterval(timer);
   timer = null;
