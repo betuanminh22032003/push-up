@@ -245,19 +245,30 @@ await check('a shallow dip counts nothing and asks for depth', () => {
   assert.ok(events.some((e) => e.partialRep));
 });
 
-await check('a sagging body counts nothing and says so', () => {
+await check('a sagging body still counts, but says so', () => {
+  // The measurement is too unreliable to refuse work over — foreshortening
+  // drags it below the threshold for a perfectly straight body — so the rep
+  // counts and the advice is given.
   const a = createPushupAnalyzer();
   const { reps, events } = run(a, cycle({ body: 130 }));
-  assert.equal(reps, 0);
-  assert.ok(issuesIn(events).includes(ISSUES.BODY_SAG));
+  assert.equal(reps, 1);
+  assert.ok(issuesIn(events).includes(ISSUES.BODY_SAG), 'still coaches the form');
 });
 
-await check('the same motion counts once the body straightens', () => {
+await check('strict mode can veto a sagging rep', () => {
+  const strict = createPushupAnalyzer({ requireStraightBody: true });
+  assert.equal(run(strict, cycle({ body: 130 })).reps, 0);
+  run(strict, cycle({ body: 175 }), 10000);
+  assert.equal(strict.reps, 1, 'and counts once the body straightens');
+});
+
+await check('one noisy tilt frame does not veto a good rep', () => {
+  // Judged on the rep's most horizontal frame, so a single bad inference
+  // mid-rep cannot throw the whole thing away.
   const a = createPushupAnalyzer();
-  run(a, cycle({ body: 130 }));
-  assert.equal(a.reps, 0);
-  run(a, cycle({ body: 175 }), 10000);
-  assert.equal(a.reps, 1);
+  const frames = cycle();
+  frames[Math.floor(frames.length / 2)] = { ...frames[Math.floor(frames.length / 2)], tilt: 80 };
+  assert.equal(run(a, frames).reps, 1);
 });
 
 await check('arm curls while standing count nothing', () => {
@@ -405,9 +416,9 @@ await check('the adaptation ceiling is configurable', () => {
   assert.equal(run(lenient, cycle({ bottom: 115 })).reps, 1);
 });
 
-await check('form gating can be switched off', () => {
-  const lenient = createPushupAnalyzer({ requireStraightBody: false });
-  assert.equal(run(lenient, cycle({ body: 130 })).reps, 1);
+await check('form gating can be switched on', () => {
+  const strict = createPushupAnalyzer({ requireStraightBody: true });
+  assert.equal(run(strict, cycle({ body: 130 })).reps, 0);
 });
 
 await check('defaults match the proximity path where they overlap', () => {

@@ -63,10 +63,24 @@ export const DEFAULTS = {
   minRepMs: 500,
   /** Shoulder-hip-knee angle below which the body is sagging or piking. */
   straightBodyMinAngle: 150,
-  /** Reject reps performed with a bent body. */
-  requireStraightBody: true,
-  /** Torso must be within this many degrees of horizontal. */
-  maxTorsoTilt: 45,
+  /**
+   * Whether bad body position *rejects* a rep rather than just warning.
+   *
+   * Off by default, because the measurement is not trustworthy enough to
+   * refuse work over. The shoulder-hip-knee angle is read off a flat image, so
+   * foreshortening from any camera not square to the body pulls it well below
+   * 150 degrees even when the person is perfectly straight — the same
+   * projection problem that made fixed elbow thresholds fail. Rejecting on it
+   * meant a full set of real push-ups counted zero. The issue is still
+   * reported, so the coaching is unchanged; only the veto is gone.
+   */
+  requireStraightBody: false,
+  /**
+   * Torso must get within this many degrees of horizontal at some point in the
+   * rep. Judged on the best frame of the rep, not every frame: a single noisy
+   * inference used to veto an otherwise good rep.
+   */
+  maxTorsoTilt: 55,
   /** Frame aspect ratio (width / height) for angle correction. */
   aspect: 1,
 };
@@ -130,7 +144,8 @@ export function createPushupAnalyzer(options = {}) {
   // Per-rep accumulators, reset when a descent begins.
   let minElbowInRep = Infinity;
   let worstBodyInRep = Infinity;
-  let sawNotHorizontal = false;
+  /** Most horizontal reading of the rep — the rep's best evidence, not its worst. */
+  let bestTiltInRep = Infinity;
 
   // A dip taken while still in the 'up' phase, i.e. one that never got deep
   // enough to commit a descent. Tracked outside the phase machine because a
@@ -182,7 +197,7 @@ export function createPushupAnalyzer(options = {}) {
   function resetRepAccumulators() {
     minElbowInRep = Infinity;
     worstBodyInRep = Infinity;
-    sawNotHorizontal = false;
+    bestTiltInRep = Infinity;
   }
 
   function clearDip() {
@@ -247,8 +262,7 @@ export function createPushupAnalyzer(options = {}) {
         });
       }
 
-      const horizontal = torsoTilt === null || torsoTilt <= opts.maxTorsoTilt;
-      if (!horizontal) sawNotHorizontal = true;
+      if (Number.isFinite(torsoTilt)) bestTiltInRep = Math.min(bestTiltInRep, torsoTilt);
 
       minElbowInRep = Math.min(minElbowInRep, elbow);
       if (Number.isFinite(body)) worstBodyInRep = Math.min(worstBodyInRep, body);
@@ -301,19 +315,27 @@ export function createPushupAnalyzer(options = {}) {
             resetRepAccumulators();
             minElbowInRep = elbow;
             if (Number.isFinite(body)) worstBodyInRep = body;
-            if (!horizontal) sawNotHorizontal = true;
+            if (Number.isFinite(torsoTilt)) bestTiltInRep = torsoTilt;
           }
 
           if (phase === 'up' && previous === 'down') {
             // A full cycle finished. Decide whether it earns a count.
-            if (sawNotHorizontal) {
+            //
+            // Only two things veto a rep: not being in a push-up position at
+            // all, and arriving impossibly soon after the last one. Body
+            // position is reported but does not veto unless explicitly asked
+            // for — see requireStraightBody.
+            const notHorizontal =
+              Number.isFinite(bestTiltInRep) && bestTiltInRep > opts.maxTorsoTilt;
+            const sagging =
+              Number.isFinite(worstBodyInRep) && worstBodyInRep < opts.straightBodyMinAngle;
+
+            if (sagging) issues.push(ISSUES.BODY_SAG);
+
+            if (notHorizontal) {
               issues.push(ISSUES.NOT_HORIZONTAL);
-            } else if (
-              opts.requireStraightBody &&
-              Number.isFinite(worstBodyInRep) &&
-              worstBodyInRep < opts.straightBodyMinAngle
-            ) {
-              issues.push(ISSUES.BODY_SAG);
+            } else if (opts.requireStraightBody && sagging) {
+              /* vetoed by an explicit strictness setting */
             } else if (timestamp - lastRepAt >= opts.minRepMs) {
               reps += 1;
               lastRepAt = timestamp;
