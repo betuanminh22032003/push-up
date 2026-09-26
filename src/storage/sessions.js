@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SESSIONS_KEY = 'pupg:sessions:v1';
 const SETTINGS_KEY = 'pupg:settings:v1';
+const PROGRAM_KEY = 'pupg:program:v1';
 
 /** Sessions are stored newest-first, so reads and prepends are both O(1)-ish. */
 
@@ -41,10 +42,36 @@ async function writeSessions(sessions) {
 }
 
 /**
+ * Sets as stored: rounded, and without empties. A user who pressed Done
+ * without moving did not do a set of zero, and it must not drag averages down.
+ */
+export function cleanSets(sets) {
+  if (!Array.isArray(sets)) return [];
+  return sets
+    .map((s) => ({
+      reps: Math.max(0, Math.round(s?.reps || 0)),
+      durationSeconds: Math.max(0, Math.round(s?.durationSeconds || 0)),
+    }))
+    .filter((s) => s.reps > 0);
+}
+
+/**
  * Persist one finished session and return the new full list, so callers update
  * state from what was actually written instead of guessing.
+ *
+ * `sets` is optional. A single-set workout is stored without it, exactly as
+ * the first version stored everything, so old and new records share a shape
+ * and every reader treats a missing `sets` as one set of `totalReps`.
  */
-export async function saveSession({ totalReps, durationSeconds, timestamp = Date.now(), sourceId }) {
+export async function saveSession({
+  totalReps,
+  durationSeconds,
+  timestamp = Date.now(),
+  sourceId,
+  sets,
+  restSeconds,
+  program,
+}) {
   const session = {
     id: createSessionId(),
     timestamp,
@@ -52,6 +79,14 @@ export async function saveSession({ totalReps, durationSeconds, timestamp = Date
     durationSeconds: Math.max(0, Math.round(durationSeconds)),
     sourceId: sourceId ?? null,
   };
+  const cleaned = cleanSets(sets);
+  if (cleaned.length > 1) session.sets = cleaned;
+  if (Number.isFinite(restSeconds) && restSeconds > 0) {
+    session.restSeconds = Math.round(restSeconds);
+  }
+  if (program && Number.isFinite(program.day)) {
+    session.program = { level: program.level, day: program.day };
+  }
   const existing = await loadSessions();
   const next = [session, ...existing];
   await writeSessions(next);
@@ -70,10 +105,19 @@ export async function clearSessions() {
   return [];
 }
 
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
   sourceId: null, // null => auto-detect the best available source
   soundEnabled: true,
   hapticsEnabled: true,
+  voiceEnabled: true,
+  countdownSeconds: 5,
+  restSeconds: 60,
+  dailyGoal: 50,
+  language: 'auto', // 'auto' | 'en' | 'vi'
+  reminderEnabled: false,
+  reminderHour: 19,
+  reminderMinute: 0,
+  onboardingDone: false,
 };
 
 export async function loadSettings() {
@@ -92,4 +136,45 @@ export async function saveSettings(settings) {
   } catch {
     /* non-fatal: settings fall back to defaults next launch */
   }
+}
+
+/**
+ * Program progress: the level the test assigned and which days are done.
+ * `null` means no program has been started.
+ *   { level, testReps, startedAt, completedDays: { [day]: timestamp } }
+ */
+export async function loadProgram() {
+  try {
+    const raw = await AsyncStorage.getItem(PROGRAM_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !Number.isFinite(parsed.level)) return null;
+    const completedDays = {};
+    for (const [day, at] of Object.entries(parsed.completedDays || {})) {
+      if (Number.isFinite(Number(day)) && Number.isFinite(at)) completedDays[Number(day)] = at;
+    }
+    return {
+      level: parsed.level,
+      testReps: Number.isFinite(parsed.testReps) ? parsed.testReps : null,
+      startedAt: Number.isFinite(parsed.startedAt) ? parsed.startedAt : Date.now(),
+      completedDays,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function saveProgram(program) {
+  try {
+    if (!program) await AsyncStorage.removeItem(PROGRAM_KEY);
+    else await AsyncStorage.setItem(PROGRAM_KEY, JSON.stringify(program));
+  } catch {
+    /* non-fatal: progress is re-derived from the in-memory copy next write */
+  }
+  return program;
+}
+
+/** Everything the app stores, for "delete all data". */
+export async function clearAllData() {
+  await AsyncStorage.multiRemove([SESSIONS_KEY, SETTINGS_KEY, PROGRAM_KEY]);
 }

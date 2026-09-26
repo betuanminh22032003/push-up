@@ -18,3 +18,8 @@
  * use Pages.
  */
 export const POSE_PAGE_URL = 'https://betuanminh22032003.github.io/push-up/pose.html';
+
+/** Published from docs/ by the same GitHub Pages setup. Linked from Settings and the store listing. */
+export const PRIVACY_URL = 'https://betuanminh22032003.github.io/push-up/privacy.html';
+
+export const SOURCE_URL = 'https://github.com/betuanminh22032003/push-up';

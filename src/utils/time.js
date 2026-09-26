@@ -25,17 +25,26 @@ export function shiftDayKey(timestamp, offset) {
   return dayKey(d.getTime());
 }
 
-/** "Today 14:32" / "Yesterday 08:05" / "12 Mar 18:44" */
-export function formatSessionDate(timestamp, now = Date.now()) {
+/**
+ * "Today 14:32" / "Yesterday 08:05" / "12 Mar 18:44"
+ * @param {{ today?: string, yesterday?: string }} words  translated day names
+ */
+export function formatSessionDate(timestamp, now = Date.now(), words = {}) {
   const key = dayKey(timestamp);
   const time = new Date(timestamp).toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   });
-  if (key === dayKey(now)) return `Today ${time}`;
-  if (key === shiftDayKey(now, -1)) return `Yesterday ${time}`;
+  if (key === dayKey(now)) return `${words.today ?? 'Today'} ${time}`;
+  if (key === shiftDayKey(now, -1)) return `${words.yesterday ?? 'Yesterday'} ${time}`;
   const d = new Date(timestamp);
   const month = d.toLocaleDateString(undefined, { month: 'short' });
   return `${d.getDate()} ${month} ${time}`;
+}
+
+/** "19:05" from an hour and minute, for the reminder time picker. */
+export function formatClock(hour, minute) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(hour)}:${pad(minute)}`;
 }

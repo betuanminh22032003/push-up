@@ -3,37 +3,80 @@
     "name": "PUPG Push-up",
     "slug": "pupg-pushup",
     "version": "1.0.0",
+    "description": "Hands-free push-up counter with AI camera form coaching, a 6-week program, daily goals and streaks.",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0A0B",
+    "primaryColor": "#4ADE80",
+    "githubUrl": "https://github.com/betuanminh22032003/push-up",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.pupg.pushup"
     },
     "android": {
+      "package": "com.pupg.pushup",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0B",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.pupg.pushup",
       "permissions": [
         "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
       [
         "expo-camera",
         {
-          "cameraPermission": "PUPG uses the camera to count your push-ups. Video never leaves your device."
+          "cameraPermission": "PUPG uses the camera to count your push-ups. Video never leaves your device.",
+          "recordAudioAndroid": false
         }
-      ]
-    ],
-    "backgroundColor": "#0A0A0B"
+      ],
+      "expo-localization",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0A0B",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#0A0A0B",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#4ADE80",
+          "defaultChannel": "reminders"
+        }
+      ],
+      "expo-asset"
+    ]
   }
 }

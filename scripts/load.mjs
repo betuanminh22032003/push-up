@@ -34,6 +34,7 @@ export const MEMORY_ASYNC_STORAGE =
   '  getItem: async (k) => (_m.has(k) ? _m.get(k) : null),\n' +
   '  setItem: async (k, v) => { _m.set(k, String(v)); },\n' +
   '  removeItem: async (k) => { _m.delete(k); },\n' +
+  '  multiRemove: async (keys) => { for (const k of keys) _m.delete(k); },\n' +
   '};\n' +
   'export const __mem = _m;';
 

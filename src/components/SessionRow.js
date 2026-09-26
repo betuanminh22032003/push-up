@@ -1,30 +1,44 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { useT } from '../i18n/I18nContext';
 import { colors, radius, spacing } from '../theme/theme';
 import { formatDuration, formatSessionDate } from '../utils/time';
 
 export function SessionRow({ session, onDelete }) {
-  const { totalReps, durationSeconds, timestamp } = session;
+  const t = useT();
+  const { totalReps, durationSeconds, timestamp, sets, program } = session;
   const pace = durationSeconds > 0 ? (totalReps / (durationSeconds / 60)).toFixed(1) : '0.0';
+
+  const details = [formatDuration(durationSeconds), `${pace} ${t('session.repsPerMin')}`];
+  if (Array.isArray(sets) && sets.length > 1) details.push(t('session.sets', { n: sets.length }));
+
+  const tag = program ? t('session.programDay', { day: program.day }) : null;
 
   return (
     <View style={styles.row}>
       <View style={styles.repsBadge}>
         <Text style={styles.repsValue}>{totalReps}</Text>
-        <Text style={styles.repsLabel}>reps</Text>
+        <Text style={styles.repsLabel}>{t('common.reps')}</Text>
       </View>
 
       <View style={styles.meta}>
-        <Text style={styles.date}>{formatSessionDate(timestamp)}</Text>
-        <Text style={styles.sub}>
-          {formatDuration(durationSeconds)} · {pace} reps/min
-        </Text>
+        <View style={styles.dateRow}>
+          <Text style={styles.date}>
+            {formatSessionDate(timestamp, Date.now(), {
+              today: t('session.today'),
+              yesterday: t('session.yesterday'),
+            })}
+          </Text>
+          {tag ? <Text style={styles.tag}>{tag}</Text> : null}
+        </View>
+        <Text style={styles.sub}>{details.join(' · ')}</Text>
       </View>
 
       <Pressable
         onPress={() => onDelete(session)}
         hitSlop={12}
         accessibilityRole="button"
-        accessibilityLabel={`Delete session of ${totalReps} reps`}
+        accessibilityLabel={t('session.delete', { reps: totalReps })}
         style={({ pressed }) => [styles.delete, pressed && { opacity: 0.5 }]}
       >
         <Text style={styles.deleteGlyph}>×</Text>
@@ -54,7 +68,18 @@ const styles = StyleSheet.create({
   repsValue: { fontSize: 24, fontWeight: '600', color: colors.accent },
   repsLabel: { fontSize: 10, color: colors.textFaint, letterSpacing: 1 },
   meta: { flex: 1, paddingLeft: spacing.md },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   date: { fontSize: 15, fontWeight: '500', color: colors.text },
+  tag: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.accent,
+    borderWidth: 1,
+    borderColor: colors.accentDim,
+    borderRadius: radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
   sub: { fontSize: 13, color: colors.textDim, marginTop: 2 },
   delete: { paddingHorizontal: spacing.sm },
   deleteGlyph: { fontSize: 26, color: colors.textFaint, lineHeight: 28 },
