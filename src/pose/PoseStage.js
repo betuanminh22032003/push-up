@@ -4,6 +4,7 @@ import { useCameraPermissions } from 'expo-camera';
 import { WebView } from 'react-native-webview';
 
 import { POSE_PAGE_URL } from '../config';
+import { useT } from '../i18n/I18nContext';
 import { colors, radius, spacing, type } from '../theme/theme';
 
 /**
@@ -23,6 +24,7 @@ import { colors, radius, spacing, type } from '../theme/theme';
  * WebView camera access if the host app already holds CAMERA at the OS level.
  */
 export function PoseStage({ active, paused, onRep, onFrame }) {
+  const t = useT();
   const webviewRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [ready, setReady] = useState(false);
@@ -86,18 +88,14 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
   // the user allowed access a moment later. Mounting only once `granted` is
   // true also means a later grant mounts a fresh WebView that starts cleanly.
   if (!permission) {
-    return <Overlay loading title="Starting camera" body="Checking camera permission…" />;
+    return <Overlay loading title={t('pose.starting')} body={t('pose.checkingPermission')} />;
   }
 
   if (!permission.granted) {
     return (
       <Overlay
-        title="Camera access needed"
-        body={
-          permission.canAskAgain
-            ? 'Allow camera access to count push-ups with the camera.'
-            : 'Camera access was denied. Enable it for Expo Go in your device settings, or switch to Proximity or Tap mode.'
-        }
+        title={t('pose.needCamera')}
+        body={permission.canAskAgain ? t('pose.allowCamera') : t('pose.denied')}
       />
     );
   }
@@ -109,10 +107,10 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
         source={{ uri: POSE_PAGE_URL }}
         onMessage={handleMessage}
         onError={({ nativeEvent }) =>
-          setFailure(`Could not load the detector page: ${nativeEvent.description}`)
+          setFailure(t('pose.loadFailed', { reason: nativeEvent.description }))
         }
         onHttpError={({ nativeEvent }) =>
-          setFailure(`Detector page returned HTTP ${nativeEvent.statusCode}.`)
+          setFailure(t('pose.httpFailed', { code: nativeEvent.statusCode }))
         }
         // Live camera in a WebView needs all four of these.
         allowsInlineMediaPlayback
@@ -127,11 +125,11 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
       />
 
       {failure ? (
-        <Overlay title="Detector problem" body={failure} tone="error" />
+        <Overlay title={t('pose.problem')} body={failure} tone="error" />
       ) : ready ? null : cameraUp ? (
-        <Banner text="Loading the model… you can frame yourself now" />
+        <Banner text={t('pose.loadingModel')} />
       ) : (
-        <Overlay loading title="Starting camera" body="Asking for the camera…" />
+        <Overlay loading title={t('pose.starting')} body={t('pose.asking')} />
       )}
     </View>
   );

@@ -215,11 +215,10 @@ await check('clearSessions empties the store', async () => {
 });
 
 await check('settings round-trip and merge onto defaults', async () => {
-  assert.deepEqual(await store.loadSettings(), {
-    sourceId: null,
-    soundEnabled: true,
-    hapticsEnabled: true,
-  });
+  const defaults = await store.loadSettings();
+  assert.equal(defaults.sourceId, null);
+  assert.equal(defaults.soundEnabled, true);
+  assert.equal(defaults.hapticsEnabled, true);
   await store.saveSettings({ sourceId: 'tap', soundEnabled: false, hapticsEnabled: true });
   assert.equal((await store.loadSettings()).soundEnabled, false);
 

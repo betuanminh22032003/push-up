@@ -12,10 +12,10 @@ import { LightSensor } from 'expo-sensors';
  *
  * Contract every source implements:
  *   id                 stable key persisted in settings
- *   label / hint       UI copy
+ *   labelKey / hintKey translation keys for the UI copy
  *   isTapDriven        true => the screen surface acts as the sensor
  *   isAvailableAsync() can this device use it right now?
- *   calibrateAsync()   optional; returns { ok, message, ...config }
+ *   calibrateAsync()   optional; returns { ok, messageKey, messageParams, ...config }
  *   subscribe(cb, cfg) returns an unsubscribe function
  *
  * NOTE ON expo-sensors: it ships Accelerometer, Barometer, DeviceMotion,
@@ -57,8 +57,8 @@ function sampleLight(durationMs) {
 
 const lightSource = {
   id: 'light',
-  label: 'Proximity sensor',
-  hint: 'Phone on the floor, screen up. Cover the sensor at the top of the phone at the bottom of each rep.',
+  labelKey: 'source.light',
+  hintKey: 'source.light.hint',
   isTapDriven: false,
 
   async isAvailableAsync() {
@@ -78,7 +78,7 @@ const lightSource = {
   async calibrateAsync() {
     const samples = await sampleLight(CALIBRATION_MS);
     if (samples.length === 0) {
-      return { ok: false, message: 'No readings from the light sensor.' };
+      return { ok: false, messageKey: 'notice.noLight' };
     }
 
     const baseline = median(samples);
@@ -86,7 +86,8 @@ const lightSource = {
       return {
         ok: false,
         baseline,
-        message: `Room is too dark to detect cover (${Math.round(baseline)} lx). Turn on a light or switch to Tap mode.`,
+        messageKey: 'notice.tooDark',
+        messageParams: { lux: Math.round(baseline) },
       };
     }
 
@@ -95,7 +96,8 @@ const lightSource = {
       baseline,
       nearThreshold: Math.max(baseline * 0.15, 2),
       farThreshold: Math.max(baseline * 0.4, 6),
-      message: `Calibrated at ${Math.round(baseline)} lx.`,
+      messageKey: 'notice.calibrated',
+      messageParams: { lux: Math.round(baseline) },
     };
   },
 
@@ -128,8 +130,8 @@ const lightSource = {
  */
 const tapSource = {
   id: 'tap',
-  label: 'Tap',
-  hint: 'Phone on the floor, screen up. Touch the screen with your nose at the bottom of each rep, then release.',
+  labelKey: 'source.tap',
+  hintKey: 'source.tap.hint',
   isTapDriven: true,
   async isAvailableAsync() {
     return true;
@@ -153,8 +155,8 @@ const tapSource = {
  */
 const aiSource = {
   id: 'ai',
-  label: 'AI camera',
-  hint: 'Prop the phone up so your whole body is in frame from the side, then push up. Form is checked on every rep.',
+  labelKey: 'source.ai',
+  hintKey: 'source.ai.hint',
   isTapDriven: false,
   isPoseDriven: true,
   async isAvailableAsync() {
@@ -194,8 +196,8 @@ export async function resolveDefaultSource() {
  *   import Proximity from 'react-native-proximity';
  *   const nativeProximitySource = {
  *     id: 'native',
- *     label: 'Proximity sensor (native)',
- *     hint: '...',
+ *     labelKey: 'source.native',
+ *     hintKey: 'source.native.hint',
  *     isTapDriven: false,
  *     isAvailableAsync: async () => true,
  *     subscribe(onProximityChange) {

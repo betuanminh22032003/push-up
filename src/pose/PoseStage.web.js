@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fromMediaPipe, SKELETON_BONES } from './landmarks';
 import { createPushupAnalyzer, ISSUES } from './pushupAnalyzer';
+import { useT } from '../i18n/I18nContext';
 import { colors } from '../theme/theme';
 
 /**
@@ -69,6 +70,7 @@ const STALE_FRAME_MS = 250;
 const MAX_CONSECUTIVE_ERRORS = 30;
 
 export function PoseStage({ active, paused, onRep, onFrame, analyzerOptions }) {
+  const t = useT();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -286,10 +288,10 @@ export function PoseStage({ active, paused, onRep, onFrame, analyzerOptions }) {
           <span style={{ ...styles.overlayText, color: colors.danger }}>{error}</span>
         </div>
       ) : phase === 'camera' ? (
-        <div style={styles.banner}>Loading the model… you can frame yourself now</div>
+        <div style={styles.banner}>{t('pose.loadingModel')}</div>
       ) : phase !== 'ready' ? (
         <div style={styles.overlay}>
-          <span style={styles.overlayText}>Starting camera…</span>
+          <span style={styles.overlayText}>{t('pose.starting')}…</span>
         </div>
       ) : null}
     </div>
