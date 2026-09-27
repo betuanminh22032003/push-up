@@ -24,16 +24,16 @@ const BlockerContext = createContext(null);
 /** How long to wait before re-reading a service the system has not bound yet. */
 const SERVICE_RECHECK_MS = 1500;
 
-const readNative = () => (NativeBlocker ? normalizeState(NativeBlocker.getState()) : EMPTY_STATE);
+const read = async () => normalizeState(await NativeBlocker.getState());
 
 /**
  * The app blocker as the screens see it: the native state (balance, blocked
- * apps, whether the accessibility service is on) plus the actions on it.
+ * apps and sites, whether the accessibility service runs) plus the actions.
  *
- * The native side is the source of truth — the service spends the balance
- * while the app is closed — so every action sets state from what the native
- * call returns, and everything is re-read whenever the app comes back to the
- * foreground (for instance from the accessibility settings).
+ * The state lives in the blocker's own process, which keeps blocking while
+ * the app is closed, so every call is async and every action sets state from
+ * what the call returns. Everything is re-read whenever the app comes back to
+ * the foreground, for instance from the accessibility settings.
  */
 export function BlockerProvider({ children }) {
   const { settings, updateSettings } = useSettings();
@@ -41,7 +41,8 @@ export function BlockerProvider({ children }) {
   const rate = settings.blockerSecondsPerRep ?? DEFAULT_RATE_SECONDS;
   const customSites = settings.blockerSites ?? [];
 
-  const [state, setState] = useState(readNative);
+  const [state, setState] = useState(EMPTY_STATE);
+  const [loaded, setLoaded] = useState(!NativeBlocker);
   const [apps, setApps] = useState(null); // null until the picker first needs them
   const [appsLoading, setAppsLoading] = useState(false);
   // Bumped when the block screen's "earn time" button brought the app up, so
@@ -51,23 +52,49 @@ export function BlockerProvider({ children }) {
   const [serviceStalled, setServiceStalled] = useState(false);
   const recheckTimer = useRef(null);
 
-  const refresh = useCallback(() => {
-    if (!NativeBlocker) return;
-    const next = readNative();
+  /** Take a state from the native side, unless its process could not be reached. */
+  const accept = useCallback((next) => {
+    if (!next.reachable) return next;
     setState(next);
-    // Just switched on in system settings: the system binds the service a
-    // moment later, so look again before calling it stuck.
-    clearTimeout(recheckTimer.current);
-    if (next.serviceEnabled && !next.serviceRunning) {
-      recheckTimer.current = setTimeout(() => {
-        const later = readNative();
-        setState(later);
-        setServiceStalled(later.serviceEnabled && !later.serviceRunning);
-      }, SERVICE_RECHECK_MS);
-    } else {
-      setServiceStalled(false);
-    }
+    setLoaded(true);
+    return next;
   }, []);
+
+  const refresh = useCallback(async () => {
+    if (!NativeBlocker) return;
+    try {
+      const next = accept(await read());
+      // Just switched on in system settings: the system binds the service a
+      // moment later, so look again before calling it stuck.
+      clearTimeout(recheckTimer.current);
+      if (next.serviceEnabled && !next.serviceRunning) {
+        recheckTimer.current = setTimeout(async () => {
+          try {
+            const later = accept(await read());
+            setServiceStalled(later.serviceEnabled && !later.serviceRunning);
+          } catch {
+            // the next refresh tries again
+          }
+        }, SERVICE_RECHECK_MS);
+      } else {
+        setServiceStalled(false);
+      }
+    } catch {
+      // keep the last state; the next foreground refresh tries again
+    }
+  }, [accept]);
+
+  const apply = useCallback(
+    async (call) => {
+      if (!NativeBlocker) return;
+      try {
+        accept(normalizeState(await call(NativeBlocker)));
+      } catch {
+        // keep the last state
+      }
+    },
+    [accept],
+  );
 
   // Sites blocked in browsers: the blocked apps' own plus the user's. Pushed
   // whenever either changes, since the service reads them natively.
@@ -77,16 +104,19 @@ export function BlockerProvider({ children }) {
   );
   const sitesKey = sites.join(' ');
   useEffect(() => {
-    if (!NativeBlocker) return;
-    setState(normalizeState(NativeBlocker.setBlockedSites(sites)));
+    if (loaded) apply((n) => n.setBlockedSites(sites));
     // sitesKey stands for sites, whose identity changes on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sitesKey]);
+  }, [sitesKey, loaded]);
 
-  const consumeEarnRequest = useCallback(() => {
+  const consumeEarnRequest = useCallback(async () => {
     if (!NativeBlocker) return;
-    const at = NativeBlocker.consumeEarnRequest();
-    if (at && Date.now() - at < EARN_REQUEST_TTL_MS) setEarnSignal((n) => n + 1);
+    try {
+      const at = await NativeBlocker.consumeEarnRequest();
+      if (at && Date.now() - at < EARN_REQUEST_TTL_MS) setEarnSignal((n) => n + 1);
+    } catch {
+      // nothing to consume
+    }
   }, []);
 
   useEffect(() => {
@@ -107,21 +137,18 @@ export function BlockerProvider({ children }) {
   // from here, in the app's language rather than the phone's.
   useEffect(() => {
     if (!NativeBlocker) return;
-    NativeBlocker.setLabels({
-      blockTitle: t('native.blockTitle'),
-      timeUpTitle: t('native.timeUpTitle'),
-      blockBody: t('native.blockBody', { rate: formatAmount(rate, t) }),
-      earnButton: t('native.earnButton'),
-      homeButton: t('native.homeButton'),
-      lowTime: t('native.lowTime'),
-      blockedToast: t('native.blockedToast'),
-    });
+    Promise.resolve(
+      NativeBlocker.setLabels({
+        blockTitle: t('native.blockTitle'),
+        timeUpTitle: t('native.timeUpTitle'),
+        blockBody: t('native.blockBody', { rate: formatAmount(rate, t) }),
+        earnButton: t('native.earnButton'),
+        homeButton: t('native.homeButton'),
+        lowTime: t('native.lowTime'),
+        blockedToast: t('native.blockedToast'),
+      }),
+    ).catch(() => {});
   }, [t, rate]);
-
-  const apply = useCallback((call) => {
-    if (!NativeBlocker) return;
-    setState(normalizeState(call(NativeBlocker)));
-  }, []);
 
   const setEnabled = useCallback((on) => apply((n) => n.setEnabled(on)), [apply]);
   const setShowTimer = useCallback((on) => apply((n) => n.setShowTimer(on)), [apply]);
@@ -129,9 +156,9 @@ export function BlockerProvider({ children }) {
 
   const setBlockedApps = useCallback(
     (packages) =>
-      apply((n) => {
-        const before = normalizeState(n.getState());
-        const next = n.setBlockedApps(packages);
+      apply(async (n) => {
+        const before = normalizeState(await n.getState());
+        const next = await n.setBlockedApps(packages);
         // Picking the first apps means "block these": switch blocking on too.
         return before.blocked.length === 0 && packages.length > 0 && !before.enabled
           ? n.setEnabled(true)
@@ -143,18 +170,22 @@ export function BlockerProvider({ children }) {
   /**
    * Turn a saved workout into fun time. Only while the blocker is set up:
    * banking hours before it is switched on would defeat it on day one.
-   * @returns {number} seconds credited (0 when nothing was)
+   * @returns {Promise<number>} seconds credited (0 when nothing was)
    */
   const creditReps = useCallback(
-    (reps) => {
+    async (reps) => {
       if (!NativeBlocker) return 0;
-      if (!isSetUp(normalizeState(NativeBlocker.getState()))) return 0;
-      const seconds = creditFor(reps, rate);
-      if (seconds <= 0) return 0;
-      setState(normalizeState(NativeBlocker.addCredit(seconds)));
-      return seconds;
+      try {
+        if (!isSetUp(await read())) return 0;
+        const seconds = creditFor(reps, rate);
+        if (seconds <= 0) return 0;
+        const next = accept(normalizeState(await NativeBlocker.addCredit(seconds)));
+        return next.reachable ? seconds : 0;
+      } catch {
+        return 0;
+      }
     },
-    [rate],
+    [rate, accept],
   );
 
   const openAccessibilitySettings = useCallback(() => {
@@ -166,6 +197,10 @@ export function BlockerProvider({ children }) {
 
   const openAppSettings = useCallback(() => NativeBlocker?.openAppSettings() ?? false, []);
   const openBatterySettings = useCallback(() => NativeBlocker?.openBatterySettings() ?? false, []);
+  const openAutostartSettings = useCallback(
+    () => NativeBlocker?.openAutostartSettings() ?? false,
+    [],
+  );
 
   /**
    * Add a site the user typed. @returns {boolean} false when it is not a domain.
@@ -177,14 +212,13 @@ export function BlockerProvider({ children }) {
       if (!domain) return false;
       if (!customSites.includes(domain)) {
         updateSettings({ blockerSites: [...customSites, domain] });
-        const now = readNative();
-        if (NativeBlocker && !now.enabled && now.blocked.length === 0 && customSites.length === 0) {
-          setState(normalizeState(NativeBlocker.setEnabled(true)));
+        if (!state.enabled && state.blocked.length === 0 && customSites.length === 0) {
+          apply((n) => n.setEnabled(true));
         }
       }
       return true;
     },
-    [customSites, updateSettings],
+    [customSites, updateSettings, state.enabled, state.blocked.length, apply],
   );
 
   const removeSite = useCallback(
@@ -208,6 +242,7 @@ export function BlockerProvider({ children }) {
     () => ({
       available: !!NativeBlocker,
       unavailableReason,
+      loaded,
       state,
       rate,
       customSites,
@@ -226,9 +261,11 @@ export function BlockerProvider({ children }) {
       openAccessibilitySettings,
       openAppSettings,
       openBatterySettings,
+      openAutostartSettings,
       loadApps,
     }),
     [
+      loaded,
       state,
       rate,
       customSites,
@@ -247,6 +284,7 @@ export function BlockerProvider({ children }) {
       openAccessibilitySettings,
       openAppSettings,
       openBatterySettings,
+      openAutostartSettings,
       loadApps,
     ],
   );

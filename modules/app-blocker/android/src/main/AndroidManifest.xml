@@ -28,6 +28,12 @@
     </intent>
   </queries>
 
+  <!--
+    The blocker runs in its own small process, ":blocker", away from the React
+    Native one (JS engine, camera, WebView). That big process is what the
+    system reclaims for memory and what a JS crash kills; sharing it, the
+    service died too, and on realme was then not restarted.
+  -->
   <application>
     <!--
       Only the system can bind a service guarded by BIND_ACCESSIBILITY_SERVICE,
@@ -37,7 +43,8 @@
       android:name="expo.modules.appblocker.BlockerService"
       android:exported="true"
       android:label="@string/app_blocker_service_label"
-      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+      android:process=":blocker">
       <intent-filter>
         <action android:name="android.accessibilityservice.AccessibilityService" />
       </intent-filter>
@@ -45,6 +52,13 @@
         android:name="android.accessibilityservice"
         android:resource="@xml/app_blocker_service" />
     </service>
+
+    <!-- The one copy of the blocker's state, which the JS module reaches from the main process. -->
+    <provider
+      android:name="expo.modules.appblocker.BlockerProvider"
+      android:authorities="${applicationId}.appblocker"
+      android:exported="false"
+      android:process=":blocker" />
 
     <!--
       Its own task, kept out of Recents: the block screen should never be
@@ -57,6 +71,7 @@
       android:exported="false"
       android:launchMode="singleTask"
       android:noHistory="true"
+      android:process=":blocker"
       android:taskAffinity="${applicationId}.blocker"
       android:theme="@style/AppBlockerTheme" />
   </application>

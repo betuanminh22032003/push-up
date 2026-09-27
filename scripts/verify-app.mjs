@@ -338,7 +338,9 @@ await check('earned time reads as an amount in both languages', () => {
 });
 
 await check('native state is normalised, junk included', () => {
-  assert.deepEqual(normalizeState(null), EMPTY_STATE);
+  assert.deepEqual(normalizeState(null), { ...EMPTY_STATE, reachable: false });
+  assert.equal(normalizeState({ reachable: false }).reachable, false, 'blocker process did not answer');
+  assert.equal(normalizeState({}).reachable, true);
   const s = normalizeState({
     enabled: true,
     blocked: ['a', 3, null, 'b'],

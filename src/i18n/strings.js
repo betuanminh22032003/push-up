@@ -263,7 +263,9 @@ const en = {
   'blocker.alertSwitchedOff':
     'Android switched the accessibility permission off, usually because the phone closed Hít Đất AI in the background (realme, OPPO and Xiaomi phones do this). Turn it back on, then follow "Keep blocking running" below so it stays on.',
   'blocker.alertStalled':
-    'The permission is on, but the phone has stopped the service. In Accessibility, switch Hít Đất AI off and on again.',
+    'The permission is on, but the phone stopped the service and did not let it restart. In Accessibility, open Hít Đất AI, switch it off and on again.',
+  'blocker.alertPrevent':
+    'So it does not happen again, allow Hít Đất AI to auto-launch and lock it in Recents (steps below).',
   'blocker.alertTurnOn': 'Turn it back on',
   'blocker.alertOpen': 'Open Accessibility',
   'blocker.sectionBlocking': 'Blocking',
@@ -301,9 +303,11 @@ const en = {
     'Some phones (realme, OPPO, Xiaomi, vivo…) close apps in the background, and Android then switches the accessibility permission off, so blocking works one moment and not the next. To stop that:',
   'blocker.keep1':
     'Lock Hít Đất AI in Recents: open the recent apps, then pull its card down or open its menu and choose Lock.',
-  'blocker.keep2': 'App info → Battery: allow background activity and turn optimisation off.',
-  'blocker.keep3': 'Turn on Auto-launch if your phone has it.',
+  'blocker.keep2':
+    'Allow auto-launch (button below). Without it the phone will not restart the blocker after closing it.',
+  'blocker.keep3': 'App info → Battery: allow background activity and turn optimisation off.',
   'blocker.keep4': 'Do not force-stop the app or clear it with a cleaner.',
+  'blocker.keepAutostart': 'Auto-launch',
   'blocker.keepAppInfo': 'App info',
   'blocker.keepBattery': 'Battery optimisation',
   'blocker.howTitle': 'How it works',
@@ -642,7 +646,9 @@ const vi = {
   'blocker.alertSwitchedOff':
     'Android đã tắt quyền Trợ năng, thường vì máy tự đóng Hít Đất AI khi chạy nền (máy realme, OPPO, Xiaomi hay làm vậy). Bật lại, rồi làm theo mục "Giữ chặn luôn chạy" bên dưới để nó không bị tắt nữa.',
   'blocker.alertStalled':
-    'Quyền đang bật nhưng máy đã dừng dịch vụ. Vào Trợ năng, tắt rồi bật lại Hít Đất AI.',
+    'Quyền vẫn bật nhưng máy đã dừng dịch vụ và không cho chạy lại. Vào Trợ năng, mở Hít Đất AI, tắt rồi bật lại.',
+  'blocker.alertPrevent':
+    'Để không bị lại: cho phép Hít Đất AI tự khởi chạy và khoá app trong đa nhiệm (các bước bên dưới).',
   'blocker.alertTurnOn': 'Bật lại',
   'blocker.alertOpen': 'Mở Trợ năng',
   'blocker.sectionBlocking': 'Chặn',
@@ -680,9 +686,11 @@ const vi = {
     'Một số máy (realme, OPPO, Xiaomi, vivo…) tự đóng ứng dụng chạy nền, rồi Android tắt luôn quyền Trợ năng, nên chặn lúc được lúc không. Để tránh:',
   'blocker.keep1':
     'Khoá Hít Đất AI trong đa nhiệm: mở màn hình ứng dụng gần đây, kéo thẻ của app xuống hoặc mở menu của thẻ và chọn Khoá.',
-  'blocker.keep2': 'Thông tin ứng dụng → Pin: cho phép hoạt động nền và tắt tối ưu hoá.',
-  'blocker.keep3': 'Bật Tự khởi chạy nếu máy có.',
+  'blocker.keep2':
+    'Cho phép Tự khởi chạy (nút bên dưới). Không có quyền này, máy đóng app xong sẽ không cho chặn chạy lại.',
+  'blocker.keep3': 'Thông tin ứng dụng → Pin: cho phép hoạt động nền và tắt tối ưu hoá.',
   'blocker.keep4': 'Không bấm Buộc dừng, không dọn app bằng trình tối ưu.',
+  'blocker.keepAutostart': 'Tự khởi chạy',
   'blocker.keepAppInfo': 'Thông tin ứng dụng',
   'blocker.keepBattery': 'Tối ưu pin',
   'blocker.howTitle': 'Cách hoạt động',

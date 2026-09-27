@@ -93,6 +93,9 @@ export function createDemoBlocker() {
       state.batteryOptimized = false;
       return true;
     },
+    openAutostartSettings() {
+      return true;
+    },
     async getInstalledApps() {
       return DEMO_APPS.map(([packageName, label]) => ({ packageName, label, icon: null }));
     },

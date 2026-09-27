@@ -72,7 +72,7 @@ export function SettingsScreen({ onShowOnboarding }) {
       onConfirm: async () => {
         await cancelDailyReminder();
         await eraseEverything();
-        resetBlocker();
+        await resetBlocker();
         resetSettings();
       },
     });

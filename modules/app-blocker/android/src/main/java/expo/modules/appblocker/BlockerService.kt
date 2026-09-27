@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.WindowManager
@@ -72,24 +73,33 @@ class BlockerService : AccessibilityService() {
   private var evaluatePending = false
   private var beatPending = false
 
+  // Every entry point is wrapped: an exception escaping into the system would
+  // crash the process, and a crashed accessibility service stays down.
   private val evaluateTask = Runnable {
     evaluatePending = false
-    evaluate()
+    safely("evaluate") { evaluate() }
   }
   private val beatTask = Runnable {
     beatPending = false
-    beat()
+    safely("beat") { beat() }
+    safely("reschedule") { ensureBeat() } // even if the beat failed, keep beating
   }
 
   private val screenReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-      scheduleEvaluate(0L)
-      ensureBeat()
+      safely("screen change") {
+        scheduleEvaluate(0L)
+        ensureBeat()
+      }
     }
   }
 
   override fun onServiceConnected() {
     super.onServiceConnected()
+    safely("connect") { connect() }
+  }
+
+  private fun connect() {
     BlockerStore.init(this)
     BlockerStore.markServiceConnected()
     // A crash here would get the service marked as broken until the user
@@ -106,8 +116,10 @@ class BlockerService : AccessibilityService() {
     } + KNOWN_BROWSERS - protectedPackages
     BlockerStore.onChange = {
       handler.post {
-        scheduleEvaluate(0L)
-        ensureBeat()
+        safely("store change") {
+          scheduleEvaluate(0L)
+          ensureBeat()
+        }
       }
     }
 
@@ -136,23 +148,33 @@ class BlockerService : AccessibilityService() {
 
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
     if (event == null) return
-    if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-      event.packageName?.toString()?.let { lastEventPackage = it }
+    safely("event") {
+      if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+        event.packageName?.toString()?.let { lastEventPackage = it }
+      }
+      scheduleEvaluate(EVENT_SETTLE_MS)
+      ensureBeat()
     }
-    scheduleEvaluate(EVENT_SETTLE_MS)
-    ensureBeat()
   }
 
   override fun onInterrupt() = Unit
 
   override fun onUnbind(intent: Intent?): Boolean {
-    shutdown()
+    safely("unbind") { shutdown() }
     return super.onUnbind(intent)
   }
 
   override fun onDestroy() {
-    shutdown()
+    safely("destroy") { shutdown() }
     super.onDestroy()
+  }
+
+  private inline fun safely(what: String, block: () -> Unit) {
+    try {
+      block()
+    } catch (t: Throwable) {
+      Log.w(TAG, "$what failed", t)
+    }
   }
 
   private fun shutdown() {
@@ -211,7 +233,6 @@ class BlockerService : AccessibilityService() {
         }
       }
     }
-    ensureBeat()
   }
 
   private fun evaluate() {
@@ -379,7 +400,10 @@ class BlockerService : AccessibilityService() {
     // Leave the page first, so reopening the browser does not land on it
     // again; the block screen follows once Back has reached the browser.
     performGlobalAction(GLOBAL_ACTION_BACK)
-    handler.postDelayed({ if (connected) showBlockScreen(target, timeUp) }, SITE_BACK_SETTLE_MS)
+    handler.postDelayed(
+      { safely("block screen") { if (connected) showBlockScreen(target, timeUp) } },
+      SITE_BACK_SETTLE_MS,
+    )
   }
 
   /**
@@ -507,6 +531,7 @@ class BlockerService : AccessibilityService() {
   }
 
   companion object {
+    private const val TAG = "AppBlocker"
     private const val EVENT_SETTLE_MS = 120L
     private const val BEAT_MS = 1000L
     private const val SAVE_EVERY_TICKS = 5
