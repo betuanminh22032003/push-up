@@ -107,6 +107,7 @@ const en = {
   'pose.problem': 'Detector problem',
   'pose.loadFailed': 'Could not load the detector ({reason}). AI camera needs an internet connection the first time.',
   'pose.httpFailed': 'Detector page returned HTTP {code}. Try again in a moment.',
+  'pose.viewCrashed': 'The camera view stopped unexpectedly. End the set and start again.',
 
   // --- notices ------------------------------------------------------------
   'notice.nothingSaved': 'No reps counted, nothing saved.',
@@ -378,6 +379,7 @@ const vi = {
   'pose.problem': 'Lỗi nhận diện',
   'pose.loadFailed': 'Không tải được bộ nhận diện ({reason}). Camera AI cần internet ở lần đầu.',
   'pose.httpFailed': 'Trang nhận diện trả về HTTP {code}. Thử lại sau ít phút.',
+  'pose.viewCrashed': 'Khung camera bị dừng đột ngột. Hãy kết thúc hiệp và bắt đầu lại.',
 
   'notice.nothingSaved': 'Không đếm được cái nào, không lưu.',
   'notice.saved': 'Đã lưu {reps} cái trong {time}.',
