@@ -52,9 +52,11 @@ Tải APK từ link EAS in ra, cài lên điện thoại Android thật và ki�
 - [ ] Trang web: chặn YouTube → mở youtube.com trong Chrome (và Cốc Cốc nếu có) → bị đẩy lùi
       về trang trước và hiện màn hình chặn. Trang tự thêm (vd. vnexpress.net) cũng vậy.
 - [ ] Chia đôi màn hình hoặc cửa sổ nổi với app bị chặn: đồng hồ vẫn trừ, hết giờ thì bị chặn.
-- [ ] Vuốt bỏ Hít Đất AI khỏi đa nhiệm (hoặc Buộc dừng): mở lại app thì tab Chặn app báo "Chặn
-      đang không chạy" và chip ở màn hình Tập thành "⚠️ Chặn đã tắt". Khoá app trong đa nhiệm
-      theo hướng dẫn thì vuốt không còn tắt được nữa.
+- [ ] Vuốt bỏ Hít Đất AI khỏi đa nhiệm (chưa khoá): mở TikTok ngay sau đó vẫn bị chặn (dịch vụ
+      chạy ở tiến trình riêng `:blocker`, không chết theo app).
+- [ ] Buộc dừng app trong Cài đặt: mở lại app thì tab Chặn app báo "Chặn đang không chạy" và chip
+      ở màn hình Tập thành "⚠️ Chặn đã tắt". Nút "Tự khởi chạy" mở đúng trang của máy (realme:
+      danh sách Tự khởi chạy); không có thì mở Thông tin ứng dụng.
 - [ ] Chụp screenshot thật từ máy (tốt hơn screenshot web) nếu muốn.
 
 ## 3. Google Play Console

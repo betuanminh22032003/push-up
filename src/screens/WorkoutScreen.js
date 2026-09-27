@@ -75,10 +75,10 @@ export function WorkoutScreen({
   const { t, speechTag } = useI18n();
   const insets = useSafeAreaInsets();
   const { settings, updateSettings } = useSettings();
-  const { state: blocker, rate: blockerRate, creditReps } = useBlocker();
+  const { state: blocker, rate: blockerRate, creditReps, serviceStalled } = useBlocker();
   const earning = isSetUp(blocker);
-  // Set up, but the system has the service switched off: nothing is blocked.
-  const blockerOff = earning && !blocker.serviceEnabled;
+  // Set up, but the service is switched off or stopped: nothing is blocked.
+  const blockerOff = earning && (!blocker.serviceEnabled || serviceStalled);
   const {
     sessions,
     stats,
@@ -256,7 +256,7 @@ export function WorkoutScreen({
     });
     // Credited with the save, so fun time always matches the history: a
     // discarded workout earns nothing, exactly as it records nothing.
-    const earnedSeconds = creditReps(totalReps);
+    const earnedSeconds = await creditReps(totalReps);
 
     let completedDays = program?.completedDays ?? {};
     let level = null;

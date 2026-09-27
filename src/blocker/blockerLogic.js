@@ -65,6 +65,7 @@ export const APP_DOMAINS = {
 };
 
 export const EMPTY_STATE = Object.freeze({
+  reachable: true,
   serviceEnabled: false,
   serviceRunning: false,
   serviceConnectedAt: 0,
@@ -80,10 +81,15 @@ export const EMPTY_STATE = Object.freeze({
 const finite = (value, fallback = 0) => (Number.isFinite(value) ? value : fallback);
 const strings = (value) => (Array.isArray(value) ? value.filter((v) => typeof v === 'string') : []);
 
-/** Whatever the native side hands back, as a complete state a render can trust. */
+/**
+ * Whatever the native side hands back, as a complete state a render can trust.
+ * `reachable` is false when the blocker's process did not answer, so the
+ * caller keeps what it had instead of showing everything switched off.
+ */
 export function normalizeState(raw) {
-  if (!raw || typeof raw !== 'object') return EMPTY_STATE;
+  if (!raw || typeof raw !== 'object') return { ...EMPTY_STATE, reachable: false };
   return {
+    reachable: raw.reachable !== false,
     serviceEnabled: raw.serviceEnabled === true,
     serviceRunning: raw.serviceRunning === true,
     serviceConnectedAt: finite(raw.serviceConnectedAt),

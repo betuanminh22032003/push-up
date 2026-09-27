@@ -7,6 +7,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -30,14 +31,28 @@ class BlockActivity : Activity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     BlockerStore.init(this)
-    render(intent)
+    showOrLeave(intent)
     if (Build.VERSION.SDK_INT >= 33) registerBackCallback()
   }
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
-    render(intent)
+    showOrLeave(intent)
+  }
+
+  /**
+   * This screen shares its process with the service, so a crash here would
+   * take blocking down with it. If it cannot be drawn, it just closes; the
+   * service sees the app still in front and sends the user home instead.
+   */
+  private fun showOrLeave(intent: Intent) {
+    try {
+      render(intent)
+    } catch (t: Throwable) {
+      Log.w("AppBlocker", "block screen failed", t)
+      finish()
+    }
   }
 
   override fun onResume() {

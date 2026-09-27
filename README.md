@@ -117,11 +117,17 @@ What it covers:
   app was still launching found no content, and no later event came. A heartbeat runs
   while the screen is on and blocking is set up, and a block screen that did not appear
   within 1.5 s is escalated (Back for a site, then the home screen).
-- **Being switched off by the phone.** Android removes a force-stopped app's
-  accessibility service from the enabled list, and realme/OPPO/Xiaomi builds force-stop
-  background apps. The tab tells "never switched on" from "switched off by the system",
-  shows the steps that prevent it (lock in Recents, battery, auto-launch) and flags
-  battery optimisation; the home chip turns into a warning.
+- **Its own process.** The service, the block screen and the state run in `:blocker`,
+  apart from the React Native process (JS engine, camera, WebView). That big process is
+  what the system reclaims for memory and what a JS crash kills; sharing it, the service
+  died too, and realme then declined to restart it ("on in settings, not running"). The
+  JS module reaches the state through a `ContentProvider` in that process, and every
+  entry point of the service is wrapped so no exception can crash it.
+- **Being stopped by the phone anyway.** A force-stop makes Android remove the service
+  from the enabled list; a kill without restart leaves it on but not running. The tab
+  tells both apart from "never switched on", explains the fix, flags battery
+  optimisation and opens the maker's auto-launch screen (realme/OPPO, Xiaomi, vivo,
+  Huawei, Asus) directly; the home chip turns into a warning.
 
 It is a **local Expo module**, [`modules/app-blocker`](modules/app-blocker/), autolinked
 from `modules/`:
@@ -131,10 +137,11 @@ from `modules/`:
 | `BlockerEngine.kt` | every decision (meter, block, wait, escalate, close picture-in-picture), plain Kotlin with JUnit tests |
 | `BlockerService.kt` | `AccessibilityService`: looks at the screen on window events and on the heartbeat, reads browser address bars, carries out the engine's commands, shows the countdown as an accessibility overlay (no "draw over apps" permission) |
 | `BlockActivity.kt` | the block screen, built in code so it appears even when the JS is not loaded; Back goes home |
-| `BlockerStore.kt` | state shared by the service and the bridge (same process), persisted in SharedPreferences |
+| `BlockerStore.kt` | the one copy of the state, in the `:blocker` process, persisted in SharedPreferences |
+| `BlockerProvider.kt` | `ContentProvider` in `:blocker`: the JS module's only way to the state |
 | `Sites.kt` | address-bar text to host, domain matching; JUnit-tested |
 | `Packages.kt` | launchable apps and icons for the picker, browsers, the never-blocked set (this app, launcher, Settings, dialer) |
-| `AppBlockerModule.kt` | the JS API, used through `src/state/BlockerContext.js` |
+| `AppBlockerModule.kt` | the JS API (async, since it crosses processes), used through `src/state/BlockerContext.js` |
 
 The JUnit tests (`android/src/test`) need no device. Android Studio runs them with the
 module's `testDebugUnitTest`; without an Android SDK, compile `BlockerEngine.kt`,

@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -57,6 +66,7 @@ export function BlockerScreen({ onGoWorkout }) {
   const {
     available,
     unavailableReason,
+    loaded,
     state,
     rate,
     customSites,
@@ -72,6 +82,7 @@ export function BlockerScreen({ onGoWorkout }) {
     openAccessibilitySettings,
     openAppSettings,
     openBatterySettings,
+    openAutostartSettings,
   } = useBlocker();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [disclosureOpen, setDisclosureOpen] = useState(false);
@@ -149,6 +160,8 @@ export function BlockerScreen({ onGoWorkout }) {
         <View style={styles.notice}>
           <Text style={styles.noticeText}>{t(unavailableReason)}</Text>
         </View>
+      ) : !loaded ? (
+        <ActivityIndicator color={colors.accent} style={styles.loading} />
       ) : (
         <>
           {state.enabled && (switchedOff || serviceStalled) ? (
@@ -157,11 +170,14 @@ export function BlockerScreen({ onGoWorkout }) {
               <Text style={styles.alertBody}>
                 {t(switchedOff ? 'blocker.alertSwitchedOff' : 'blocker.alertStalled')}
               </Text>
-              <SmallButton
-                label={t(switchedOff ? 'blocker.alertTurnOn' : 'blocker.alertOpen')}
-                onPress={switchedOff ? () => setDisclosureOpen(true) : openAccessibilitySettings}
-                style={styles.alertButton}
-              />
+              <Text style={styles.alertBody}>{t('blocker.alertPrevent')}</Text>
+              <View style={styles.alertButtons}>
+                <SmallButton
+                  label={t(switchedOff ? 'blocker.alertTurnOn' : 'blocker.alertOpen')}
+                  onPress={switchedOff ? () => setDisclosureOpen(true) : openAccessibilitySettings}
+                />
+                <SmallButton label={t('blocker.keepAutostart')} onPress={openAutostartSettings} secondary />
+              </View>
             </View>
           ) : null}
 
@@ -284,8 +300,9 @@ export function BlockerScreen({ onGoWorkout }) {
               </View>
             ))}
             <View style={styles.keepButtons}>
-              <SmallButton label={t('blocker.keepAppInfo')} onPress={openAppSettings} secondary />
+              <SmallButton label={t('blocker.keepAutostart')} onPress={openAutostartSettings} secondary />
               <SmallButton label={t('blocker.keepBattery')} onPress={openBatterySettings} secondary />
+              <SmallButton label={t('blocker.keepAppInfo')} onPress={openAppSettings} secondary />
             </View>
           </Section>
         </>
@@ -425,7 +442,8 @@ const styles = StyleSheet.create({
   },
   alertTitle: { fontSize: 16, fontWeight: '700', color: colors.danger },
   alertBody: { ...type.body, color: colors.text, marginTop: spacing.xs, lineHeight: 21 },
-  alertButton: { alignSelf: 'flex-start', marginTop: spacing.md },
+  alertButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  loading: { marginTop: spacing.xl },
 
   okMark: { fontSize: 20, fontWeight: '700', color: colors.accent },
   hintRow: { paddingVertical: spacing.md, gap: spacing.sm },
