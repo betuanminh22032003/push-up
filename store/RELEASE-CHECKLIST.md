@@ -5,7 +5,7 @@ Chỉ cần Node, tài khoản Expo (miễn phí) và tài khoản Google Play D
 
 ## 0. Trước khi build
 
-- [ ] `npm run verify` xanh (83 assertion).
+- [ ] `npm run verify` xanh (92 assertion).
 - [ ] `npm run build:pose` rồi commit `docs/pose.html` nếu có sửa `src/pose/`.
 - [ ] GitHub Pages đang bật cho nhánh `master`, thư mục `/docs`. Mở thử:
       - https://betuanminh22032003.github.io/push-up/pose.html (xin quyền camera là đúng)
@@ -38,6 +38,15 @@ Tải APK từ link EAS in ra, cài lên điện thoại Android thật và ki�
 - [ ] Nhắc tập: bật → hỏi quyền thông báo → đúng giờ có thông báo (kể cả sau khi khởi động lại máy).
 - [ ] Nút Back của Android: đang tập → tạm dừng; ở tab khác → về tab Tập; ở tab Tập → thoát.
 - [ ] Đổi ngôn ngữ trong Cài đặt, mọi màn hình đổi theo.
+- [ ] Chặn app, bật quyền: tab Chặn app → Bật → hộp thoại giải thích → Đồng ý → Cài đặt Trợ
+      năng → bật mục "Hít Đất AI". APK cài ngoài Play trên Android 13+ sẽ bị xám / báo "Cài đặt
+      bị hạn chế": Thông tin ứng dụng → ⋮ → Cho phép cài đặt bị hạn chế, rồi bật lại. (Bản cài từ
+      Play không bị.)
+- [ ] Chặn app, hết giờ: chọn một app (vd. YouTube), số phút đang 00:00 → mở app đó → màn hình
+      chặn hiện ngay. "Về màn hình chính" và nút Back đều về Home, không quay lại app bị chặn.
+- [ ] Chặn app, có giờ: hít đất 3 cái → Kết thúc → "+3 phút" → mở app bị chặn → đồng hồ nhỏ góc
+      trên đếm ngược; thoát app hoặc khoá màn hình thì dừng; về 0 → màn hình "Hết giờ".
+- [ ] "Hít đất ngay" trên màn hình chặn mở Hít Đất AI ở tab Tập.
 - [ ] Chụp screenshot thật từ máy (tốt hơn screenshot web) nếu muốn.
 
 ## 3. Google Play Console
@@ -51,6 +60,10 @@ Tải APK từ link EAS in ra, cài lên điện thoại Android thật và ki�
    - Ads: No · App access: no restrictions · Content rating: điền IARC, trả lời No hết → Everyone
    - Target audience: 18+ · News: No · Data safety: không thu thập, không chia sẻ (xem `listing.md`)
    - Health: fitness app, không phải thiết bị y tế.
+   - **Accessibility API** (bắt buộc vì có tính năng chặn app): khai báo app **không phải** công cụ
+     trợ năng, dán mô tả trong `listing.md` (mục *Accessibility API declaration*), kèm một video
+     ngắn quay màn hình: tab Chặn app → hộp thoại giải thích → bật dịch vụ → mở app bị chặn →
+     màn hình chặn. Google duyệt mục này kỹ, có thể lâu hơn bình thường.
 4. **Testing yêu cầu với tài khoản cá nhân mới** (từ 2023): phải chạy **Closed testing với ≥ 12
    tester trong 14 ngày liên tục** rồi mới được nộp đơn xin quyền Production. Tạo track Closed
    testing, thêm email tester (bạn bè, nhóm Facebook/Reddit tester), gửi link opt-in.
@@ -88,3 +101,7 @@ Các lần sau, có thể nộp thẳng từ máy:
   Storage). Nếu đổi tên repo/tài khoản GitHub, cập nhật `POSE_PAGE_URL` trong `src/config.js`.
 - Nhắc tập dùng alarm không chính xác (inexact) để không cần quyền `SCHEDULE_EXACT_ALARM`;
   thông báo có thể lệch vài phút.
+- Chặn app dùng Accessibility Service. Google Play chỉ cho phép khi có hộp thoại giải thích và
+  đồng ý trước khi bật (đã có), mô tả rõ trong chính sách quyền riêng tư (đã có) và bản khai báo
+  trong Play Console. Nếu bị từ chối, trả lời reviewer bằng mô tả + video; tính năng chặn không
+  chạy trong Expo Go, chỉ trong bản build (APK/AAB).

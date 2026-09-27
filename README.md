@@ -5,8 +5,9 @@ Hands-free push-up counter for Android (Expo / React Native). Dark, minimal, pur
 
 Counts reps with the camera, the light sensor or a tap of the nose; runs sets with
 a countdown and a rest timer; speaks the count; follows a 6-week program; tracks a
-daily goal, streaks, records and achievements. English and Vietnamese. Everything
-stays on the device.
+daily goal, streaks, records and achievements; and locks the apps you choose until
+push-ups earn you time on them. English and Vietnamese. Everything stays on the
+device.
 
 Store material lives in [`store/`](store/): listing copy, icon, feature graphic,
 screenshots, and the [release checklist](store/RELEASE-CHECKLIST.md) (Vietnamese).
@@ -89,6 +90,42 @@ Daily goal, countdown, rest, sound, vibration, voice, daily reminder (local
 notification, inexact alarm — no special permission), language (auto / en / vi),
 how-it-works, delete all data, privacy policy link.
 
+## App blocker (Android)
+
+Pick the apps that eat your time; they stay locked until you earn time on them. Every
+saved workout credits `reps × rate` of fun time (rate: 30 s, **1 min** by default, 2 or
+5 min per rep). Opening a blocked app spends the balance second by second, with a
+small countdown over the app; leaving it, turning the screen off or locking the phone
+stops the meter. At zero the app is covered by a block screen whose buttons lead to a
+workout or the home screen — never back into the app.
+
+Reps count only once the blocker is set up (switched on, at least one app), so hours
+cannot be banked before it bites, and a discarded workout earns nothing, exactly as it
+records nothing.
+
+It is a **local Expo module**, [`modules/app-blocker`](modules/app-blocker/), autolinked
+from `modules/`:
+
+| File | Role |
+| --- | --- |
+| `BlockerService.kt` | `AccessibilityService`: finds the active app window on window-change events, meters the balance on a 1 s tick that runs only while a blocked app is in use, shows the countdown as an accessibility overlay (no "draw over apps" permission), launches the block screen |
+| `BlockActivity.kt` | the block screen, built in code so it appears even when the JS is not loaded; Back goes home |
+| `BlockerStore.kt` | state shared by the service and the bridge (same process), persisted in SharedPreferences |
+| `Packages.kt` | launchable apps and icons for the picker; the never-blocked set (this app, launcher, Settings, dialer) |
+| `AppBlockerModule.kt` | the JS API, used through `src/state/BlockerContext.js` |
+
+Custom native code does not run in **Expo Go**: there the module is absent
+(`requireOptionalNativeModule` returns null) and the tab explains why. Use a build —
+`npm run build:apk`. On Android 13+, a sideloaded APK must first be given *App info →
+⋮ → Allow restricted settings* before the accessibility service can be switched on;
+Play installs are exempt. The dev web build uses an in-memory stand-in
+(`src/blocker/demoBlocker.js`) so the screen can be laid out and screenshotted.
+
+Google Play allows accessibility services outside accessibility tools only with a
+prominent disclosure and consent before the user is sent to settings (the tab shows
+one), a privacy-policy section, and the Accessibility API declaration in Play Console —
+text in [`store/listing.md`](store/listing.md).
+
 ## AI camera detection
 
 Counts push-ups from body position and judges form on every rep.
@@ -130,16 +167,20 @@ AsyncStorage, three keys, all read defensively (corrupt data → empty, never a 
 - `pupg:settings:v1` — goal, countdown, rest, sound, haptics, voice, language, reminder, onboarding flag, source.
 - `pupg:program:v1` — `{ level, testReps, startedAt, completedDays: { [day]: timestamp } }` or absent.
 
+The app blocker keeps its state natively, in SharedPreferences, because its service
+runs while the app is closed: blocked packages, balance, on/off, countdown on/off.
+
 ## Layout
 
 ```
-App.js                        providers: safe area, settings, sessions, i18n
+App.js                        providers: safe area, settings, sessions, i18n, blocker
 src/
   shell/AppRoot.js            tabs, toasts, onboarding, reminder sync, back button
   screens/
     WorkoutScreen.js          the workout state machine and stage
     ProgramScreen.js          test, level, day list
     ProgressScreen.js         chart, records, achievements, history
+    BlockerScreen.js          app blocker: balance, permission, blocked apps, rate
     SettingsScreen.js         every setting
     OnboardingModal.js        first-run cards
   program/program.js          level table + day generator (pure)
@@ -150,13 +191,15 @@ src/
     useWorkoutTimer.js        wall-clock elapsed time, pause-aware
     useCountdown.js           wall-clock countdown for get-ready and rest
     useFeedback.js            haptics, cue sounds, spoken count
+  blocker/                    blocker rules (pure), native bridge, web stand-in
   pose/                       analyser, landmarks, geometry, camera stages
   sensors/sources.js          detection sources (ai / light / tap)
   storage/sessions.js         AsyncStorage read/write
   notifications/reminders.js  daily local notification
-  state/                      settings + sessions/program contexts
+  state/                      settings, sessions/program and blocker contexts
   components/                 Button, StatTile, ProgressBar, WeeklyChart, …
   utils/                      time, stats, confirm, share
+modules/app-blocker/          native Android module: accessibility service, block screen
 assets/                       icons, splash, cue sounds (generated by scripts/)
 docs/                         GitHub Pages: pose.html, privacy.html
 store/                        Play listing, graphics, screenshots, checklist
@@ -166,7 +209,7 @@ store/                        Play listing, graphics, screenshots, checklist
 
 | Script | What |
 | --- | --- |
-| `npm run verify` | 83 assertions in plain Node: time/streaks/storage, pose analyser, program/achievements/strings, and the pose page drift check |
+| `npm run verify` | 92 assertions in plain Node: time/streaks/storage, pose analyser, program/achievements/strings/blocker rules, and the pose page drift check |
 | `npm run build:pose` | regenerate `docs/pose.html` from `src/pose/` |
 | `npm run build:sounds` | regenerate the cue WAVs |
 | `npm run build:brand` | regenerate icons, splash, notification icon, Play icon and feature graphic (Python + Pillow) |

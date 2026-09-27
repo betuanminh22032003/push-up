@@ -34,11 +34,17 @@
   <p>The optional <strong>AI camera</strong> mode uses your front camera to count push-ups by estimating body position. Frames are processed <strong>on your device</strong>, in real time, and are never recorded, stored or uploaded. The camera is only active while a camera-mode workout is running, and you can use the sensor or tap modes instead without ever granting camera access.</p>
   <p>To run the pose model, the app loads the detector page and the model file over the internet (from GitHub Pages, the jsDelivr CDN and Google Cloud Storage). These are ordinary static file downloads; like any web request they expose your IP address to those hosts, which is not something the app controls or records. No workout data is sent anywhere.</p>
 
+  <h2>App blocker (optional, Android)</h2>
+  <p>If you turn on the app blocker, Hít Đất AI uses Android's <strong>Accessibility Service</strong> API for one purpose: to know which app is in the foreground, so it can cover an app you chose to block when you have no earned time left, and count your earned time down while you use it. The service only looks at the package name of the app on screen. It does not read, record or transmit screen content, messages, passwords or anything you type, and it keeps no history of the apps you use.</p>
+  <p>So that you can pick the apps to block, the app reads the list of apps installed on your phone (their names and icons). The list is only used on your device and is never uploaded.</p>
+  <p>The blocker stays off until you switch the service on yourself in Android's accessibility settings, after an explanation in the app. You can switch it off there at any time, and turn blocking off in the app.</p>
+
   <h2>Data stored on your device</h2>
   <ul>
     <li>Workout history: date, rep counts, set durations, which counting mode was used.</li>
     <li>Program progress: your test result, level and completed days.</li>
     <li>Settings: goal, countdown and rest lengths, sound, vibration, voice, language, reminder time.</li>
+    <li>App blocker: the apps you chose to block, your earned fun time, and whether blocking is on.</li>
   </ul>
   <p>You can delete all of it at any time from <em>Settings → Delete all data</em>, or by uninstalling the app. Android may include this data in your device backup according to your own backup settings.</p>
 
@@ -51,6 +57,7 @@
     <li><strong>Notifications</strong> — only if you turn on the daily reminder.</li>
     <li><strong>Internet</strong> — to download the pose detector and model for the AI camera mode.</li>
     <li><strong>Vibrate</strong> — for the rep haptics.</li>
+    <li><strong>Accessibility service</strong> — only if you turn on the app blocker, to detect which app is open, as described above.</li>
   </ul>
 
   <h2>Children</h2>
@@ -73,11 +80,17 @@
     <p>Chế độ <strong>Camera AI</strong> (tuỳ chọn) dùng camera trước để đếm hít đất bằng cách ước lượng tư thế cơ thể. Khung hình được xử lý <strong>ngay trên thiết bị</strong>, theo thời gian thực, không bao giờ được ghi lại, lưu trữ hay tải lên. Camera chỉ hoạt động khi bạn đang tập ở chế độ camera; bạn có thể dùng chế độ Cảm biến hoặc Chạm mà không cần cấp quyền camera.</p>
     <p>Để chạy mô hình nhận diện tư thế, ứng dụng tải trang nhận diện và tệp mô hình qua internet (từ GitHub Pages, CDN jsDelivr và Google Cloud Storage). Đây là các tệp tĩnh thông thường; như mọi yêu cầu web, địa chỉ IP của bạn được các máy chủ đó nhìn thấy — ứng dụng không kiểm soát hay ghi lại điều này. Không có dữ liệu tập luyện nào được gửi đi.</p>
 
+    <h2>Chặn ứng dụng (tuỳ chọn, Android)</h2>
+    <p>Nếu bạn bật tính năng chặn ứng dụng, Hít Đất AI dùng API <strong>Dịch vụ Trợ năng (Accessibility Service)</strong> của Android cho đúng một mục đích: biết ứng dụng nào đang ở trên màn hình, để che ứng dụng bạn đã chọn chặn khi bạn hết thời gian đã kiếm được, và đếm ngược thời gian đó khi bạn dùng. Dịch vụ chỉ xem tên gói của ứng dụng đang mở. Nó không đọc, ghi lại hay gửi đi nội dung màn hình, tin nhắn, mật khẩu hay bất cứ thứ gì bạn gõ, và không lưu lịch sử các ứng dụng bạn dùng.</p>
+    <p>Để bạn chọn ứng dụng cần chặn, ứng dụng đọc danh sách ứng dụng đã cài trên máy (tên và biểu tượng). Danh sách này chỉ dùng trên thiết bị và không bao giờ được tải lên.</p>
+    <p>Tính năng chặn luôn tắt cho tới khi chính bạn bật dịch vụ trong phần cài đặt Trợ năng của Android, sau khi đọc giải thích trong ứng dụng. Bạn có thể tắt dịch vụ ở đó bất cứ lúc nào, và tắt chặn ngay trong ứng dụng.</p>
+
     <h2>Dữ liệu lưu trên thiết bị</h2>
     <ul>
       <li>Lịch sử tập: ngày giờ, số cái, thời lượng từng set, chế độ đếm đã dùng.</li>
       <li>Tiến độ chương trình: kết quả kiểm tra, cấp độ, các ngày đã hoàn thành.</li>
       <li>Cài đặt: mục tiêu, thời gian đếm ngược và nghỉ, âm thanh, rung, giọng đọc, ngôn ngữ, giờ nhắc.</li>
+      <li>Chặn ứng dụng: các ứng dụng bạn chọn chặn, thời gian giải trí đã kiếm được, và việc chặn đang bật hay tắt.</li>
     </ul>
     <p>Bạn có thể xoá toàn bộ bất cứ lúc nào tại <em>Cài đặt → Xoá toàn bộ dữ liệu</em>, hoặc gỡ ứng dụng. Android có thể đưa dữ liệu này vào bản sao lưu thiết bị theo cài đặt sao lưu của riêng bạn.</p>
 
@@ -90,6 +103,7 @@
       <li><strong>Thông báo</strong> — chỉ khi bạn bật nhắc tập.</li>
       <li><strong>Internet</strong> — để tải bộ nhận diện và mô hình cho chế độ Camera AI.</li>
       <li><strong>Rung</strong> — cho phản hồi rung mỗi cái.</li>
+      <li><strong>Dịch vụ Trợ năng</strong> — chỉ khi bạn bật tính năng chặn ứng dụng, để biết ứng dụng nào đang mở như mô tả ở trên.</li>
     </ul>
 
     <h2>Trẻ em</h2>

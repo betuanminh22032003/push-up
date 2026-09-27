@@ -3,6 +3,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppRoot } from './src/shell/AppRoot';
 import { I18nProvider } from './src/i18n/I18nContext';
+import { BlockerProvider } from './src/state/BlockerContext';
 import { SessionsProvider } from './src/state/SessionsContext';
 import { SettingsProvider } from './src/state/SettingsContext';
 
@@ -16,7 +17,9 @@ export default function App() {
       <SettingsProvider>
         <SessionsProvider>
           <I18nProvider>
-            <AppRoot />
+            <BlockerProvider>
+              <AppRoot />
+            </BlockerProvider>
           </I18nProvider>
         </SessionsProvider>
       </SettingsProvider>

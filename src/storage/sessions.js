@@ -118,6 +118,7 @@ export const DEFAULT_SETTINGS = {
   reminderHour: 19,
   reminderMinute: 0,
   onboardingDone: false,
+  blockerSecondsPerRep: 60, // fun time each rep earns; the blocker itself lives natively
 };
 
 export async function loadSettings() {

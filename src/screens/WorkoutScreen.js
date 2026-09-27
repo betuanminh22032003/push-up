@@ -4,6 +4,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { newlyUnlocked, unlockedAchievements } from '../achievements/achievements';
+import { creditFor, formatAmount, isSetUp } from '../blocker/blockerLogic';
 import { Button } from '../components/Button';
 import { StatTile } from '../components/StatTile';
 import { useCountdown } from '../hooks/useCountdown';
@@ -14,6 +15,7 @@ import { useI18n } from '../i18n/I18nContext';
 import { PoseStage } from '../pose/PoseStage';
 import { ISSUES } from '../pose/pushupAnalyzer';
 import { SOURCES, getSourceById, resolveDefaultSource } from '../sensors/sources';
+import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
 import { colors, radius, spacing, type } from '../theme/theme';
@@ -59,12 +61,22 @@ function freshLive() {
  * @param {Function} onClearPlan     the plan was finished or dismissed
  * @param {Function} onStatusChange  so the shell can hide the tabs mid-set
  * @param {Function} onCelebrate     toasts for the goal and new achievements
+ * @param {Function} onOpenBlocker   the fun-time chip leads to the blocker tab
  * @param {object}   controlsRef     lets the shell pause on the back button
  */
-export function WorkoutScreen({ plan, onClearPlan, onStatusChange, onCelebrate, controlsRef }) {
+export function WorkoutScreen({
+  plan,
+  onClearPlan,
+  onStatusChange,
+  onCelebrate,
+  onOpenBlocker,
+  controlsRef,
+}) {
   const { t, speechTag } = useI18n();
   const insets = useSafeAreaInsets();
   const { settings, updateSettings } = useSettings();
+  const { state: blocker, rate: blockerRate, creditReps } = useBlocker();
+  const earning = isSetUp(blocker);
   const {
     sessions,
     stats,
@@ -240,6 +252,9 @@ export function WorkoutScreen({ plan, onClearPlan, onStatusChange, onCelebrate, 
       restSeconds: restTotal,
       program: followed?.kind === 'day' ? { level: followed.level, day: followed.day } : null,
     });
+    // Credited with the save, so fun time always matches the history: a
+    // discarded workout earns nothing, exactly as it records nothing.
+    const earnedSeconds = creditReps(totalReps);
 
     let completedDays = program?.completedDays ?? {};
     let level = null;
@@ -268,12 +283,16 @@ export function WorkoutScreen({ plan, onClearPlan, onStatusChange, onCelebrate, 
       totalReps,
       sets: sets.length,
       durationSeconds,
+      earnedSeconds,
     });
+    const savedText = level
+      ? t('notice.levelAssigned', { level })
+      : t('notice.saved', { reps: totalReps, time: formatDuration(durationSeconds) });
     setNotice({
       tone: 'ok',
-      text: level
-        ? t('notice.levelAssigned', { level })
-        : t('notice.saved', { reps: totalReps, time: formatDuration(durationSeconds) }),
+      text: earnedSeconds
+        ? `${savedText} ${t('notice.earned', { time: formatAmount(earnedSeconds, t) })}`
+        : savedText,
     });
     if (celebrations.length) onCelebrate?.(celebrations);
     if (followed) onClearPlan?.();
@@ -294,6 +313,7 @@ export function WorkoutScreen({ plan, onClearPlan, onStatusChange, onCelebrate, 
     startProgram,
     sessions,
     onCelebrate,
+    creditReps,
   ]);
 
   const { isNear, onTouchStart, onTouchEnd, reset: resetDetector } = useRepDetector({
@@ -502,6 +522,8 @@ export function WorkoutScreen({ plan, onClearPlan, onStatusChange, onCelebrate, 
   const running = status !== 'idle';
   const setsDone = completedSets.length;
   const totalSets = planSets ? planSets.length : null;
+  // Reps so far this workout, for the running fun-time preview.
+  const workoutReps = completedSets.reduce((sum, s) => sum + s.reps, 0) + reps;
 
   const planLine = (() => {
     if (activePlan?.kind === 'test') return t('workout.test');
@@ -531,6 +553,18 @@ export function WorkoutScreen({ plan, onClearPlan, onStatusChange, onCelebrate, 
           <Text style={styles.headerPlan}>
             {t('workout.day', { day: activePlan.day, week: activePlan.week })}
           </Text>
+        ) : earning && status === 'idle' ? (
+          <Pressable
+            onPress={onOpenBlocker}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('blocker.chipA11y', {
+              time: formatAmount(blocker.balanceSeconds, t),
+            })}
+            style={({ pressed }) => [styles.funChip, pressed && styles.pressedDim]}
+          >
+            <Text style={styles.funChipText}>{`🎮 ${formatDuration(blocker.balanceSeconds)}`}</Text>
+          </Pressable>
         ) : null}
       </View>
 
@@ -599,6 +633,11 @@ export function WorkoutScreen({ plan, onClearPlan, onStatusChange, onCelebrate, 
             <Text style={styles.summaryMeta}>
               {`${summary.sets} ${t('common.sets')} · ${formatDuration(summary.durationSeconds)}`}
             </Text>
+            {summary.earnedSeconds ? (
+              <Text style={styles.earnedLine}>
+                {t('workout.earned', { time: formatAmount(summary.earnedSeconds, t) })}
+              </Text>
+            ) : null}
             <Pressable
               onPress={share}
               hitSlop={8}
@@ -660,6 +699,13 @@ export function WorkoutScreen({ plan, onClearPlan, onStatusChange, onCelebrate, 
                   {formatDuration(elapsedSeconds)}
                 </Text>
                 {running && planLine ? <Text style={styles.subline}>{planLine}</Text> : null}
+                {running && earning && workoutReps > 0 ? (
+                  <Text style={styles.earnedLine}>
+                    {t('workout.earned', {
+                      time: formatAmount(creditFor(workoutReps, blockerRate), t),
+                    })}
+                  </Text>
+                ) : null}
                 {tapActive ? (
                   <Text style={styles.stageHint}>
                     {isNear ? t('workout.tapHold') : t('workout.tapTouch')}
@@ -824,6 +870,22 @@ const styles = StyleSheet.create({
   brand: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: 2 },
   brandSub: { ...type.label, color: colors.textFaint, marginTop: -2 },
   headerPlan: { ...type.label, color: colors.accent },
+  funChip: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.accentDim,
+    backgroundColor: colors.surface,
+  },
+  funChipText: { fontSize: 14, fontWeight: '600', color: colors.text, fontVariant: ['tabular-nums'] },
+  earnedLine: {
+    ...type.label,
+    color: colors.accent,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    textShadow: '0px 1px 8px rgba(0,0,0,0.85)',
+  },
 
   statsRow: { flexDirection: 'row' },
   gap: { width: spacing.sm },

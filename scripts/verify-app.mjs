@@ -30,6 +30,7 @@ const achievements = await bundle(
 );
 const stats = await bundle(timeSrc, stripImport(read('src/utils/stats.js'), './time'));
 const strings = await bundle(read('src/i18n/strings.js'));
+const blocker = await bundle(read('src/blocker/blockerLogic.js'));
 const store = await asModule(
   read('src/storage/sessions.js').replace(
     "import AsyncStorage from '@react-native-async-storage/async-storage';",
@@ -52,6 +53,19 @@ const { ACHIEVEMENTS, unlockedAchievements, newlyUnlocked, longestStreak, bestSe
   achievements;
 const { computeStats, dailyTotals } = stats;
 const { STRINGS, LANGUAGES, resolveLanguage, translate } = strings;
+const {
+  RATE_OPTIONS,
+  DEFAULT_RATE_SECONDS,
+  EMPTY_STATE,
+  normalizeState,
+  isSetUp,
+  isBlocking,
+  creditFor,
+  formatAmount,
+  filterApps,
+  normalizeApps,
+  sortApps,
+} = blocker;
 
 const { state, group, check } = createHarness();
 
@@ -290,6 +304,111 @@ await check('resolveLanguage: explicit setting, then device, then English', () =
   assert.equal(resolveLanguage(undefined, ['vi']), 'vi');
 });
 
+// --- app blocker -------------------------------------------------------------
+group('app blocker');
+
+await check('reps earn time at the chosen rate, never negative', () => {
+  assert.equal(creditFor(15, 60), 900);
+  assert.equal(creditFor(15, 30), 450);
+  assert.equal(creditFor(0, 60), 0);
+  assert.equal(creditFor(-5, 60), 0);
+  assert.equal(creditFor(NaN, 60), 0);
+  assert.equal(creditFor(2.6, 60), 180, 'reps are whole');
+  assert.equal(creditFor(10, undefined), 0, 'no rate, no time');
+});
+
+await check('the default rate is one push-up = one minute, and on offer', () => {
+  assert.equal(DEFAULT_RATE_SECONDS, 60);
+  assert.ok(RATE_OPTIONS.includes(DEFAULT_RATE_SECONDS));
+});
+
+await check('earned time reads as an amount in both languages', () => {
+  const en = (key, params) => translate('en', key, params);
+  const vi = (key, params) => translate('vi', key, params);
+  assert.equal(formatAmount(60, en), '1 min');
+  assert.equal(formatAmount(900, vi), '15 phút');
+  assert.equal(formatAmount(450, vi), '7 phút 30 giây');
+  assert.equal(formatAmount(30, en), '30 sec');
+  assert.equal(formatAmount(-3, en), '0 sec');
+});
+
+await check('native state is normalised, junk included', () => {
+  assert.deepEqual(normalizeState(null), EMPTY_STATE);
+  const s = normalizeState({
+    enabled: true,
+    blocked: ['a', 3, null, 'b'],
+    balanceSeconds: -4,
+    serviceEnabled: 'yes',
+  });
+  assert.deepEqual(s.blocked, ['a', 'b']);
+  assert.equal(s.balanceSeconds, 0);
+  assert.equal(s.showTimer, true, 'the countdown defaults to on');
+  assert.equal(s.serviceEnabled, false, 'only a real true counts');
+});
+
+await check('reps only earn once the blocker is set up', () => {
+  const on = { ...EMPTY_STATE, enabled: true, blocked: ['a'] };
+  assert.equal(isSetUp({ ...on, blocked: [] }), false);
+  assert.equal(isSetUp({ ...on, enabled: false }), false);
+  assert.equal(isSetUp(on), true);
+  assert.equal(isBlocking({ ...on, serviceEnabled: true }), false, 'enabled but not bound yet');
+  assert.equal(isBlocking({ ...on, serviceEnabled: true, serviceRunning: true }), true);
+});
+
+await check('app search ignores case and Vietnamese accents', () => {
+  const apps = normalizeApps([
+    { packageName: 'com.garena.game.kgvn', label: 'Liên Quân Mobile' },
+    { packageName: 'com.ss.android.ugc.trill', label: 'TikTok' },
+    { packageName: 'vn.example.tickets', label: 'Đặt vé' },
+  ]);
+  const labels = (query) => filterApps(apps, query).map((a) => a.label);
+  assert.deepEqual(labels('lien quan'), ['Liên Quân Mobile']);
+  assert.deepEqual(labels('TIK'), ['TikTok']);
+  assert.deepEqual(labels('dat'), ['Đặt vé']);
+  assert.deepEqual(labels('trill'), ['TikTok'], 'package names match too');
+  assert.equal(labels('  ').length, 3);
+});
+
+await check('suggested apps sort first, the rest by name', () => {
+  const apps = normalizeApps([
+    { packageName: 'z.notes', label: 'Notes' },
+    { packageName: 'com.google.android.youtube', label: 'YouTube' },
+    { packageName: 'a.bank', label: 'Bank' },
+    { packageName: 'com.ss.android.ugc.trill', label: 'TikTok' },
+  ]);
+  assert.deepEqual(
+    sortApps(apps).map((a) => a.label),
+    ['TikTok', 'YouTube', 'Bank', 'Notes'],
+  );
+});
+
+await check('the installed-app list drops junk and duplicates', () => {
+  const apps = normalizeApps([
+    { packageName: 'a', label: '  A  ', icon: 'xx' },
+    { packageName: 'a', label: 'dup' },
+    { label: 'no package' },
+    null,
+    { packageName: 'b', label: '', icon: '' },
+  ]);
+  assert.deepEqual(apps, [
+    { packageName: 'a', label: 'A', icon: 'xx' },
+    { packageName: 'b', label: 'b', icon: null },
+  ]);
+  assert.deepEqual(normalizeApps('nope'), []);
+});
+
+await check('block-screen copy leaves {app} for the phone and fills everything else', () => {
+  for (const lang of LANGUAGES) {
+    for (const key of ['native.blockTitle', 'native.timeUpTitle', 'native.blockedToast']) {
+      assert.ok(STRINGS[lang][key].includes('{app}'), `${lang} ${key}`);
+    }
+    assert.ok(
+      !translate(lang, 'native.blockBody', { rate: '1 min' }).includes('{'),
+      `${lang} native.blockBody is complete once the rate is in`,
+    );
+  }
+});
+
 // --- storage -----------------------------------------------------------------
 group('storage (sets, program)');
 
@@ -341,6 +460,7 @@ await check('new settings have defaults and clearAllData wipes everything', asyn
   assert.equal(settings.countdownSeconds, 5);
   assert.equal(settings.language, 'auto');
   assert.equal(settings.onboardingDone, false);
+  assert.equal(settings.blockerSecondsPerRep, DEFAULT_RATE_SECONDS);
   await store.saveProgram({ level: 1, completedDays: {} });
   await store.clearAllData();
   assert.equal(await store.loadProgram(), null);

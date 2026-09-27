@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Chips, LinkRow, Row, Section, Toggle } from '../components/SettingsRows';
 import { PRIVACY_URL, SOURCE_URL } from '../config';
 import { useT } from '../i18n/I18nContext';
 import {
@@ -10,9 +11,10 @@ import {
   remindersSupported,
   requestReminderPermission,
 } from '../notifications/reminders';
+import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { formatClock } from '../utils/time';
 
@@ -32,6 +34,7 @@ export function SettingsScreen({ onShowOnboarding }) {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings, resetSettings } = useSettings();
   const { eraseEverything } = useSessions();
+  const { reset: resetBlocker } = useBlocker();
   const [reminderDenied, setReminderDenied] = useState(false);
 
   const toggleReminder = useCallback(
@@ -69,6 +72,7 @@ export function SettingsScreen({ onShowOnboarding }) {
       onConfirm: async () => {
         await cancelDailyReminder();
         await eraseEverything();
+        resetBlocker();
         resetSettings();
       },
     });
@@ -205,78 +209,6 @@ export function SettingsScreen({ onShowOnboarding }) {
   );
 }
 
-function Section({ label, children }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionLabel}>{label}</Text>
-      <View style={styles.card}>{children}</View>
-    </View>
-  );
-}
-
-/** A labelled setting; `stacked` puts the control under the text instead of beside it. */
-function Row({ title, body, bodyWarn, stacked, children }) {
-  return (
-    <View style={[styles.row, stacked && styles.rowStacked]}>
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        {body ? <Text style={[styles.rowBody, bodyWarn && styles.rowBodyWarn]}>{body}</Text> : null}
-      </View>
-      {children ? <View style={stacked ? styles.rowControlStacked : null}>{children}</View> : null}
-    </View>
-  );
-}
-
-function LinkRow({ title, body, onPress, danger }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-    >
-      <View style={styles.rowText}>
-        <Text style={[styles.rowTitle, danger && styles.danger]}>{title}</Text>
-        {body ? <Text style={styles.rowBody}>{body}</Text> : null}
-      </View>
-      <Text style={[styles.chevron, danger && styles.danger]}>›</Text>
-    </Pressable>
-  );
-}
-
-function Toggle({ value, onChange, label }) {
-  return (
-    <Switch
-      value={value}
-      onValueChange={onChange}
-      accessibilityLabel={label}
-      trackColor={{ false: colors.border, true: colors.accentDim }}
-      thumbColor={value ? colors.accent : colors.textDim}
-      ios_backgroundColor={colors.border}
-    />
-  );
-}
-
-function Chips({ options, selected, onSelect }) {
-  return (
-    <View style={styles.chips}>
-      {options.map((o) => {
-        const on = o.id === selected;
-        return (
-          <Pressable
-            key={String(o.id)}
-            onPress={() => onSelect(o.id)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: on }}
-            style={[styles.chip, on && styles.chipOn]}
-          >
-            <Text style={[styles.chipText, on && styles.chipTextOn]}>{o.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 function Stepper({ value, onDown, onUp, downDisabled, upDisabled }) {
   return (
     <View style={styles.stepper}>
@@ -308,47 +240,8 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   pressed: { opacity: 0.5 },
   title: { ...type.title, color: colors.text },
-  section: { marginTop: spacing.lg },
-  sectionLabel: { ...type.label, color: colors.textFaint, marginBottom: spacing.sm },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    gap: spacing.md,
-  },
-  rowStacked: { flexDirection: 'column', alignItems: 'stretch' },
-  rowText: { flex: 1 },
-  rowControlStacked: { marginTop: spacing.sm },
-  rowTitle: { fontSize: 15, fontWeight: '500', color: colors.text },
-  rowBody: { fontSize: 13, color: colors.textDim, marginTop: 2, lineHeight: 18 },
-  rowBodyWarn: { color: colors.warn },
-  chevron: { fontSize: 22, color: colors.textFaint },
-  danger: { color: colors.danger },
   privacyNote: { fontSize: 13, color: colors.textDim, paddingVertical: spacing.md, lineHeight: 18 },
   version: { fontSize: 12, color: colors.textFaint, paddingVertical: spacing.md },
-
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
-  chipOn: { borderColor: colors.accent, backgroundColor: colors.accentDim },
-  chipText: { fontSize: 13, color: colors.textDim },
-  chipTextOn: { color: colors.text, fontWeight: '600' },
 
   stepper: { flexDirection: 'row', alignItems: 'center' },
   stepBtn: {

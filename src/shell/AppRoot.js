@@ -7,22 +7,24 @@ import { TabBar } from '../components/TabBar';
 import { Toast } from '../components/Toast';
 import { useT } from '../i18n/I18nContext';
 import { configureNotifications, scheduleDailyReminder } from '../notifications/reminders';
+import { BlockerScreen } from '../screens/BlockerScreen';
 import { OnboardingModal } from '../screens/OnboardingModal';
 import { ProgramScreen } from '../screens/ProgramScreen';
 import { ProgressScreen } from '../screens/ProgressScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { WorkoutScreen } from '../screens/WorkoutScreen';
+import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
 import { colors } from '../theme/theme';
 
-const TAB_IDS = ['workout', 'program', 'progress', 'settings'];
-const TAB_ICONS = { workout: '💪', program: '📘', progress: '📈', settings: '⚙️' };
+const TAB_IDS = ['workout', 'program', 'progress', 'blocker', 'settings'];
+const TAB_ICONS = { workout: '💪', program: '📘', progress: '📈', blocker: '🔒', settings: '⚙️' };
 
 configureNotifications();
 
 /**
- * The shell: four tabs, a toast lane, first-run onboarding, and the daily
+ * The shell: five tabs, a toast lane, first-run onboarding, and the daily
  * reminder kept in sync with settings.
  *
  * Every tab stays mounted and is hidden rather than unmounted, so scroll
@@ -34,6 +36,7 @@ export function AppRoot() {
   const t = useT();
   const { settings, isLoaded: settingsLoaded, updateSettings } = useSettings();
   const { isLoaded: sessionsLoaded } = useSessions();
+  const { earnSignal } = useBlocker();
 
   const [tab, setTab] = useState('workout');
   const [plan, setPlan] = useState(null);
@@ -70,6 +73,11 @@ export function AppRoot() {
     });
   }, [settingsLoaded, reminderEnabled, reminderHour, reminderMinute, t]);
 
+  // --- "Do push-ups now" on the block screen opens the app on the workout tab --
+  useEffect(() => {
+    if (earnSignal > 0) setTab('workout');
+  }, [earnSignal]);
+
   // --- Android back button ------------------------------------------------------
   useEffect(() => {
     if (Platform.OS !== 'android') return undefined;
@@ -98,6 +106,8 @@ export function AppRoot() {
   }, []);
 
   const clearPlan = useCallback(() => setPlan(null), []);
+  const openBlocker = useCallback(() => setTab('blocker'), []);
+  const openWorkout = useCallback(() => setTab('workout'), []);
 
   const handleStatus = useCallback((status) => setWorkoutBusy(status !== 'idle'), []);
 
@@ -120,6 +130,7 @@ export function AppRoot() {
           onClearPlan={clearPlan}
           onStatusChange={handleStatus}
           onCelebrate={celebrate}
+          onOpenBlocker={openBlocker}
           controlsRef={workoutControls}
         />
       </View>
@@ -128,6 +139,9 @@ export function AppRoot() {
       </View>
       <View style={[styles.screen, tab !== 'progress' && styles.hidden]}>
         <ProgressScreen />
+      </View>
+      <View style={[styles.screen, tab !== 'blocker' && styles.hidden]}>
+        <BlockerScreen onGoWorkout={openWorkout} />
       </View>
       <View style={[styles.screen, tab !== 'settings' && styles.hidden]}>
         <SettingsScreen onShowOnboarding={() => setOnboardingOpen(true)} />
