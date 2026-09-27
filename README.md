@@ -92,27 +92,54 @@ how-it-works, delete all data, privacy policy link.
 
 ## App blocker (Android)
 
-Pick the apps that eat your time; they stay locked until you earn time on them. Every
-saved workout credits `reps × rate` of fun time (rate: 30 s, **1 min** by default, 2 or
-5 min per rep). Opening a blocked app spends the balance second by second, with a
-small countdown over the app; leaving it, turning the screen off or locking the phone
-stops the meter. At zero the app is covered by a block screen whose buttons lead to a
+Pick the apps and websites that eat your time; they stay locked until you earn time on
+them. Every saved workout credits `reps × rate` of fun time (rate: 30 s, **1 min** by
+default, 2 or 5 min per rep). Using a blocked app or site spends the balance second by
+second, with a small countdown on top; leaving it, turning the screen off or locking the
+phone stops the meter. At zero it is covered by a block screen whose buttons lead to a
 workout or the home screen — never back into the app.
 
-Reps count only once the blocker is set up (switched on, at least one app), so hours
-cannot be banked before it bites, and a discarded workout earns nothing, exactly as it
-records nothing.
+Reps count only once the blocker is set up (switched on, at least one app or site), so
+hours cannot be banked before it bites, and a discarded workout earns nothing, exactly as
+it records nothing.
+
+What it covers:
+
+- **Every app window on screen**, not just the focused one: split screen, floating
+  windows and picture-in-picture count as use, and a blocked app in picture-in-picture is
+  closed when time runs out (the block screen cannot cover it).
+- **Websites in browsers.** The service reads the domain in the address bar of Chrome,
+  Cốc Cốc, Edge, Brave, Samsung Internet, Opera, Firefox and other browsers it finds,
+  and blocks the blocked apps' own sites (tiktok.com for TikTok, youtube.com for
+  YouTube…) plus any the user adds. A blocked site is first left with Back, so reopening
+  the browser does not land on it again.
+- **A second look every second.** Window events alone missed apps: a look taken while an
+  app was still launching found no content, and no later event came. A heartbeat runs
+  while the screen is on and blocking is set up, and a block screen that did not appear
+  within 1.5 s is escalated (Back for a site, then the home screen).
+- **Being switched off by the phone.** Android removes a force-stopped app's
+  accessibility service from the enabled list, and realme/OPPO/Xiaomi builds force-stop
+  background apps. The tab tells "never switched on" from "switched off by the system",
+  shows the steps that prevent it (lock in Recents, battery, auto-launch) and flags
+  battery optimisation; the home chip turns into a warning.
 
 It is a **local Expo module**, [`modules/app-blocker`](modules/app-blocker/), autolinked
 from `modules/`:
 
 | File | Role |
 | --- | --- |
-| `BlockerService.kt` | `AccessibilityService`: finds the active app window on window-change events, meters the balance on a 1 s tick that runs only while a blocked app is in use, shows the countdown as an accessibility overlay (no "draw over apps" permission), launches the block screen |
+| `BlockerEngine.kt` | every decision (meter, block, wait, escalate, close picture-in-picture), plain Kotlin with JUnit tests |
+| `BlockerService.kt` | `AccessibilityService`: looks at the screen on window events and on the heartbeat, reads browser address bars, carries out the engine's commands, shows the countdown as an accessibility overlay (no "draw over apps" permission) |
 | `BlockActivity.kt` | the block screen, built in code so it appears even when the JS is not loaded; Back goes home |
 | `BlockerStore.kt` | state shared by the service and the bridge (same process), persisted in SharedPreferences |
-| `Packages.kt` | launchable apps and icons for the picker; the never-blocked set (this app, launcher, Settings, dialer) |
+| `Sites.kt` | address-bar text to host, domain matching; JUnit-tested |
+| `Packages.kt` | launchable apps and icons for the picker, browsers, the never-blocked set (this app, launcher, Settings, dialer) |
 | `AppBlockerModule.kt` | the JS API, used through `src/state/BlockerContext.js` |
+
+The JUnit tests (`android/src/test`) need no device. Android Studio runs them with the
+module's `testDebugUnitTest`; without an Android SDK, compile `BlockerEngine.kt`,
+`Sites.kt` and the two test files with `kotlinc` against JUnit 4 and run
+`org.junit.runner.JUnitCore`.
 
 Custom native code does not run in **Expo Go**: there the module is absent
 (`requireOptionalNativeModule` returns null) and the tab explains why. Use a build —
@@ -168,7 +195,7 @@ AsyncStorage, three keys, all read defensively (corrupt data → empty, never a 
 - `pupg:program:v1` — `{ level, testReps, startedAt, completedDays: { [day]: timestamp } }` or absent.
 
 The app blocker keeps its state natively, in SharedPreferences, because its service
-runs while the app is closed: blocked packages, balance, on/off, countdown on/off.
+runs while the app is closed: blocked packages and domains, balance, on/off, countdown on/off, when the service last connected.
 
 ## Layout
 
@@ -209,7 +236,7 @@ store/                        Play listing, graphics, screenshots, checklist
 
 | Script | What |
 | --- | --- |
-| `npm run verify` | 92 assertions in plain Node: time/streaks/storage, pose analyser, program/achievements/strings/blocker rules, and the pose page drift check |
+| `npm run verify` | 95 assertions in plain Node: time/streaks/storage, pose analyser, program/achievements/strings/blocker rules, and the pose page drift check |
 | `npm run build:pose` | regenerate `docs/pose.html` from `src/pose/` |
 | `npm run build:sounds` | regenerate the cue WAVs |
 | `npm run build:brand` | regenerate icons, splash, notification icon, Play icon and feature graphic (Python + Pillow) |

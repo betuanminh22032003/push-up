@@ -13,3 +13,8 @@ android {
     versionName "1.0.0"
   }
 }
+
+dependencies {
+  // BlockerEngine and Sites are plain Kotlin; their JUnit tests run on the JVM.
+  testImplementation 'junit:junit:4.13.2'
+}

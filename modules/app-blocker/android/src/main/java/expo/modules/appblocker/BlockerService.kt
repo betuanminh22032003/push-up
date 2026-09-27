@@ -14,58 +14,102 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.TextView
 import android.widget.Toast
+import expo.modules.appblocker.BlockerEngine.Command
+import expo.modules.appblocker.BlockerEngine.Seen
 import java.util.Locale
 
 /**
- * Watches which app is in front. While a blocked app is open it spends the
- * earned balance second by second, and once nothing is left it covers the app
- * with the block screen.
+ * Looks at what is on screen and carries out [BlockerEngine]'s decisions:
+ * spend the balance while a blocked app or site is in use, cover it with the
+ * block screen once nothing is left.
  *
- * It is driven by window-change events. The one-second tick runs only while a
- * blocked app is actually in use, so the service costs nothing the rest of
- * the time. Screen-off and the lock screen stop the meter.
+ * It looks on two triggers, because either one alone misses things. Window
+ * events give a fast reaction. A heartbeat every second, while the screen is on
+ * and blocking is set up, makes it dependable: a look taken while an app is
+ * still launching (no content yet, focus not moved) would otherwise be the last
+ * look, and the app would stay usable.
+ *
+ * Every app window on screen counts, not only the focused one, so split
+ * screen, floating windows and picture-in-picture cannot slip past. In a
+ * browser the address bar is read, so a blocked app's website is blocked too.
  */
 class BlockerService : AccessibilityService() {
   private val handler = Handler(Looper.getMainLooper())
+  private val engine = BlockerEngine()
 
-  /** The blocked app being paid for right now, or null when none is in front. */
-  private var sessionPackage: String? = null
   private var lastTickAt = 0L
   private var ticksSinceSave = 0
   private var warnedLow = false
+  private var lastToastAt = 0L
 
-  private var lastBlockAt = 0L
   private var lastEventPackage: String? = null
   private var protectedPackages: Set<String> = emptySet()
+  private var browsers: Set<String> = emptySet()
+  private val appLabels = HashMap<String, String>()
+
+  /** The address-bar view id that worked, per browser. */
+  private val urlBarIds = HashMap<String, String>()
+
+  /** When a browser's address bar could not be found, so it is not searched every second. */
+  private val urlBarMissAt = HashMap<String, Long>()
+
+  /** The last host each browser showed: its address bar hides while a page scrolls. */
+  private val lastHosts = HashMap<String, String>()
+
+  /** Picture-in-picture windows seen in the last look, to close on a block. */
+  private val pipRoots = HashMap<String, AccessibilityNodeInfo>()
+
   private var timerView: TextView? = null
   private var connected = false
   private var evaluatePending = false
+  private var beatPending = false
 
   private val evaluateTask = Runnable {
     evaluatePending = false
     evaluate()
   }
-  private val tickTask = Runnable { tick() }
+  private val beatTask = Runnable {
+    beatPending = false
+    beat()
+  }
 
   private val screenReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
       scheduleEvaluate(0L)
+      ensureBeat()
     }
   }
 
   override fun onServiceConnected() {
     super.onServiceConnected()
     BlockerStore.init(this)
-    protectedPackages = Packages.protectedPackages(this)
-    BlockerStore.onChange = { handler.post { scheduleEvaluate(0L) } }
+    BlockerStore.markServiceConnected()
+    // A crash here would get the service marked as broken until the user
+    // switches it off and on again, so the lookups fall back instead of throwing.
+    protectedPackages = try {
+      Packages.protectedPackages(this)
+    } catch (e: RuntimeException) {
+      setOf(packageName, "com.android.systemui", "com.android.settings")
+    }
+    browsers = try {
+      Packages.browsers(this)
+    } catch (e: RuntimeException) {
+      emptySet()
+    } + KNOWN_BROWSERS - protectedPackages
+    BlockerStore.onChange = {
+      handler.post {
+        scheduleEvaluate(0L)
+        ensureBeat()
+      }
+    }
 
     val filter = IntentFilter().apply {
       addAction(Intent.ACTION_SCREEN_OFF)
@@ -73,15 +117,21 @@ class BlockerService : AccessibilityService() {
       addAction(Intent.ACTION_USER_PRESENT)
     }
     // Protected system broadcasts only, so exporting the receiver exposes nothing.
-    if (Build.VERSION.SDK_INT >= 33) {
-      registerReceiver(screenReceiver, filter, Context.RECEIVER_EXPORTED)
-    } else {
-      registerReceiver(screenReceiver, filter)
+    // Without them, the first window event after unlocking restarts the heartbeat.
+    try {
+      if (Build.VERSION.SDK_INT >= 33) {
+        registerReceiver(screenReceiver, filter, Context.RECEIVER_EXPORTED)
+      } else {
+        registerReceiver(screenReceiver, filter)
+      }
+    } catch (e: RuntimeException) {
+      // keep going without screen broadcasts
     }
 
     connected = true
     isRunning = true
     scheduleEvaluate(0L)
+    ensureBeat()
   }
 
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -90,6 +140,7 @@ class BlockerService : AccessibilityService() {
       event.packageName?.toString()?.let { lastEventPackage = it }
     }
     scheduleEvaluate(EVENT_SETTLE_MS)
+    ensureBeat()
   }
 
   override fun onInterrupt() = Unit
@@ -106,11 +157,13 @@ class BlockerService : AccessibilityService() {
 
   private fun shutdown() {
     if (!connected) return
+    execute(engine.step(Seen.Clear, 0L, false, SystemClock.elapsedRealtime()))
     connected = false
     isRunning = false
-    endSession()
     handler.removeCallbacksAndMessages(null)
     evaluatePending = false
+    beatPending = false
+    pipRoots.clear()
     BlockerStore.onChange = null
     try {
       unregisterReceiver(screenReceiver)
@@ -119,10 +172,7 @@ class BlockerService : AccessibilityService() {
     }
   }
 
-  /**
-   * An app launch fires a burst of window events; checking once after the
-   * burst settles is enough, because the check reads the live window state.
-   */
+  /** A burst of window events (an app launching) is looked at once, after it settles. */
   private fun scheduleEvaluate(delayMs: Long) {
     if (!connected) return
     if (evaluatePending) {
@@ -133,26 +183,42 @@ class BlockerService : AccessibilityService() {
     handler.postDelayed(evaluateTask, delayMs)
   }
 
+  /** Keeps the heartbeat going while the screen is on and blocking is set up. */
+  private fun ensureBeat() {
+    if (beatPending || !connected) return
+    if (!BlockerStore.snapshot().active || !screenInUse()) return
+    beatPending = true
+    handler.postDelayed(beatTask, BEAT_MS)
+  }
+
+  private fun beat() {
+    if (!connected) return
+    evaluate()
+    if (engine.metering != null) {
+      val remaining = spendSinceLastTick()
+      if (remaining <= 0L) {
+        execute(engine.timeUp(SystemClock.elapsedRealtime()))
+      } else {
+        syncTimer(remaining)
+        if (!warnedLow && remaining <= LOW_TIME_MS) {
+          warnedLow = true
+          toast(BlockerStore.label("lowTime", "Less than a minute of fun time left"))
+        }
+        ticksSinceSave += 1
+        if (ticksSinceSave >= SAVE_EVERY_TICKS) {
+          ticksSinceSave = 0
+          BlockerStore.saveBalance()
+        }
+      }
+    }
+    ensureBeat()
+  }
+
   private fun evaluate() {
     if (!connected) return
     val state = BlockerStore.snapshot()
-    if (!state.enabled || state.blocked.isEmpty() || !screenInUse()) {
-      endSession()
-      return
-    }
-    // Null means "can't tell right now" (the notification shade is down, a
-    // window is animating): keep whatever is going on.
-    val pkg = foregroundPackage() ?: return
-    val blocked = pkg in state.blocked && pkg !in protectedPackages && pkg != packageName
-    if (!blocked) {
-      endSession()
-      return
-    }
-    if (sessionPackage != null) {
-      sessionPackage = pkg // hopping between two blocked apps is one session
-      return
-    }
-    if (state.balanceMs > 0L) startSession(pkg) else block(pkg, timeUp = false)
+    val seen = if (state.active && screenInUse()) look(state) else Seen.Clear
+    execute(engine.step(seen, state.balanceMs, BlockActivity.isVisible, SystemClock.elapsedRealtime()))
   }
 
   private fun screenInUse(): Boolean {
@@ -161,72 +227,140 @@ class BlockerService : AccessibilityService() {
     return (power?.isInteractive ?: true) && !(keyguard?.isKeyguardLocked ?: false)
   }
 
+  // --- looking ------------------------------------------------------------------
+
   /**
-   * The package of the app window the user is interacting with. The keyboard,
-   * the notification shade and overlays (the timer included) are other window
-   * types and are skipped, so typing a comment in TikTok is still TikTok.
+   * Whether a blocked app or site is on screen. App windows only: the
+   * keyboard, the notification shade and overlays (the countdown included) are
+   * other window types, so typing a comment in TikTok is still TikTok.
    */
-  private fun foregroundPackage(): String? {
-    val list = try {
+  private fun look(state: BlockerStore.Snapshot): Seen {
+    pipRoots.clear()
+    val all = try {
       windows
     } catch (e: RuntimeException) {
       null
     }
-    if (list.isNullOrEmpty()) {
-      // The window list is unavailable (rare): fall back to the last activity
-      // change, minus the system UI and the keyboard, which are never "an app".
-      val pkg = lastEventPackage ?: return null
-      return if (pkg == SYSTEM_UI || pkg == currentKeyboardPackage()) null else pkg
-    }
+    if (all.isNullOrEmpty()) return fromLastEvent(state) ?: Seen.Unknown
+
     return try {
-      list.firstNotNullOfOrNull { window ->
-        if (window.type == AccessibilityWindowInfo.TYPE_APPLICATION && (window.isActive || window.isFocused)) {
-          window.root?.packageName?.toString()?.takeIf { it.isNotEmpty() }
-        } else {
-          null
+      val apps = all.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+      val (inUse, others) = apps.partition { it.isActive || it.isFocused }
+      var inUseUnreadable = false
+      for (window in inUse + others) {
+        val active = window.isActive || window.isFocused
+        val root = window.root
+        val pkg = root?.packageName?.toString()
+        if (root == null || pkg.isNullOrEmpty()) {
+          if (active) inUseUnreadable = true
+          continue
+        }
+        if (isBlockedApp(pkg, state)) {
+          val pip = Build.VERSION.SDK_INT >= 26 && window.isInPictureInPictureMode
+          if (pip) pipRoots[pkg] = root
+          return Seen.Blocked(pkg, labelOf(pkg), pkg, inPip = pip)
+        }
+        if (active && state.sites.isNotEmpty() && pkg in browsers) {
+          val domain = blockedDomain(pkg, root, state.sites)
+          if (domain != null) return Seen.Blocked("site:$domain", domain, pkg, isSite = true)
         }
       }
+      // The window in use has no content yet, typically an app still launching.
+      // The activity change that announced it names its package: go by that,
+      // and the next heartbeat looks again anyway.
+      if (inUseUnreadable) fromLastEvent(state) ?: Seen.Unknown else Seen.Clear
     } catch (e: RuntimeException) {
-      null
+      Seen.Unknown
     }
   }
 
-  private fun currentKeyboardPackage(): String? =
-    Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)?.substringBefore('/')
+  private fun fromLastEvent(state: BlockerStore.Snapshot): Seen? {
+    val pkg = lastEventPackage ?: return null
+    return if (isBlockedApp(pkg, state)) Seen.Blocked(pkg, labelOf(pkg), pkg) else null
+  }
 
-  // --- metering ---------------------------------------------------------------
+  private fun isBlockedApp(pkg: String, state: BlockerStore.Snapshot): Boolean =
+    pkg in state.blocked && pkg !in protectedPackages && pkg != packageName
 
-  private fun startSession(pkg: String) {
-    sessionPackage = pkg
+  private fun labelOf(pkg: String): String = appLabels.getOrPut(pkg) { Packages.appLabel(this, pkg) }
+
+  /** The blocked domain the browser is showing, if any. */
+  private fun blockedDomain(browser: String, root: AccessibilityNodeInfo, sites: Set<String>): String? {
+    val read = addressBarHost(browser, root)
+    val host = when {
+      read == null -> lastHosts[browser] // bar hidden or not found: the page has not changed
+      read.isEmpty() -> null // a new tab or a search
+      else -> read
+    } ?: return null
+    return Sites.matchingDomain(host, sites)
+  }
+
+  /**
+   * The host in [browser]'s address bar: null when the bar cannot be read
+   * right now, "" when it shows no site (a new tab, a search query).
+   */
+  private fun addressBarHost(browser: String, root: AccessibilityNodeInfo): String? {
+    val now = SystemClock.elapsedRealtime()
+    val known = urlBarIds[browser]
+    val missedAt = urlBarMissAt[browser]
+    if (known == null && missedAt != null && now - missedAt < URL_BAR_RETRY_MS) return null
+
+    val candidates = LinkedHashSet<String>()
+    known?.let { candidates += it }
+    KNOWN_URL_BARS[browser]?.let { candidates += it }
+    GENERIC_URL_BARS.forEach { candidates += "$browser:id/$it" }
+
+    for (id in candidates) {
+      val node = root.findAccessibilityNodeInfosByViewId(id)?.firstOrNull() ?: continue
+      urlBarIds[browser] = id
+      urlBarMissAt.remove(browser)
+      // Being typed in: the page on screen is still the previous one.
+      if (node.isFocused) return lastHosts[browser]
+      val showingHint = Build.VERSION.SDK_INT >= 26 && node.isShowingHintText
+      val host = if (showingHint) null else node.text?.toString()?.let(Sites::hostOf)
+      if (host == null) {
+        lastHosts.remove(browser)
+        return ""
+      }
+      lastHosts[browser] = host
+      return host
+    }
+    if (known == null) urlBarMissAt[browser] = now
+    return null
+  }
+
+  // --- acting ---------------------------------------------------------------------
+
+  private fun execute(commands: List<Command>) {
+    for (command in commands) {
+      when (command) {
+        is Command.StartMeter -> startMeter()
+        Command.StopMeter -> stopMeter()
+        is Command.Block -> block(command.target, command.timeUp)
+        is Command.GoBack -> {
+          performGlobalAction(GLOBAL_ACTION_BACK)
+          blockedToast(command.target)
+        }
+        is Command.GoHome -> {
+          performGlobalAction(GLOBAL_ACTION_HOME)
+          blockedToast(command.target)
+        }
+        is Command.ClosePip -> closePip(command.target)
+      }
+    }
+  }
+
+  private fun startMeter() {
     lastTickAt = SystemClock.elapsedRealtime()
     ticksSinceSave = 0
     warnedLow = false
     syncTimer(BlockerStore.snapshot().balanceMs)
-    handler.removeCallbacks(tickTask)
-    handler.postDelayed(tickTask, TICK_MS)
   }
 
-  private fun tick() {
-    if (sessionPackage == null) return
-    evaluate() // may end the session: app left, screen off, blocker turned off
-    if (sessionPackage == null) return
-
-    val remaining = spendSinceLastTick()
-    if (remaining <= 0L) {
-      timeUp()
-      return
-    }
-    syncTimer(remaining)
-    if (!warnedLow && remaining <= LOW_TIME_MS) {
-      warnedLow = true
-      toast(BlockerStore.label("lowTime", "Less than a minute of fun time left"))
-    }
-    ticksSinceSave += 1
-    if (ticksSinceSave >= SAVE_EVERY_TICKS) {
-      ticksSinceSave = 0
-      BlockerStore.saveBalance()
-    }
-    handler.postDelayed(tickTask, TICK_MS)
+  private fun stopMeter() {
+    spendSinceLastTick()
+    hideTimer()
+    BlockerStore.saveBalance()
   }
 
   /** Charges the time since the last tick, measured on the monotonic clock. */
@@ -237,56 +371,63 @@ class BlockerService : AccessibilityService() {
     return BlockerStore.spend(spent)
   }
 
-  private fun endSession() {
-    if (sessionPackage == null) return
-    spendSinceLastTick()
-    sessionPackage = null
-    handler.removeCallbacks(tickTask)
-    hideTimer()
-    BlockerStore.saveBalance()
-  }
-
-  private fun timeUp() {
-    val pkg = sessionPackage ?: return
-    endSession()
-    block(pkg, timeUp = true)
-  }
-
-  // --- blocking ---------------------------------------------------------------
-
-  private fun block(pkg: String, timeUp: Boolean) {
-    if (BlockActivity.isVisible) return
-    val now = SystemClock.elapsedRealtime()
-    val sinceLast = now - lastBlockAt
-    if (sinceLast < BLOCK_RETRY_MS) {
-      // A block screen is already on its way. Look again once it should be
-      // up, so reopening the app straight away cannot slip through.
-      handler.postDelayed({ scheduleEvaluate(0L) }, BLOCK_RETRY_MS - sinceLast + 50L)
+  private fun block(target: Seen.Blocked, timeUp: Boolean) {
+    if (!target.isSite) {
+      showBlockScreen(target, timeUp)
       return
     }
-    lastBlockAt = now
+    // Leave the page first, so reopening the browser does not land on it
+    // again; the block screen follows once Back has reached the browser.
+    performGlobalAction(GLOBAL_ACTION_BACK)
+    handler.postDelayed({ if (connected) showBlockScreen(target, timeUp) }, SITE_BACK_SETTLE_MS)
+  }
 
+  /**
+   * NO_USER_ACTION keeps the covered app from treating this as the user
+   * leaving, which is what sends video apps into picture-in-picture. If the
+   * start is refused (some OEM builds restrict it), the heartbeat escalates.
+   */
+  private fun showBlockScreen(target: Seen.Blocked, timeUp: Boolean) {
     val intent = Intent(this, BlockActivity::class.java)
-      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-      .putExtra(BlockActivity.EXTRA_PACKAGE, pkg)
+      .addFlags(
+        Intent.FLAG_ACTIVITY_NEW_TASK or
+          Intent.FLAG_ACTIVITY_CLEAR_TOP or
+          Intent.FLAG_ACTIVITY_NO_USER_ACTION,
+      )
+      .putExtra(BlockActivity.EXTRA_LABEL, target.label)
+      .putExtra(BlockActivity.EXTRA_ICON_PACKAGE, target.iconPackage)
       .putExtra(BlockActivity.EXTRA_TIME_UP, timeUp)
-    val started = try {
+    try {
       startActivity(intent)
-      true
+    } catch (e: RuntimeException) {
+      // the next heartbeat sees the app still in front and escalates
+    }
+  }
+
+  /**
+   * Picture-in-picture floats above every activity, so the block screen cannot
+   * cover it. The system lets accessibility services dismiss it, or failing
+   * that expand it, after which it is blocked like any app.
+   */
+  private fun closePip(target: Seen.Blocked) {
+    val root = pipRoots[target.key]
+    val done = try {
+      root != null && (
+        root.performAction(AccessibilityNodeInfo.ACTION_DISMISS) ||
+          root.performAction(AccessibilityNodeInfo.ACTION_EXPAND)
+        )
     } catch (e: RuntimeException) {
       false
     }
+    if (done) blockedToast(target)
+  }
 
-    // Some OEM builds refuse background activity starts even to an
-    // accessibility service. Going home still gets the user out of the app,
-    // only without the explanation, so the toast carries it instead.
-    handler.postDelayed({
-      if (connected && !BlockActivity.isVisible && foregroundPackage() == pkg) {
-        performGlobalAction(GLOBAL_ACTION_HOME)
-        val template = BlockerStore.label("blockedToast", "{app} is blocked. Earn time with push-ups.")
-        toast(template.replace("{app}", Packages.appLabel(this, pkg)))
-      }
-    }, if (started) BLOCK_FALLBACK_MS else 0L)
+  private fun blockedToast(target: Seen.Blocked) {
+    val now = SystemClock.elapsedRealtime()
+    if (now - lastToastAt < TOAST_GAP_MS) return
+    lastToastAt = now
+    val template = BlockerStore.label("blockedToast", "{app} is blocked. Earn time with push-ups.")
+    toast(template.replace("{app}", target.label))
   }
 
   // --- the countdown pill -----------------------------------------------------
@@ -366,18 +507,58 @@ class BlockerService : AccessibilityService() {
   }
 
   companion object {
-    private const val SYSTEM_UI = "com.android.systemui"
     private const val EVENT_SETTLE_MS = 120L
-    private const val TICK_MS = 1000L
+    private const val BEAT_MS = 1000L
     private const val SAVE_EVERY_TICKS = 5
     private const val LOW_TIME_MS = 60_000L
-    private const val BLOCK_RETRY_MS = 800L
-    private const val BLOCK_FALLBACK_MS = 900L
+    private const val SITE_BACK_SETTLE_MS = 400L
+    private const val URL_BAR_RETRY_MS = 10_000L
+    private const val TOAST_GAP_MS = 3_000L
 
     private const val COLOR_PILL_BG = 0xE60A0A0B.toInt()
     private const val COLOR_ACCENT = 0xFF4ADE80.toInt()
     private const val COLOR_WARN = 0xFFFBBF24.toInt()
     private const val COLOR_DANGER = 0xFFF87171.toInt()
+
+    /** Browsers that may not answer the generic web-link query. */
+    private val KNOWN_BROWSERS = setOf(
+      "com.android.chrome",
+      "com.chrome.beta",
+      "com.chrome.dev",
+      "com.chrome.canary",
+      "com.microsoft.emmx",
+      "com.brave.browser",
+      "com.coccoc.trinhduyet",
+      "com.vivaldi.browser",
+      "com.kiwibrowser.browser",
+      "com.opera.browser",
+      "com.opera.mini.native",
+      "com.sec.android.app.sbrowser",
+      "org.mozilla.firefox",
+      "com.duckduckgo.mobile.android",
+      "com.heytap.browser",
+      "com.android.browser",
+      "com.mi.globalbrowser",
+    )
+
+    /** Address bars that do not follow the Chromium "<package>:id/url_bar" naming. */
+    private val KNOWN_URL_BARS = mapOf(
+      "com.sec.android.app.sbrowser" to listOf("com.sec.android.app.sbrowser:id/location_bar_edit_text"),
+      "com.opera.browser" to listOf("com.opera.browser:id/url_field"),
+      "com.opera.mini.native" to listOf("com.opera.mini.native:id/url_field"),
+      "org.mozilla.firefox" to listOf("org.mozilla.firefox:id/mozac_browser_toolbar_url_view"),
+      "com.duckduckgo.mobile.android" to listOf("com.duckduckgo.mobile.android:id/omnibarTextInput"),
+    )
+
+    /** Tried in any browser, most common first. */
+    private val GENERIC_URL_BARS = listOf(
+      "url_bar",
+      "url_field",
+      "location_bar_edit_text",
+      "mozac_browser_toolbar_url_view",
+      "url_edit_text",
+      "address_bar_edit_text",
+    )
 
     /** Whether the system has the service bound right now. */
     @Volatile

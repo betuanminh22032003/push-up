@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
@@ -41,6 +42,11 @@ class AppBlockerModule : Module() {
       state()
     }
 
+    Function("setBlockedSites") { domains: List<String> ->
+      store().setSites(domains.mapNotNull(Sites::hostOf).toSet())
+      state()
+    }
+
     Function("addCredit") { seconds: Double ->
       store().addCredit((seconds * 1000.0).toLong())
       state()
@@ -69,9 +75,13 @@ class AppBlockerModule : Module() {
     }
 
     Function("openAppSettings") {
-      openSettings(
-        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
-      )
+      openSettings(appDetailsIntent())
+    }
+
+    // The list of apps under battery optimisation. Asking to be exempted
+    // directly needs a permission Google Play restricts, so the user picks.
+    Function("openBatterySettings") {
+      openSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) || openSettings(appDetailsIntent())
     }
 
     AsyncFunction("getInstalledApps") { iconSize: Int ->
@@ -84,13 +94,25 @@ class AppBlockerModule : Module() {
     return mapOf(
       "serviceEnabled" to isServiceEnabled(),
       "serviceRunning" to BlockerService.isRunning,
+      "serviceConnectedAt" to s.serviceConnectedAt.toDouble(),
+      "batteryOptimized" to isBatteryOptimized(),
       "enabled" to s.enabled,
       "blocked" to s.blocked.toList(),
+      "sites" to s.sites.toList(),
       "balanceSeconds" to s.balanceMs / 1000.0,
       "showTimer" to s.showTimer,
       "earnRequestedAt" to s.earnRequestedAt.toDouble(),
     )
   }
+
+  /** Battery optimisation lets aggressive OEM builds stop the service in the background. */
+  private fun isBatteryOptimized(): Boolean {
+    val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+    return !power.isIgnoringBatteryOptimizations(context.packageName)
+  }
+
+  private fun appDetailsIntent() =
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
 
   /** Whether the user has switched the service on in the system's accessibility settings. */
   private fun isServiceEnabled(): Boolean {

@@ -5,7 +5,7 @@ Chỉ cần Node, tài khoản Expo (miễn phí) và tài khoản Google Play D
 
 ## 0. Trước khi build
 
-- [ ] `npm run verify` xanh (92 assertion).
+- [ ] `npm run verify` xanh (95 assertion).
 - [ ] `npm run build:pose` rồi commit `docs/pose.html` nếu có sửa `src/pose/`.
 - [ ] GitHub Pages đang bật cho nhánh `master`, thư mục `/docs`. Mở thử:
       - https://betuanminh22032003.github.io/push-up/pose.html (xin quyền camera là đúng)
@@ -47,6 +47,14 @@ Tải APK từ link EAS in ra, cài lên điện thoại Android thật và ki�
 - [ ] Chặn app, có giờ: hít đất 3 cái → Kết thúc → "+3 phút" → mở app bị chặn → đồng hồ nhỏ góc
       trên đếm ngược; thoát app hoặc khoá màn hình thì dừng; về 0 → màn hình "Hết giờ".
 - [ ] "Hít đất ngay" trên màn hình chặn mở Hít Đất AI ở tab Tập.
+- [ ] Mở app bị chặn 10 lần liên tiếp (từ màn hình chính, từ đa nhiệm, từ thông báo): lần nào
+      cũng bị chặn trong khoảng 1–2 giây.
+- [ ] Trang web: chặn YouTube → mở youtube.com trong Chrome (và Cốc Cốc nếu có) → bị đẩy lùi
+      về trang trước và hiện màn hình chặn. Trang tự thêm (vd. vnexpress.net) cũng vậy.
+- [ ] Chia đôi màn hình hoặc cửa sổ nổi với app bị chặn: đồng hồ vẫn trừ, hết giờ thì bị chặn.
+- [ ] Vuốt bỏ Hít Đất AI khỏi đa nhiệm (hoặc Buộc dừng): mở lại app thì tab Chặn app báo "Chặn
+      đang không chạy" và chip ở màn hình Tập thành "⚠️ Chặn đã tắt". Khoá app trong đa nhiệm
+      theo hướng dẫn thì vuốt không còn tắt được nữa.
 - [ ] Chụp screenshot thật từ máy (tốt hơn screenshot web) nếu muốn.
 
 ## 3. Google Play Console
@@ -101,7 +109,11 @@ Các lần sau, có thể nộp thẳng từ máy:
   Storage). Nếu đổi tên repo/tài khoản GitHub, cập nhật `POSE_PAGE_URL` trong `src/config.js`.
 - Nhắc tập dùng alarm không chính xác (inexact) để không cần quyền `SCHEDULE_EXACT_ALARM`;
   thông báo có thể lệch vài phút.
-- Chặn app dùng Accessibility Service. Google Play chỉ cho phép khi có hộp thoại giải thích và
-  đồng ý trước khi bật (đã có), mô tả rõ trong chính sách quyền riêng tư (đã có) và bản khai báo
-  trong Play Console. Nếu bị từ chối, trả lời reviewer bằng mô tả + video; tính năng chặn không
-  chạy trong Expo Go, chỉ trong bản build (APK/AAB).
+- Chặn app dùng Accessibility Service, kể cả đọc tên miền trên thanh địa chỉ trình duyệt. Google
+  Play chỉ cho phép khi có hộp thoại giải thích và đồng ý trước khi bật (đã có), mô tả rõ trong
+  chính sách quyền riêng tư (đã có) và bản khai báo trong Play Console. Nếu bị từ chối, trả lời
+  reviewer bằng mô tả + video; tính năng chặn không chạy trong Expo Go, chỉ trong bản build
+  (APK/AAB).
+- Máy realme/OPPO/Xiaomi tự buộc dừng app chạy nền, và Android tắt luôn dịch vụ Trợ năng của app
+  bị buộc dừng. App không ngăn được việc đó, chỉ phát hiện và hướng dẫn người dùng (tab Chặn app,
+  mục "Giữ chặn luôn chạy").

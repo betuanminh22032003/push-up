@@ -60,11 +60,16 @@ const {
   normalizeState,
   isSetUp,
   isBlocking,
+  wasSwitchedOff,
   creditFor,
   formatAmount,
   filterApps,
   normalizeApps,
   sortApps,
+  normalizeDomain,
+  effectiveSites,
+  APP_DOMAINS,
+  SUGGESTED_PACKAGES,
 } = blocker;
 
 const { state, group, check } = createHarness();
@@ -351,8 +356,47 @@ await check('reps only earn once the blocker is set up', () => {
   assert.equal(isSetUp({ ...on, blocked: [] }), false);
   assert.equal(isSetUp({ ...on, enabled: false }), false);
   assert.equal(isSetUp(on), true);
+  assert.equal(isSetUp({ ...on, blocked: [], sites: ['vnexpress.net'] }), true, 'sites alone count');
   assert.equal(isBlocking({ ...on, serviceEnabled: true }), false, 'enabled but not bound yet');
   assert.equal(isBlocking({ ...on, serviceEnabled: true, serviceRunning: true }), true);
+});
+
+await check('a service the system switched off is told apart from one never switched on', () => {
+  const on = { ...EMPTY_STATE, enabled: true, blocked: ['a'] };
+  assert.equal(wasSwitchedOff(on), false, 'never connected: just not set up yet');
+  assert.equal(wasSwitchedOff({ ...on, serviceConnectedAt: 1000 }), true);
+  assert.equal(wasSwitchedOff({ ...on, serviceConnectedAt: 1000, serviceEnabled: true }), false);
+  assert.equal(wasSwitchedOff({ ...on, enabled: false, serviceConnectedAt: 1000 }), false);
+  const s = normalizeState({ serviceConnectedAt: 5, batteryOptimized: true, sites: ['x.com', 7] });
+  assert.equal(s.serviceConnectedAt, 5);
+  assert.equal(s.batteryOptimized, true);
+  assert.deepEqual(s.sites, ['x.com']);
+});
+
+await check('typed sites become bare domains, anything else is refused', () => {
+  assert.equal(normalizeDomain('https://www.VnExpress.net/thoi-su?x=1'), 'vnexpress.net');
+  assert.equal(normalizeDomain('m.youtube.com'), 'm.youtube.com');
+  assert.equal(normalizeDomain('  tiktok.com/  '), 'tiktok.com');
+  assert.equal(normalizeDomain('user@reddit.com:443'), 'reddit.com');
+  assert.equal(normalizeDomain('tuổitrẻ.vn'), 'tuổitrẻ.vn');
+  for (const bad of ['', 'youtube', 'you tube.com', '.com', 'bad_domain!.com', null]) {
+    assert.equal(normalizeDomain(bad), null, String(bad));
+  }
+});
+
+await check("blocking an app blocks its website too, merged with the user's sites", () => {
+  assert.deepEqual(
+    effectiveSites(['com.google.android.youtube', 'com.ss.android.ugc.trill'], ['VnExpress.net', 'nope']),
+    ['tiktok.com', 'vnexpress.net', 'youtu.be', 'youtube.com'],
+  );
+  assert.deepEqual(effectiveSites(['com.zhiliaoapp.musically', 'com.ss.android.ugc.trill'], []), [
+    'tiktok.com',
+  ]);
+  assert.deepEqual(effectiveSites(['some.unknown.app'], []), []);
+  for (const pkg of Object.keys(APP_DOMAINS)) {
+    assert.ok(SUGGESTED_PACKAGES.includes(pkg), `${pkg} has sites but is not suggested`);
+    for (const d of APP_DOMAINS[pkg]) assert.equal(normalizeDomain(d), d, `${pkg}: ${d}`);
+  }
 });
 
 await check('app search ignores case and Vietnamese accents', () => {
@@ -461,6 +505,7 @@ await check('new settings have defaults and clearAllData wipes everything', asyn
   assert.equal(settings.language, 'auto');
   assert.equal(settings.onboardingDone, false);
   assert.equal(settings.blockerSecondsPerRep, DEFAULT_RATE_SECONDS);
+  assert.deepEqual(settings.blockerSites, []);
   await store.saveProgram({ level: 1, completedDays: {} });
   await store.clearAllData();
   assert.equal(await store.loadProgram(), null);

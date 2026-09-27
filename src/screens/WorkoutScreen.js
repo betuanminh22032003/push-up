@@ -77,6 +77,8 @@ export function WorkoutScreen({
   const { settings, updateSettings } = useSettings();
   const { state: blocker, rate: blockerRate, creditReps } = useBlocker();
   const earning = isSetUp(blocker);
+  // Set up, but the system has the service switched off: nothing is blocked.
+  const blockerOff = earning && !blocker.serviceEnabled;
   const {
     sessions,
     stats,
@@ -558,12 +560,20 @@ export function WorkoutScreen({
             onPress={onOpenBlocker}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={t('blocker.chipA11y', {
-              time: formatAmount(blocker.balanceSeconds, t),
-            })}
-            style={({ pressed }) => [styles.funChip, pressed && styles.pressedDim]}
+            accessibilityLabel={
+              blockerOff
+                ? t('blocker.chipOff')
+                : t('blocker.chipA11y', { time: formatAmount(blocker.balanceSeconds, t) })
+            }
+            style={({ pressed }) => [
+              styles.funChip,
+              blockerOff && styles.funChipOff,
+              pressed && styles.pressedDim,
+            ]}
           >
-            <Text style={styles.funChipText}>{`🎮 ${formatDuration(blocker.balanceSeconds)}`}</Text>
+            <Text style={[styles.funChipText, blockerOff && styles.funChipTextOff]}>
+              {blockerOff ? `⚠️ ${t('blocker.chipOff')}` : `🎮 ${formatDuration(blocker.balanceSeconds)}`}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -879,6 +889,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   funChipText: { fontSize: 14, fontWeight: '600', color: colors.text, fontVariant: ['tabular-nums'] },
+  funChipOff: { borderColor: colors.warn },
+  funChipTextOff: { color: colors.warn },
   earnedLine: {
     ...type.label,
     color: colors.accent,

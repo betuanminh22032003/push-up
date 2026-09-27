@@ -22,10 +22,12 @@ export const EARN_REQUEST_TTL_MS = 2 * 60 * 1000;
 export const SUGGESTED_PACKAGES = [
   'com.ss.android.ugc.trill', // TikTok (Asia)
   'com.zhiliaoapp.musically', // TikTok
+  'com.zhiliaoapp.musically.go', // TikTok Lite
   'com.facebook.katana', // Facebook
   'com.facebook.lite', // Facebook Lite
   'com.google.android.youtube', // YouTube
   'com.instagram.android', // Instagram
+  'com.instagram.lite', // Instagram Lite
   'com.instagram.barcelona', // Threads
   'com.twitter.android', // X
   'com.reddit.frontpage', // Reddit
@@ -39,17 +41,44 @@ export const SUGGESTED_PACKAGES = [
   'com.roblox.client', // Roblox
 ];
 
+/**
+ * Each suggested app's own websites, blocked in browsers along with the app:
+ * otherwise a blocked TikTok is one tap away as tiktok.com.
+ */
+export const APP_DOMAINS = {
+  'com.ss.android.ugc.trill': ['tiktok.com'],
+  'com.zhiliaoapp.musically': ['tiktok.com'],
+  'com.zhiliaoapp.musically.go': ['tiktok.com'],
+  'com.facebook.katana': ['facebook.com', 'fb.com', 'fb.watch'],
+  'com.facebook.lite': ['facebook.com', 'fb.com', 'fb.watch'],
+  'com.google.android.youtube': ['youtube.com', 'youtu.be'],
+  'com.instagram.android': ['instagram.com'],
+  'com.instagram.lite': ['instagram.com'],
+  'com.instagram.barcelona': ['threads.net', 'threads.com'],
+  'com.twitter.android': ['x.com', 'twitter.com'],
+  'com.reddit.frontpage': ['reddit.com'],
+  'com.snapchat.android': ['snapchat.com'],
+  'com.pinterest': ['pinterest.com'],
+  'com.netflix.mediaclient': ['netflix.com'],
+  'tv.twitch.android.app': ['twitch.tv'],
+  'com.roblox.client': ['roblox.com'],
+};
+
 export const EMPTY_STATE = Object.freeze({
   serviceEnabled: false,
   serviceRunning: false,
+  serviceConnectedAt: 0,
+  batteryOptimized: false,
   enabled: false,
   blocked: [],
+  sites: [],
   balanceSeconds: 0,
   showTimer: true,
   earnRequestedAt: 0,
 });
 
 const finite = (value, fallback = 0) => (Number.isFinite(value) ? value : fallback);
+const strings = (value) => (Array.isArray(value) ? value.filter((v) => typeof v === 'string') : []);
 
 /** Whatever the native side hands back, as a complete state a render can trust. */
 export function normalizeState(raw) {
@@ -57,17 +86,55 @@ export function normalizeState(raw) {
   return {
     serviceEnabled: raw.serviceEnabled === true,
     serviceRunning: raw.serviceRunning === true,
+    serviceConnectedAt: finite(raw.serviceConnectedAt),
+    batteryOptimized: raw.batteryOptimized === true,
     enabled: raw.enabled === true,
-    blocked: Array.isArray(raw.blocked) ? raw.blocked.filter((p) => typeof p === 'string') : [],
+    blocked: strings(raw.blocked),
+    sites: strings(raw.sites),
     balanceSeconds: Math.max(0, finite(raw.balanceSeconds)),
     showTimer: raw.showTimer !== false,
     earnRequestedAt: finite(raw.earnRequestedAt),
   };
 }
 
-/** Set up to block: switched on with at least one app. Only then do reps earn time. */
+/** Set up to block: switched on with at least one app or site. Only then do reps earn time. */
 export function isSetUp(state) {
-  return state.enabled && state.blocked.length > 0;
+  return state.enabled && (state.blocked.length > 0 || state.sites.length > 0);
+}
+
+/**
+ * The service ran once and is now off in the system settings. Android does
+ * this when an app is force-stopped, which aggressive OEM builds (realme,
+ * OPPO, Xiaomi…) do to background apps, so blocking stops without a word.
+ */
+export function wasSwitchedOff(state) {
+  return isSetUp(state) && !state.serviceEnabled && state.serviceConnectedAt > 0;
+}
+
+/**
+ * "https://www.YouTube.com/watch?v=1" -> "youtube.com". Null for anything that
+ * is not a domain, so the add-a-site field can refuse it.
+ */
+export function normalizeDomain(text) {
+  let s = String(text ?? '').trim().toLowerCase();
+  if (!s || /\s/.test(s)) return null;
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, '');
+  s = s.split(/[/?#]/)[0];
+  s = s.slice(s.lastIndexOf('@') + 1).split(':')[0].replace(/\.+$/, '');
+  // ASCII letters, digits, dots and dashes, plus any non-ASCII letter (tuổitrẻ.vn).
+  if (!s.includes('.') || s.startsWith('.') || /[^a-z0-9.\- -￿]/.test(s)) return null;
+  return s.replace(/^www\./, '');
+}
+
+/** The blocked apps' own domains plus the user's, each once, for the native side. */
+export function effectiveSites(blockedPackages, customSites) {
+  const out = new Set();
+  for (const pkg of blockedPackages) for (const d of APP_DOMAINS[pkg] ?? []) out.add(d);
+  for (const site of customSites ?? []) {
+    const d = normalizeDomain(site);
+    if (d) out.add(d);
+  }
+  return [...out].sort();
 }
 
 /** Actually blocking right now: set up, and the system has the service bound. */

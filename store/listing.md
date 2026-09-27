@@ -57,7 +57,7 @@ STAY MOTIVATED
 • Share your result after every workout.
 
 EARN YOUR SCREEN TIME
-• Pick the apps that eat your time (social media, videos, games) and Hít Đất AI locks them.
+• Pick the apps and websites that eat your time (social media, videos, games) and Hít Đất AI locks them, in the browser too.
 • Every push-up earns a minute of use; you choose the rate. A small timer counts it down while you scroll.
 • Out of time? The app stays covered until you do more push-ups. Switch it off whenever you like.
 
@@ -112,7 +112,7 @@ GIỮ ĐỘNG LỰC
 • Chia sẻ kết quả sau mỗi buổi tập.
 
 ĐỔI HÍT ĐẤT LẤY GIỜ GIẢI TRÍ
-• Chọn những ứng dụng hay ngốn thời gian (mạng xã hội, video, game), Hít Đất AI sẽ khoá chúng.
+• Chọn những ứng dụng và trang web hay ngốn thời gian (mạng xã hội, video, game), Hít Đất AI sẽ khoá chúng, cả trong trình duyệt.
 • Mỗi cái hít đất đổi được 1 phút sử dụng, tuỳ chỉnh được. Đồng hồ nhỏ đếm ngược khi bạn lướt.
 • Hết giờ? Ứng dụng bị che lại cho tới khi bạn hít đất tiếp. Tắt bất cứ lúc nào.
 
@@ -168,16 +168,16 @@ The manifest requests only:
 
 `RECORD_AUDIO`, `ACTIVITY_RECOGNITION` and the foreground-service permissions that the Expo modules add by default are blocked in `app.json`.
 
-The app blocker adds no permission, but it does declare an **accessibility service** (`modules/app-blocker`), which needs its own declaration. It lists installed apps through a `<queries>` launcher intent, so `QUERY_ALL_PACKAGES` is not requested.
+The app blocker adds no permission, but it does declare an **accessibility service** (`modules/app-blocker`), which needs its own declaration. It finds installed apps and browsers through targeted `<queries>` intents, so `QUERY_ALL_PACKAGES` is not requested.
 
 ## Accessibility API declaration
 
 Play Console → App content → Accessibility API. The app is **not** an accessibility tool (`isAccessibilityTool="false"`).
 
 ```
-Hít Đất AI is a push-up counter with an optional app blocker for digital wellbeing. The user picks apps they want to limit (for example social media); those apps stay blocked until the user earns time by doing push-ups, and the earned time counts down while they use them.
+Hít Đất AI is a push-up counter with an optional app blocker for digital wellbeing. The user picks apps and websites they want to limit (for example social media); they stay blocked until the user earns time by doing push-ups, and the earned time counts down while they use them.
 
-The AccessibilityService is used only to detect which app is in the foreground (window-state and window-change events, reading the package name of the active application window). This is what lets the app show its block screen over a blocked app and meter the earned time. It does not read screen text, input or any other content, performs no actions on other apps other than returning to the home screen when an app is blocked, keeps no usage history, and sends no data off the device.
+The AccessibilityService is used only to detect what the user has on screen: the package name of each visible application window (from window-state and window-change events, plus a once-a-second check while the screen is on), and, in web browsers, the domain shown in the address bar, which is compared with the user's list of blocked websites. This is what lets the app show its block screen over a blocked app or site and meter the earned time. It reads no other screen text or input, keeps no usage or browsing history, and sends no data off the device. The only actions it performs are pressing Back (to leave a blocked website), returning to the home screen, and closing a picture-in-picture window of a blocked app, all only when the user's earned time has run out.
 
 The service is off by default. The app shows a prominent disclosure explaining this use, and only after the user taps "Agree" does it open the system accessibility settings, where the user switches the service on themselves. Blocking can be turned off in the app at any time, and the service in system settings.
 ```

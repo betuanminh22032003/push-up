@@ -7,9 +7,11 @@ import {
   EMPTY_STATE,
   ICON_PX,
   creditFor,
+  effectiveSites,
   formatAmount,
   isSetUp,
   normalizeApps,
+  normalizeDomain,
   normalizeState,
   sortApps,
 } from '../blocker/blockerLogic';
@@ -34,9 +36,10 @@ const readNative = () => (NativeBlocker ? normalizeState(NativeBlocker.getState(
  * foreground (for instance from the accessibility settings).
  */
 export function BlockerProvider({ children }) {
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const { t } = useI18n();
   const rate = settings.blockerSecondsPerRep ?? DEFAULT_RATE_SECONDS;
+  const customSites = settings.blockerSites ?? [];
 
   const [state, setState] = useState(readNative);
   const [apps, setApps] = useState(null); // null until the picker first needs them
@@ -44,6 +47,8 @@ export function BlockerProvider({ children }) {
   // Bumped when the block screen's "earn time" button brought the app up, so
   // the shell can switch to the workout tab.
   const [earnSignal, setEarnSignal] = useState(0);
+  // On in the system settings, yet still not running after a second look.
+  const [serviceStalled, setServiceStalled] = useState(false);
   const recheckTimer = useRef(null);
 
   const refresh = useCallback(() => {
@@ -51,12 +56,32 @@ export function BlockerProvider({ children }) {
     const next = readNative();
     setState(next);
     // Just switched on in system settings: the system binds the service a
-    // moment later, so look again rather than show "starting" forever.
+    // moment later, so look again before calling it stuck.
     clearTimeout(recheckTimer.current);
     if (next.serviceEnabled && !next.serviceRunning) {
-      recheckTimer.current = setTimeout(() => setState(readNative()), SERVICE_RECHECK_MS);
+      recheckTimer.current = setTimeout(() => {
+        const later = readNative();
+        setState(later);
+        setServiceStalled(later.serviceEnabled && !later.serviceRunning);
+      }, SERVICE_RECHECK_MS);
+    } else {
+      setServiceStalled(false);
     }
   }, []);
+
+  // Sites blocked in browsers: the blocked apps' own plus the user's. Pushed
+  // whenever either changes, since the service reads them natively.
+  const sites = useMemo(
+    () => effectiveSites(state.blocked, customSites),
+    [state.blocked, customSites],
+  );
+  const sitesKey = sites.join(' ');
+  useEffect(() => {
+    if (!NativeBlocker) return;
+    setState(normalizeState(NativeBlocker.setBlockedSites(sites)));
+    // sitesKey stands for sites, whose identity changes on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sitesKey]);
 
   const consumeEarnRequest = useCallback(() => {
     if (!NativeBlocker) return;
@@ -140,6 +165,32 @@ export function BlockerProvider({ children }) {
   }, [refresh]);
 
   const openAppSettings = useCallback(() => NativeBlocker?.openAppSettings() ?? false, []);
+  const openBatterySettings = useCallback(() => NativeBlocker?.openBatterySettings() ?? false, []);
+
+  /**
+   * Add a site the user typed. @returns {boolean} false when it is not a domain.
+   * Like picking the first apps, adding the first site switches blocking on.
+   */
+  const addSite = useCallback(
+    (text) => {
+      const domain = normalizeDomain(text);
+      if (!domain) return false;
+      if (!customSites.includes(domain)) {
+        updateSettings({ blockerSites: [...customSites, domain] });
+        const now = readNative();
+        if (NativeBlocker && !now.enabled && now.blocked.length === 0 && customSites.length === 0) {
+          setState(normalizeState(NativeBlocker.setEnabled(true)));
+        }
+      }
+      return true;
+    },
+    [customSites, updateSettings],
+  );
+
+  const removeSite = useCallback(
+    (domain) => updateSettings({ blockerSites: customSites.filter((d) => d !== domain) }),
+    [customSites, updateSettings],
+  );
 
   const loadApps = useCallback(async () => {
     if (!NativeBlocker) return;
@@ -159,6 +210,8 @@ export function BlockerProvider({ children }) {
       unavailableReason,
       state,
       rate,
+      customSites,
+      serviceStalled,
       apps,
       appsLoading,
       earnSignal,
@@ -166,15 +219,20 @@ export function BlockerProvider({ children }) {
       setEnabled,
       setShowTimer,
       setBlockedApps,
+      addSite,
+      removeSite,
       creditReps,
       reset,
       openAccessibilitySettings,
       openAppSettings,
+      openBatterySettings,
       loadApps,
     }),
     [
       state,
       rate,
+      customSites,
+      serviceStalled,
       apps,
       appsLoading,
       earnSignal,
@@ -182,10 +240,13 @@ export function BlockerProvider({ children }) {
       setEnabled,
       setShowTimer,
       setBlockedApps,
+      addSite,
+      removeSite,
       creditReps,
       reset,
       openAccessibilitySettings,
       openAppSettings,
+      openBatterySettings,
       loadApps,
     ],
   );

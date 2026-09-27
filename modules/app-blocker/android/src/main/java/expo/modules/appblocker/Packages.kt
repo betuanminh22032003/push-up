@@ -7,12 +7,13 @@ import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Base64
 import java.io.ByteArrayOutputStream
 
-/** Installed-app lookups for the picker, the block screen and the never-block list. */
+/** Installed-app lookups for the picker, the block screen, browsers and the never-block list. */
 internal object Packages {
   /**
    * Apps that must never be blocked, whatever the stored list says: this app,
@@ -30,6 +31,18 @@ internal object Packages {
       queryActivities(pm, intent).mapNotNullTo(result) { it.activityInfo?.packageName }
     }
     return result
+  }
+
+  /**
+   * Apps that open ordinary web links, whose address bar is read to block
+   * sites. Queried rather than listed, so any browser the user installs counts.
+   */
+  fun browsers(context: Context): Set<String> {
+    val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
+      .addCategory(Intent.CATEGORY_BROWSABLE)
+    return queryActivities(context.packageManager, web, PackageManager.MATCH_ALL)
+      .mapNotNullTo(HashSet()) { it.activityInfo?.packageName }
+      .apply { remove(context.packageName) }
   }
 
   /**
@@ -79,12 +92,12 @@ internal object Packages {
       pm.getApplicationInfo(pkg, 0)
     }
 
-  private fun queryActivities(pm: PackageManager, intent: Intent): List<ResolveInfo> =
+  private fun queryActivities(pm: PackageManager, intent: Intent, flags: Int = 0): List<ResolveInfo> =
     if (Build.VERSION.SDK_INT >= 33) {
-      pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0L))
+      pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(flags.toLong()))
     } else {
       @Suppress("DEPRECATION")
-      pm.queryIntentActivities(intent, 0)
+      pm.queryIntentActivities(intent, flags)
     }
 
   private fun encodeIcon(drawable: Drawable, size: Int): String {

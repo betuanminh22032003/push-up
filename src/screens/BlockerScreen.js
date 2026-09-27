@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { RATE_OPTIONS, formatAmount, searchKey } from '../blocker/blockerLogic';
+import {
+  RATE_OPTIONS,
+  effectiveSites,
+  formatAmount,
+  searchKey,
+  wasSwitchedOff,
+} from '../blocker/blockerLogic';
 import { AppIcon } from '../components/AppIcon';
 import { AppPickerModal } from '../components/AppPickerModal';
 import { Button } from '../components/Button';
@@ -13,23 +19,36 @@ import { useSettings } from '../state/SettingsContext';
 import { colors, radius, spacing, type } from '../theme/theme';
 import { formatDuration } from '../utils/time';
 
+const KEEP_STEPS = ['blocker.keep1', 'blocker.keep2', 'blocker.keep3', 'blocker.keep4'];
+
+/** "3 apps and 4 sites" — whatever is being blocked. */
+function blockingPhrase(state, t) {
+  const parts = [];
+  const apps = state.blocked.length;
+  const sites = state.sites.length;
+  if (apps) parts.push(apps === 1 ? t('blocker.appOne') : t('blocker.appMany', { n: apps }));
+  if (sites) parts.push(sites === 1 ? t('blocker.siteOne') : t('blocker.siteMany', { n: sites }));
+  return parts.join(` ${t('blocker.and')} `);
+}
+
 /** One line on what the blocker is doing right now, most urgent gap first. */
-function statusLine(state, t) {
+function statusLine(state, stalled, t) {
   if (!state.enabled) return { text: t('blocker.statusOff'), warn: false };
-  if (state.blocked.length === 0) return { text: t('blocker.statusNoApps'), warn: true };
+  if (state.blocked.length === 0 && state.sites.length === 0) {
+    return { text: t('blocker.statusNoApps'), warn: true };
+  }
+  if (wasSwitchedOff(state)) return { text: t('blocker.statusSwitchedOff'), warn: true };
   if (!state.serviceEnabled) return { text: t('blocker.statusNoService'), warn: true };
+  if (stalled) return { text: t('blocker.statusStalled'), warn: true };
   if (!state.serviceRunning) return { text: t('blocker.statusStarting'), warn: false };
-  const n = state.blocked.length;
-  return {
-    text: t('blocker.statusOn', { apps: n === 1 ? t('blocker.appOne') : t('blocker.appMany', { n }) }),
-    warn: false,
-  };
+  return { text: t('blocker.statusOn', { apps: blockingPhrase(state, t) }), warn: false };
 }
 
 /**
- * The app blocker: the fun time banked, the apps it guards, and the one
- * system permission it needs. Reps turn into time on the workout screen; this
- * screen is where it is all set up.
+ * The app blocker: the fun time banked, the apps and sites it guards, the one
+ * system permission it needs, and what keeps that permission from being
+ * switched off behind the user's back. Reps turn into time on the workout
+ * screen; this screen is where it is all set up.
  */
 export function BlockerScreen({ onGoWorkout }) {
   const t = useT();
@@ -40,17 +59,24 @@ export function BlockerScreen({ onGoWorkout }) {
     unavailableReason,
     state,
     rate,
+    customSites,
+    serviceStalled,
     apps,
     appsLoading,
     loadApps,
     setEnabled,
     setShowTimer,
     setBlockedApps,
+    addSite,
+    removeSite,
     openAccessibilitySettings,
     openAppSettings,
+    openBatterySettings,
   } = useBlocker();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [disclosureOpen, setDisclosureOpen] = useState(false);
+  const [siteDraft, setSiteDraft] = useState('');
+  const [siteError, setSiteError] = useState(false);
 
   // Names and icons for the blocked list come from the installed-app list.
   useEffect(() => {
@@ -64,6 +90,10 @@ export function BlockerScreen({ onGoWorkout }) {
       .sort((a, b) => searchKey(a.label).localeCompare(searchKey(b.label)));
   }, [apps, state.blocked]);
 
+  // The blocked apps' own sites, shown apart from the ones the user added.
+  const appSites = useMemo(() => effectiveSites(state.blocked, []), [state.blocked]);
+  const extraSites = customSites.filter((d) => !appSites.includes(d));
+
   const openPicker = () => {
     setPickerOpen(true);
     if (apps === null && !appsLoading) loadApps();
@@ -76,18 +106,30 @@ export function BlockerScreen({ onGoWorkout }) {
 
   const unblock = (pkg) => setBlockedApps(state.blocked.filter((p) => p !== pkg));
 
+  const submitSite = () => {
+    if (!siteDraft.trim()) return;
+    if (addSite(siteDraft)) {
+      setSiteDraft('');
+      setSiteError(false);
+    } else {
+      setSiteError(true);
+    }
+  };
+
   const agreeAndOpen = () => {
     setDisclosureOpen(false);
     openAccessibilitySettings();
   };
 
-  const status = statusLine(state, t);
+  const status = statusLine(state, serviceStalled, t);
+  const switchedOff = wasSwitchedOff(state);
 
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       <Text style={styles.title}>{t('blocker.title')}</Text>
       <Text style={styles.subtitle}>{t('blocker.subtitle', { rate: formatAmount(rate, t) })}</Text>
@@ -109,6 +151,20 @@ export function BlockerScreen({ onGoWorkout }) {
         </View>
       ) : (
         <>
+          {state.enabled && (switchedOff || serviceStalled) ? (
+            <View style={styles.alert}>
+              <Text style={styles.alertTitle}>{t('blocker.alertTitle')}</Text>
+              <Text style={styles.alertBody}>
+                {t(switchedOff ? 'blocker.alertSwitchedOff' : 'blocker.alertStalled')}
+              </Text>
+              <SmallButton
+                label={t(switchedOff ? 'blocker.alertTurnOn' : 'blocker.alertOpen')}
+                onPress={switchedOff ? () => setDisclosureOpen(true) : openAccessibilitySettings}
+                style={styles.alertButton}
+              />
+            </View>
+          ) : null}
+
           <Section label={t('blocker.sectionBlocking')}>
             <Row title={t('blocker.toggle')}>
               <Toggle value={state.enabled} onChange={setEnabled} label={t('blocker.toggle')} />
@@ -132,6 +188,11 @@ export function BlockerScreen({ onGoWorkout }) {
                 </Pressable>
               </View>
             )}
+            {state.batteryOptimized ? (
+              <Row title={t('blocker.battery')} body={t('blocker.batteryOn')} bodyWarn>
+                <SmallButton label={t('blocker.batteryButton')} onPress={openBatterySettings} />
+              </Row>
+            ) : null}
           </Section>
 
           <Section label={t('blocker.sectionApps', { n: state.blocked.length })}>
@@ -139,20 +200,15 @@ export function BlockerScreen({ onGoWorkout }) {
               <Text style={styles.empty}>{t('blocker.noApps')}</Text>
             ) : (
               blockedApps.map((app) => (
-                <View key={app.packageName} style={styles.appRow}>
+                <View key={app.packageName} style={styles.itemRow}>
                   <AppIcon app={app} size={32} />
-                  <Text style={styles.appLabel} numberOfLines={1}>
+                  <Text style={styles.itemLabel} numberOfLines={1}>
                     {app.label}
                   </Text>
-                  <Pressable
+                  <RemoveButton
+                    label={t('blocker.remove', { app: app.label })}
                     onPress={() => unblock(app.packageName)}
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('blocker.remove', { app: app.label })}
-                    style={({ pressed }) => [styles.remove, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.removeText}>✕</Text>
-                  </Pressable>
+                  />
                 </View>
               ))
             )}
@@ -167,6 +223,45 @@ export function BlockerScreen({ onGoWorkout }) {
             </Pressable>
           </Section>
 
+          <Section label={t('blocker.sectionSites', { n: state.sites.length })}>
+            <Text style={styles.sectionNote}>{t('blocker.sitesBody')}</Text>
+            {appSites.map((domain) => (
+              <View key={domain} style={styles.itemRow}>
+                <Text style={styles.itemLabel} numberOfLines={1}>
+                  {domain}
+                </Text>
+                <Text style={styles.autoTag}>{t('blocker.siteAuto')}</Text>
+              </View>
+            ))}
+            {extraSites.map((domain) => (
+              <View key={domain} style={styles.itemRow}>
+                <Text style={styles.itemLabel} numberOfLines={1}>
+                  {domain}
+                </Text>
+                <RemoveButton label={t('blocker.removeSite', { site: domain })} onPress={() => removeSite(domain)} />
+              </View>
+            ))}
+            <View style={styles.siteInputRow}>
+              <TextInput
+                value={siteDraft}
+                onChangeText={(text) => {
+                  setSiteDraft(text);
+                  if (siteError) setSiteError(false);
+                }}
+                onSubmitEditing={submitSite}
+                placeholder={t('blocker.sitePlaceholder')}
+                placeholderTextColor={colors.textFaint}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                returnKeyType="done"
+                style={styles.siteInput}
+              />
+              <SmallButton label={t('blocker.siteAdd')} onPress={submitSite} />
+            </View>
+            {siteError ? <Text style={styles.siteError}>{t('blocker.siteInvalid')}</Text> : null}
+          </Section>
+
           <Section label={t('blocker.sectionRate')}>
             <Row title={t('blocker.rate')} stacked>
               <Chips
@@ -178,6 +273,20 @@ export function BlockerScreen({ onGoWorkout }) {
             <Row title={t('blocker.timer')} body={t('blocker.timerBody')}>
               <Toggle value={state.showTimer} onChange={setShowTimer} label={t('blocker.timer')} />
             </Row>
+          </Section>
+
+          <Section label={t('blocker.keepTitle')}>
+            <Text style={styles.sectionNote}>{t('blocker.keepBody')}</Text>
+            {KEEP_STEPS.map((key, i) => (
+              <View key={key} style={styles.step}>
+                <Text style={styles.stepNumber}>{i + 1}</Text>
+                <Text style={styles.stepText}>{t(key)}</Text>
+              </View>
+            ))}
+            <View style={styles.keepButtons}>
+              <SmallButton label={t('blocker.keepAppInfo')} onPress={openAppSettings} secondary />
+              <SmallButton label={t('blocker.keepBattery')} onPress={openBatterySettings} secondary />
+            </View>
           </Section>
         </>
       )}
@@ -200,14 +309,33 @@ export function BlockerScreen({ onGoWorkout }) {
   );
 }
 
-function SmallButton({ label, onPress }) {
+function SmallButton({ label, onPress, secondary, style }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.smallButton, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.smallButton,
+        secondary && styles.smallButtonSecondary,
+        pressed && styles.pressed,
+        style,
+      ]}
     >
-      <Text style={styles.smallButtonText}>{label}</Text>
+      <Text style={[styles.smallButtonText, secondary && styles.smallButtonTextSecondary]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function RemoveButton({ label, onPress }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.remove, pressed && styles.pressed]}
+    >
+      <Text style={styles.removeText}>✕</Text>
     </Pressable>
   );
 }
@@ -287,6 +415,18 @@ const styles = StyleSheet.create({
   },
   noticeText: { ...type.body, color: colors.text, lineHeight: 21 },
 
+  alert: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.surface,
+  },
+  alertTitle: { fontSize: 16, fontWeight: '700', color: colors.danger },
+  alertBody: { ...type.body, color: colors.text, marginTop: spacing.xs, lineHeight: 21 },
+  alertButton: { alignSelf: 'flex-start', marginTop: spacing.md },
+
   okMark: { fontSize: 20, fontWeight: '700', color: colors.accent },
   hintRow: { paddingVertical: spacing.md, gap: spacing.sm },
   hint: { fontSize: 13, color: colors.textDim, lineHeight: 18 },
@@ -298,18 +438,27 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.accent,
   },
+  smallButtonSecondary: {
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   smallButtonText: { fontSize: 14, fontWeight: '700', color: colors.bg },
+  smallButtonTextSecondary: { color: colors.text },
 
   empty: { fontSize: 14, color: colors.textDim, paddingVertical: spacing.md },
-  appRow: {
+  sectionNote: { fontSize: 13, color: colors.textDim, lineHeight: 18, paddingTop: spacing.md },
+  itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     paddingVertical: spacing.sm,
+    minHeight: 46,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  appLabel: { flex: 1, fontSize: 15, color: colors.text },
+  itemLabel: { flex: 1, fontSize: 15, color: colors.text },
+  autoTag: { fontSize: 12, color: colors.textFaint },
   remove: {
     width: 30,
     height: 30,
@@ -321,6 +470,41 @@ const styles = StyleSheet.create({
   removeText: { fontSize: 13, color: colors.textDim },
   addRow: { paddingVertical: spacing.md },
   addText: { fontSize: 15, fontWeight: '600', color: colors.accent },
+
+  siteInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  siteInput: {
+    flex: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
+    fontSize: 15,
+  },
+  siteError: { fontSize: 13, color: colors.warn, paddingBottom: spacing.md },
+
+  step: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.sm },
+  stepNumber: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    overflow: 'hidden',
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 20,
+    color: colors.bg,
+    backgroundColor: colors.accent,
+  },
+  stepText: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 20 },
+  keepButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingVertical: spacing.md },
 
   paragraph: { fontSize: 14, color: colors.textDim, lineHeight: 20, paddingVertical: spacing.sm },
 

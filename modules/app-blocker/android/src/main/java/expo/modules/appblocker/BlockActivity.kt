@@ -77,9 +77,10 @@ class BlockActivity : Activity() {
   }
 
   private fun render(intent: Intent) {
-    val pkg = intent.getStringExtra(EXTRA_PACKAGE)
+    // An app's name, or the domain of a blocked site; the icon is the app's, or the browser's.
+    val appName = intent.getStringExtra(EXTRA_LABEL).orEmpty()
+    val iconPackage = intent.getStringExtra(EXTRA_ICON_PACKAGE)
     val timeUp = intent.getBooleanExtra(EXTRA_TIME_UP, false)
-    val appName = pkg?.let { Packages.appLabel(this, it) }.orEmpty()
 
     val title = if (timeUp) {
       BlockerStore.label("timeUpTitle", "Time's up for {app}")
@@ -97,7 +98,7 @@ class BlockActivity : Activity() {
       setPadding(dp(32), dp(56), dp(32), dp(40))
     }
 
-    pkg?.let { Packages.appIcon(this, it) }?.let { icon ->
+    iconPackage?.let { Packages.appIcon(this, it) }?.let { icon ->
       column.addView(
         ImageView(this).apply {
           setImageDrawable(icon)
@@ -219,7 +220,8 @@ class BlockActivity : Activity() {
   private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
   companion object {
-    const val EXTRA_PACKAGE = "expo.modules.appblocker.PACKAGE"
+    const val EXTRA_LABEL = "expo.modules.appblocker.LABEL"
+    const val EXTRA_ICON_PACKAGE = "expo.modules.appblocker.ICON_PACKAGE"
     const val EXTRA_TIME_UP = "expo.modules.appblocker.TIME_UP"
 
     private const val BRAND = "HÍT ĐẤT AI"

@@ -2,8 +2,9 @@
 
   <!--
     Package visibility on Android 11+, without the QUERY_ALL_PACKAGES
-    permission that Google Play restricts: launchable apps for the picker, and
-    the home screen, Settings and the dialer so they can never be blocked.
+    permission that Google Play restricts: launchable apps for the picker,
+    browsers for site blocking, and the home screen, Settings and the dialer so
+    they can never be blocked.
   -->
   <queries>
     <intent>
@@ -19,6 +20,11 @@
     </intent>
     <intent>
       <action android:name="android.intent.action.DIAL" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <category android:name="android.intent.category.BROWSABLE" />
+      <data android:scheme="https" />
     </intent>
   </queries>
 

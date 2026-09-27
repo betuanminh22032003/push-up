@@ -37,14 +37,17 @@ export function createDemoBlocker() {
   const state = {
     serviceEnabled: false,
     serviceRunning: false,
+    serviceConnectedAt: 0,
+    batteryOptimized: false,
     enabled: false,
     blocked: [],
+    sites: [],
     balanceSeconds: 0,
     showTimer: true,
     earnRequestedAt: 0,
     ...seededState(),
   };
-  const snapshot = () => ({ ...state, blocked: [...state.blocked] });
+  const snapshot = () => ({ ...state, blocked: [...state.blocked], sites: [...state.sites] });
 
   return {
     getState: snapshot,
@@ -54,6 +57,10 @@ export function createDemoBlocker() {
     },
     setBlockedApps(packages) {
       state.blocked = [...packages];
+      return snapshot();
+    },
+    setBlockedSites(domains) {
+      state.sites = [...domains];
       return snapshot();
     },
     addCredit(seconds) {
@@ -69,16 +76,21 @@ export function createDemoBlocker() {
       return 0;
     },
     reset() {
-      Object.assign(state, { enabled: false, blocked: [], balanceSeconds: 0, earnRequestedAt: 0 });
+      Object.assign(state, { enabled: false, blocked: [], sites: [], balanceSeconds: 0, earnRequestedAt: 0 });
       return snapshot();
     },
     // Stands in for the user switching the service on in system settings.
     openAccessibilitySettings() {
       state.serviceEnabled = true;
       state.serviceRunning = true;
+      state.serviceConnectedAt = Date.now();
       return true;
     },
     openAppSettings() {
+      return true;
+    },
+    openBatterySettings() {
+      state.batteryOptimized = false;
       return true;
     },
     async getInstalledApps() {

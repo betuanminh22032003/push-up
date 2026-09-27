@@ -119,6 +119,7 @@ export const DEFAULT_SETTINGS = {
   reminderMinute: 0,
   onboardingDone: false,
   blockerSecondsPerRep: 60, // fun time each rep earns; the blocker itself lives natively
+  blockerSites: [], // websites the user added; the blocked apps' own sites are added on top
 };
 
 export async function loadSettings() {

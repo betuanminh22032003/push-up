@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Window changes only: that is all it takes to know which app is in front.
-  Window content is readable (canRetrieveWindowContent) solely so the service
-  can ask each window which package owns it; no text is ever read.
+  Window content is readable (canRetrieveWindowContent) so the service can ask
+  each window which package owns it and, in browsers, read the domain in the
+  address bar (flagReportViewIds finds that bar by its view id). Nothing else
+  on screen is read.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
   android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged"
   android:accessibilityFeedbackType="feedbackGeneric"
-  android:accessibilityFlags="flagRetrieveInteractiveWindows"
+  android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
   android:canRetrieveWindowContent="true"
   android:description="@string/app_blocker_service_description"
   android:isAccessibilityTool="false"
