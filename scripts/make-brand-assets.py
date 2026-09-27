@@ -93,7 +93,7 @@ def main():
     mark = glyph(360, ACCENT, TEXT_DIM, 0.9)
     fg.paste(mark, (70, (H - 360) // 2), mark)
     d = ImageDraw.Draw(fg)
-    d.text((430, 150), "PUPG Push-up", font=font(72), fill=TEXT)
+    d.text((430, 150), "Hít Đất AI", font=font(72), fill=TEXT)
     d.text((434, 250), "AI camera counts your reps.", font=font(34, bold=False), fill=TEXT_DIM)
     d.text((434, 296), "Programs, streaks, progress.", font=font(34, bold=False), fill=TEXT_DIM)
     d.rounded_rectangle([434, 366, 434 + 250, 366 + 54], radius=27, fill=ACCENT)

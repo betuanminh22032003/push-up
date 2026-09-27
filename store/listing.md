@@ -1,4 +1,4 @@
-# Google Play listing — PUPG Push-up
+# Google Play listing — Hít Đất AI
 
 Copy-paste material for the Play Console. Character limits are Play's: title 30,
 short description 80, full description 4000.
@@ -20,7 +20,7 @@ Regenerate the icon and feature graphic with `npm run build:brand` (needs Python
 **Title** (30)
 
 ```
-PUPG Push-up: AI Counter
+Hít Đất AI: Push-up Counter
 ```
 
 **Short description** (80)
@@ -32,7 +32,7 @@ Hands-free push-up counter. AI camera, 6-week program, goals and streaks.
 **Full description**
 
 ```
-Put the phone down and just do push-ups. PUPG counts every rep for you — with the camera, the sensor, or a tap of your nose — and turns them into a habit.
+Put the phone down and just do push-ups. Hít Đất AI counts every rep for you — with the camera, the sensor, or a tap of your nose — and turns them into a habit.
 
 COUNTS HANDS-FREE
 • AI camera: prop the phone up, get into position, and the camera counts your reps and coaches your form ("go lower", "keep your body straight").
@@ -56,9 +56,15 @@ STAY MOTIVATED
 • Weekly chart, personal records, 17 achievements.
 • Share your result after every workout.
 
+EARN YOUR SCREEN TIME
+• Pick the apps that eat your time (social media, videos, games) and Hít Đất AI locks them.
+• Every push-up earns a minute of use; you choose the rate. A small timer counts it down while you scroll.
+• Out of time? The app stays covered until you do more push-ups. Switch it off whenever you like.
+
 PRIVATE BY DESIGN
 • No account. No ads. No analytics.
 • Camera frames are processed on your phone and never uploaded.
+• The app blocker only checks which app is open, on your phone.
 • All history stays on your device — delete it any time.
 
 Available in English and Vietnamese.
@@ -69,7 +75,7 @@ Available in English and Vietnamese.
 **Title** (30)
 
 ```
-PUPG Hít đất: Đếm bằng AI
+Hít Đất AI: Đếm bằng camera
 ```
 
 **Short description** (80)
@@ -81,7 +87,7 @@ PUPG Hít đất: Đếm bằng AI
 **Full description**
 
 ```
-Đặt điện thoại xuống và chỉ việc hít đất. PUPG đếm từng cái cho bạn — bằng camera, cảm biến, hoặc chạm mũi — và biến nó thành thói quen.
+Đặt điện thoại xuống và chỉ việc hít đất. Hít Đất AI đếm từng cái cho bạn — bằng camera, cảm biến, hoặc chạm mũi — và biến nó thành thói quen.
 
 ĐẾM RẢNH TAY
 • Camera AI: dựng điện thoại lên, vào tư thế, camera đếm số cái và nhắc tư thế ("xuống thấp hơn", "giữ thẳng người").
@@ -105,9 +111,15 @@ GIỮ ĐỘNG LỰC
 • Biểu đồ tuần, kỷ lục cá nhân, 17 thành tích.
 • Chia sẻ kết quả sau mỗi buổi tập.
 
+ĐỔI HÍT ĐẤT LẤY GIỜ GIẢI TRÍ
+• Chọn những ứng dụng hay ngốn thời gian (mạng xã hội, video, game), Hít Đất AI sẽ khoá chúng.
+• Mỗi cái hít đất đổi được 1 phút sử dụng, tuỳ chỉnh được. Đồng hồ nhỏ đếm ngược khi bạn lướt.
+• Hết giờ? Ứng dụng bị che lại cho tới khi bạn hít đất tiếp. Tắt bất cứ lúc nào.
+
 RIÊNG TƯ TỪ THIẾT KẾ
 • Không tài khoản. Không quảng cáo. Không theo dõi.
 • Khung hình camera xử lý ngay trên máy, không bao giờ tải lên.
+• Tính năng chặn ứng dụng chỉ kiểm tra ứng dụng nào đang mở, ngay trên máy.
 • Toàn bộ lịch sử nằm trên máy bạn — xoá bất cứ lúc nào.
 
 Có tiếng Việt và tiếng Anh.
@@ -154,4 +166,20 @@ The manifest requests only:
 - `RECEIVE_BOOT_COMPLETED` — expo-notifications re-schedules the reminder after a reboot
 - `VIBRATE`, `INTERNET`, `MODIFY_AUDIO_SETTINGS` — normal permissions, no prompt
 
-`RECORD_AUDIO`, `ACTIVITY_RECOGNITION` and the foreground-service permissions that the Expo modules add by default are blocked in `app.json`, so no sensitive-permission declaration is needed.
+`RECORD_AUDIO`, `ACTIVITY_RECOGNITION` and the foreground-service permissions that the Expo modules add by default are blocked in `app.json`.
+
+The app blocker adds no permission, but it does declare an **accessibility service** (`modules/app-blocker`), which needs its own declaration. It lists installed apps through a `<queries>` launcher intent, so `QUERY_ALL_PACKAGES` is not requested.
+
+## Accessibility API declaration
+
+Play Console → App content → Accessibility API. The app is **not** an accessibility tool (`isAccessibilityTool="false"`).
+
+```
+Hít Đất AI is a push-up counter with an optional app blocker for digital wellbeing. The user picks apps they want to limit (for example social media); those apps stay blocked until the user earns time by doing push-ups, and the earned time counts down while they use them.
+
+The AccessibilityService is used only to detect which app is in the foreground (window-state and window-change events, reading the package name of the active application window). This is what lets the app show its block screen over a blocked app and meter the earned time. It does not read screen text, input or any other content, performs no actions on other apps other than returning to the home screen when an app is blocked, keeps no usage history, and sends no data off the device.
+
+The service is off by default. The app shows a prominent disclosure explaining this use, and only after the user taps "Agree" does it open the system accessibility settings, where the user switches the service on themselves. Blocking can be turned off in the app at any time, and the service in system settings.
+```
+
+Attach a short screen recording: the Blocker tab → the disclosure → switching the service on → opening a blocked app → the block screen.

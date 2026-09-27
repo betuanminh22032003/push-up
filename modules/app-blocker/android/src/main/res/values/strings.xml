@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_blocker_service_label">Hít Đất AI app blocker</string>
+  <string name="app_blocker_service_description">Blocks the apps you choose in Hít Đất AI until you earn time with push-ups, and counts that time down while you use them. It only checks which app is open. It does not read what is on the screen or what you type, and nothing leaves your phone.</string>
+</resources>

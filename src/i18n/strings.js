@@ -17,6 +17,7 @@ const en = {
   'tab.workout': 'Workout',
   'tab.program': 'Program',
   'tab.progress': 'Progress',
+  'tab.blocker': 'Blocker',
   'tab.settings': 'Settings',
 
   // --- common -------------------------------------------------------------
@@ -29,6 +30,11 @@ const en = {
   'common.sets': 'sets',
   'common.seconds': '{n}s',
   'common.off': 'Off',
+
+  // --- amounts of time (earned, on offer) ---------------------------------
+  'time.sec': '{n} sec',
+  'time.min': '{n} min',
+  'time.minSec': '{m} min {s} sec',
 
   // --- home stats ---------------------------------------------------------
   'stat.total': 'Total',
@@ -61,6 +67,7 @@ const en = {
   'workout.summaryTitle': 'Workout saved',
   'workout.summaryTest': 'Test complete',
   'workout.summaryDay': 'Day {day} complete',
+  'workout.earned': '+{time} fun time',
 
   // --- buttons ------------------------------------------------------------
   'btn.start': 'Start',
@@ -118,6 +125,7 @@ const en = {
   'notice.calibrated': 'Calibrated at {lux} lx.',
   'notice.tooDark': 'Room is too dark to detect cover ({lux} lx). Turn on a light or switch to Tap mode.',
   'notice.noLight': 'No readings from the light sensor.',
+  'notice.earned': '+{time} of fun time.',
 
   // --- confirmations ------------------------------------------------------
   'confirm.discardTitle': 'Discard this workout?',
@@ -128,14 +136,15 @@ const en = {
   'confirm.deleteBody': '{reps} reps will be removed from your history.',
   'confirm.delete': 'Delete',
   'confirm.clearTitle': 'Delete all data?',
-  'confirm.clearBody': 'Every workout, your program progress and your settings will be permanently deleted.',
+  'confirm.clearBody':
+    'Every workout, your program progress, your settings and your fun time will be permanently deleted.',
   'confirm.deleteAll': 'Delete all',
   'confirm.restartTitle': 'Restart the program?',
   'confirm.restartBody': 'Day progress is reset. Your workout history is kept.',
   'confirm.restart': 'Restart',
 
   // --- share --------------------------------------------------------------
-  'share.text': 'I just did {reps} push-ups in {time} with PUPG Push-up 💪',
+  'share.text': 'I just did {reps} push-ups in {time} with Hít Đất AI 💪',
   'share.sets': ' ({sets} sets)',
 
   // --- program ------------------------------------------------------------
@@ -232,6 +241,79 @@ const en = {
   'ach.program_done.title': 'Graduate',
   'ach.program_done.body': 'Complete the 6-week program',
 
+  // --- app blocker --------------------------------------------------------
+  'blocker.title': 'App blocker',
+  'blocker.subtitle':
+    'Lock the apps that eat your time. They open again once you earn time: every push-up buys {rate}.',
+  'blocker.balance': 'Fun time left',
+  'blocker.earn': 'Do push-ups to earn more',
+  'blocker.statusOn': 'Blocking {apps}',
+  'blocker.appOne': '1 app',
+  'blocker.appMany': '{n} apps',
+  'blocker.statusOff': 'Blocking is off',
+  'blocker.statusNoApps': 'Choose at least one app to block',
+  'blocker.statusNoService': 'Turn on the accessibility permission to start blocking',
+  'blocker.statusStarting': 'Starting the blocker…',
+  'blocker.sectionBlocking': 'Blocking',
+  'blocker.toggle': 'Block apps',
+  'blocker.permission': 'Accessibility permission',
+  'blocker.permissionOn': 'On. The blocker can see which app is open.',
+  'blocker.permissionOff': 'Needed to notice when a blocked app opens. Only the app name is checked.',
+  'blocker.permissionButton': 'Turn on',
+  'blocker.restrictedHint':
+    'Greyed out, or Android says "Restricted setting"? Open app info, tap ⋮ in the top corner, choose "Allow restricted settings", then try again.',
+  'blocker.openAppInfo': 'Open app info',
+  'blocker.sectionApps': 'Blocked apps ({n})',
+  'blocker.noApps': 'No apps chosen yet.',
+  'blocker.addApps': 'Choose apps',
+  'blocker.editApps': 'Edit the list',
+  'blocker.remove': 'Unblock {app}',
+  'blocker.sectionRate': 'Earning',
+  'blocker.rate': 'Each push-up earns',
+  'blocker.timer': 'Countdown on screen',
+  'blocker.timerBody': 'A small timer over a blocked app while your time runs.',
+  'blocker.howTitle': 'How it works',
+  'blocker.howBody':
+    'Finish a workout and its reps turn into fun time. Open a blocked app and the time counts down while it is on screen; it pauses when you leave the app or lock the phone. At zero the app is covered until you do more push-ups. You can switch blocking off here at any time.',
+  'blocker.privacy':
+    'The blocker only checks which app is open. It never reads the screen or what you type, and nothing leaves your phone.',
+  'blocker.androidOnly': 'The app blocker is only available on Android.',
+  'blocker.expoGo':
+    'Expo Go cannot run the app blocker, because it needs native code. Install a build of the app instead (npm run build:apk).',
+  'blocker.needsUpdate': 'This installation was built without the app blocker. Install the latest version.',
+  'blocker.chipA11y': '{time} of fun time left. Open the app blocker.',
+  'blocker.disclosureTitle': 'Allow accessibility access?',
+  'blocker.disclosureBody':
+    "To block apps, Hít Đất AI uses Android's Accessibility Service to see which app is open on your screen.",
+  'blocker.disclosure1':
+    'It only checks the name of the app in front. It does not read what is on the screen, your messages or what you type.',
+  'blocker.disclosure2': 'Nothing is recorded as history, and nothing leaves your phone.',
+  'blocker.disclosure3':
+    'You can turn the permission off at any time in Settings › Accessibility, and switch blocking off right here.',
+  'blocker.disclosureSteps':
+    'On the next screen, find the entry with "Hít Đất AI" in its name (often under "Downloaded apps" or "Installed apps") and switch it on.',
+  'blocker.disclosureAgree': 'Agree and open Settings',
+  'blocker.disclosureLater': 'Not now',
+
+  // --- app picker ---------------------------------------------------------
+  'picker.title': 'Choose apps to block',
+  'picker.search': 'Search apps',
+  'picker.loading': 'Loading your apps…',
+  'picker.suggested': 'Suggested',
+  'picker.all': 'All apps',
+  'picker.empty': 'No app matches "{query}".',
+  'picker.none': 'No apps found.',
+  'picker.save': 'Save ({n})',
+
+  // --- block screen and countdown (native; {app} is filled in on the phone)
+  'native.blockTitle': '{app} is blocked',
+  'native.timeUpTitle': "Time's up for {app}",
+  'native.blockBody': "You're out of fun time. Every push-up earns {rate}: do a few, then come back.",
+  'native.earnButton': 'Do push-ups now',
+  'native.homeButton': 'Go to the home screen',
+  'native.lowTime': 'Less than a minute of fun time left',
+  'native.blockedToast': '{app} is blocked. Earn time with push-ups.',
+
   // --- settings -----------------------------------------------------------
   'settings.title': 'Settings',
   'settings.workout': 'Workout',
@@ -262,7 +344,7 @@ const en = {
   'settings.langVi': 'Tiếng Việt',
   'settings.howItWorks': 'How it works',
   'settings.clearAll': 'Delete all data',
-  'settings.clearAllBody': 'Workouts, program progress and settings.',
+  'settings.clearAllBody': 'Workouts, program progress, settings and fun time.',
   'settings.privacy': 'Privacy policy',
   'settings.privacyNote': 'Everything stays on your phone. No account, no ads, no tracking.',
   'settings.version': 'Version {version}',
@@ -273,7 +355,7 @@ const en = {
   'reminder.body': 'Keep your streak alive. One set is enough.',
 
   // --- onboarding ---------------------------------------------------------
-  'onboarding.title': 'Welcome to PUPG',
+  'onboarding.title': 'Welcome to Hít Đất AI',
   'onboarding.s1.title': 'Hands-free counting',
   'onboarding.s1.body':
     'Prop the phone up to your side so your whole body is in frame: the AI camera counts every rep and coaches your form. No camera? Put the phone on the floor and use the sensor, or tap the screen with your nose.',
@@ -297,6 +379,7 @@ const vi = {
   'tab.workout': 'Tập',
   'tab.program': 'Chương trình',
   'tab.progress': 'Tiến độ',
+  'tab.blocker': 'Chặn app',
   'tab.settings': 'Cài đặt',
 
   'common.cancel': 'Huỷ',
@@ -308,6 +391,10 @@ const vi = {
   'common.sets': 'set',
   'common.seconds': '{n} giây',
   'common.off': 'Tắt',
+
+  'time.sec': '{n} giây',
+  'time.min': '{n} phút',
+  'time.minSec': '{m} phút {s} giây',
 
   'stat.total': 'Tổng',
   'stat.today': 'Hôm nay',
@@ -337,6 +424,7 @@ const vi = {
   'workout.summaryTitle': 'Đã lưu buổi tập',
   'workout.summaryTest': 'Kiểm tra xong',
   'workout.summaryDay': 'Hoàn thành ngày {day}',
+  'workout.earned': '+{time} giải trí',
 
   'btn.start': 'Bắt đầu',
   'btn.startDay': 'Bắt đầu ngày {day}',
@@ -389,6 +477,7 @@ const vi = {
   'notice.calibrated': 'Đã hiệu chỉnh ở {lux} lx.',
   'notice.tooDark': 'Phòng quá tối để nhận diện ({lux} lx). Bật đèn hoặc chuyển sang chế độ Chạm.',
   'notice.noLight': 'Không đọc được cảm biến ánh sáng.',
+  'notice.earned': '+{time} giải trí.',
 
   'confirm.discardTitle': 'Bỏ buổi tập này?',
   'confirm.discardBody': '{reps} cái sẽ không được lưu.',
@@ -398,13 +487,14 @@ const vi = {
   'confirm.deleteBody': '{reps} cái sẽ bị xoá khỏi lịch sử.',
   'confirm.delete': 'Xoá',
   'confirm.clearTitle': 'Xoá toàn bộ dữ liệu?',
-  'confirm.clearBody': 'Toàn bộ lịch sử, tiến độ chương trình và cài đặt sẽ bị xoá vĩnh viễn.',
+  'confirm.clearBody':
+    'Toàn bộ lịch sử, tiến độ chương trình, cài đặt và thời gian giải trí sẽ bị xoá vĩnh viễn.',
   'confirm.deleteAll': 'Xoá tất cả',
   'confirm.restartTitle': 'Bắt đầu lại chương trình?',
   'confirm.restartBody': 'Tiến độ ngày sẽ được đặt lại. Lịch sử tập vẫn giữ nguyên.',
   'confirm.restart': 'Bắt đầu lại',
 
-  'share.text': 'Tôi vừa hít đất {reps} cái trong {time} với PUPG Push-up 💪',
+  'share.text': 'Tôi vừa hít đất {reps} cái trong {time} với Hít Đất AI 💪',
   'share.sets': ' ({sets} set)',
 
   'program.title': 'Chương trình 6 tuần',
@@ -496,6 +586,77 @@ const vi = {
   'ach.program_done.title': 'Tốt nghiệp',
   'ach.program_done.body': 'Hoàn thành chương trình 6 tuần',
 
+  'blocker.title': 'Chặn ứng dụng',
+  'blocker.subtitle':
+    'Khoá những ứng dụng hay ngốn thời gian của bạn. Chúng chỉ mở lại khi bạn kiếm được thời gian: mỗi cái hít đất đổi được {rate}.',
+  'blocker.balance': 'Thời gian giải trí còn lại',
+  'blocker.earn': 'Hít đất để kiếm thêm',
+  'blocker.statusOn': 'Đang chặn {apps}',
+  'blocker.appOne': '1 ứng dụng',
+  'blocker.appMany': '{n} ứng dụng',
+  'blocker.statusOff': 'Đang tắt chặn',
+  'blocker.statusNoApps': 'Chọn ít nhất một ứng dụng để chặn',
+  'blocker.statusNoService': 'Bật quyền Trợ năng để bắt đầu chặn',
+  'blocker.statusStarting': 'Đang khởi động…',
+  'blocker.sectionBlocking': 'Chặn',
+  'blocker.toggle': 'Chặn ứng dụng',
+  'blocker.permission': 'Quyền Trợ năng',
+  'blocker.permissionOn': 'Đã bật. App biết được ứng dụng nào đang mở.',
+  'blocker.permissionOff': 'Cần để biết khi nào ứng dụng bị chặn được mở. Chỉ kiểm tra tên ứng dụng.',
+  'blocker.permissionButton': 'Bật',
+  'blocker.restrictedHint':
+    'Không bật được, hoặc Android báo "Cài đặt bị hạn chế"? Mở Thông tin ứng dụng, bấm ⋮ ở góc trên, chọn "Cho phép cài đặt bị hạn chế", rồi thử lại.',
+  'blocker.openAppInfo': 'Mở thông tin ứng dụng',
+  'blocker.sectionApps': 'Ứng dụng bị chặn ({n})',
+  'blocker.noApps': 'Chưa chọn ứng dụng nào.',
+  'blocker.addApps': 'Chọn ứng dụng',
+  'blocker.editApps': 'Sửa danh sách',
+  'blocker.remove': 'Bỏ chặn {app}',
+  'blocker.sectionRate': 'Quy đổi',
+  'blocker.rate': 'Mỗi cái hít đất đổi được',
+  'blocker.timer': 'Đồng hồ đếm ngược',
+  'blocker.timerBody': 'Một đồng hồ nhỏ hiện trên ứng dụng bị chặn khi thời gian đang chạy.',
+  'blocker.howTitle': 'Cách hoạt động',
+  'blocker.howBody':
+    'Tập xong một buổi, số cái được đổi thành thời gian giải trí. Mở ứng dụng bị chặn thì thời gian đếm ngược khi nó đang trên màn hình, và dừng khi bạn thoát ra hoặc khoá máy. Về 0 thì ứng dụng bị che lại cho tới khi bạn hít đất tiếp. Bạn có thể tắt chặn ở đây bất cứ lúc nào.',
+  'blocker.privacy':
+    'Tính năng chặn chỉ kiểm tra ứng dụng nào đang mở, không bao giờ đọc nội dung màn hình hay những gì bạn gõ, và không gửi gì ra khỏi máy.',
+  'blocker.androidOnly': 'Tính năng chặn ứng dụng chỉ có trên Android.',
+  'blocker.expoGo':
+    'Expo Go không chạy được tính năng chặn ứng dụng vì cần mã native. Hãy cài bản build của app (npm run build:apk).',
+  'blocker.needsUpdate': 'Bản cài đặt này chưa có tính năng chặn ứng dụng. Hãy cài bản mới nhất.',
+  'blocker.chipA11y': 'Còn {time} giải trí. Mở phần chặn ứng dụng.',
+  'blocker.disclosureTitle': 'Cho phép quyền Trợ năng?',
+  'blocker.disclosureBody':
+    'Để chặn ứng dụng, Hít Đất AI dùng dịch vụ Trợ năng (Accessibility) của Android để biết ứng dụng nào đang mở trên màn hình.',
+  'blocker.disclosure1':
+    'Chỉ kiểm tra tên ứng dụng đang mở. Không đọc nội dung màn hình, tin nhắn hay những gì bạn gõ.',
+  'blocker.disclosure2': 'Không lưu lịch sử sử dụng, không gửi gì ra khỏi máy.',
+  'blocker.disclosure3':
+    'Bạn có thể tắt quyền bất cứ lúc nào trong Cài đặt › Trợ năng, và tắt chặn ngay tại đây.',
+  'blocker.disclosureSteps':
+    'Ở màn hình tiếp theo, tìm mục có chữ "Hít Đất AI" (thường nằm trong "Ứng dụng đã tải xuống" hoặc "Ứng dụng đã cài đặt") rồi bật lên.',
+  'blocker.disclosureAgree': 'Đồng ý và mở Cài đặt',
+  'blocker.disclosureLater': 'Để sau',
+
+  'picker.title': 'Chọn ứng dụng cần chặn',
+  'picker.search': 'Tìm ứng dụng',
+  'picker.loading': 'Đang tải danh sách ứng dụng…',
+  'picker.suggested': 'Gợi ý',
+  'picker.all': 'Tất cả ứng dụng',
+  'picker.empty': 'Không có ứng dụng nào khớp "{query}".',
+  'picker.none': 'Không tìm thấy ứng dụng nào.',
+  'picker.save': 'Lưu ({n})',
+
+  'native.blockTitle': '{app} đang bị chặn',
+  'native.timeUpTitle': 'Hết giờ dùng {app}',
+  'native.blockBody':
+    'Bạn đã hết thời gian giải trí. Mỗi cái hít đất đổi được {rate}: tập vài cái rồi quay lại nhé.',
+  'native.earnButton': 'Hít đất ngay',
+  'native.homeButton': 'Về màn hình chính',
+  'native.lowTime': 'Còn chưa đầy 1 phút giải trí',
+  'native.blockedToast': '{app} đang bị chặn. Hít đất để có thêm thời gian.',
+
   'settings.title': 'Cài đặt',
   'settings.workout': 'Buổi tập',
   'settings.feedback': 'Phản hồi',
@@ -525,7 +686,7 @@ const vi = {
   'settings.langVi': 'Tiếng Việt',
   'settings.howItWorks': 'Hướng dẫn sử dụng',
   'settings.clearAll': 'Xoá toàn bộ dữ liệu',
-  'settings.clearAllBody': 'Lịch sử, tiến độ chương trình và cài đặt.',
+  'settings.clearAllBody': 'Lịch sử, tiến độ chương trình, cài đặt và thời gian giải trí.',
   'settings.privacy': 'Chính sách quyền riêng tư',
   'settings.privacyNote': 'Mọi dữ liệu ở trên máy bạn. Không tài khoản, không quảng cáo, không theo dõi.',
   'settings.version': 'Phiên bản {version}',
@@ -534,7 +695,7 @@ const vi = {
   'reminder.title': 'Đến giờ hít đất 💪',
   'reminder.body': 'Giữ chuỗi ngày của bạn. Một set là đủ.',
 
-  'onboarding.title': 'Chào mừng đến PUPG',
+  'onboarding.title': 'Chào mừng đến Hít Đất AI',
   'onboarding.s1.title': 'Đếm không cần chạm',
   'onboarding.s1.body':
     'Dựng điện thoại bên hông để thấy toàn thân: camera AI đếm từng cái và nhắc tư thế. Không dùng camera? Đặt máy trên sàn, dùng cảm biến hoặc chạm mũi vào màn hình.',

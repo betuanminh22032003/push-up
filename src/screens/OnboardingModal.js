@@ -18,7 +18,7 @@ export function OnboardingModal({ visible, onClose }) {
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <SafeAreaView style={styles.screen}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={styles.brand}>PUPG</Text>
+          <Text style={styles.brand}>HÍT ĐẤT AI</Text>
           <Text style={styles.title}>{t('onboarding.title')}</Text>
           {STEPS.map((step) => (
             <View key={step.key} style={styles.card}>

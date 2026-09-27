@@ -87,6 +87,18 @@ function seedProgram() {
   };
 }
 
+/** The web build's stand-in blocker (src/blocker/demoBlocker.js), already set up. */
+function seedBlocker() {
+  return {
+    serviceEnabled: true,
+    serviceRunning: true,
+    enabled: true,
+    blocked: ['com.ss.android.ugc.trill', 'com.facebook.katana', 'com.google.android.youtube'],
+    balanceSeconds: 23 * 60,
+    showTimer: true,
+  };
+}
+
 function seedSettings(language, onboardingDone) {
   return {
     sourceId: 'tap',
@@ -192,8 +204,8 @@ async function shoot(cdp, file) {
 
 /** The labels each language uses, so the walk can press the right controls. */
 const LABELS = {
-  en: { go: "Let's go", tap: 'Tap', start: 'Start', done: 'Done', finish: 'Finish workout', tabs: ['Program', 'Progress', 'Settings'] },
-  vi: { go: 'Bắt đầu thôi', tap: 'Chạm', start: 'Bắt đầu', done: 'Xong', finish: 'Kết thúc buổi tập', tabs: ['Chương trình', 'Tiến độ', 'Cài đặt'] },
+  en: { go: "Let's go", tap: 'Tap', start: 'Start', done: 'Done', finish: 'Finish workout', tabs: ['Program', 'Progress', 'Settings', 'Blocker'] },
+  vi: { go: 'Bắt đầu thôi', tap: 'Chạm', start: 'Bắt đầu', done: 'Xong', finish: 'Kết thúc buổi tập', tabs: ['Chương trình', 'Tiến độ', 'Cài đặt', 'Chặn app'] },
 };
 
 async function captureLanguage(cdp, lang) {
@@ -206,10 +218,11 @@ async function captureLanguage(cdp, lang) {
     localStorage.setItem('pupg:sessions:v1', ${JSON.stringify(JSON.stringify(seedSessions()))});
     localStorage.setItem('pupg:program:v1', ${JSON.stringify(JSON.stringify(seedProgram()))});
     localStorage.setItem('pupg:settings:v1', ${JSON.stringify(JSON.stringify(seedSettings(lang, false)))});
+    localStorage.setItem('pupg:blockerDemo', ${JSON.stringify(JSON.stringify(seedBlocker()))});
   `);
   await cdp.send('Page.reload', { ignoreCache: false });
   await sleep(1500);
-  await waitFor(cdp, `document.body.innerText.includes('PUPG')`);
+  await waitFor(cdp, `document.body.innerText.includes('HÍT ĐẤT')`);
   await cdp.eval(HELPERS);
   await waitFor(cdp, `window.__btn(${JSON.stringify(L.go)})`);
   await sleep(600);
@@ -219,7 +232,7 @@ async function captureLanguage(cdp, lang) {
   await sleep(700);
   await shoot(cdp, path.join(dir, '01-home.png'));
 
-  const tabFiles = ['04-program.png', '05-progress.png', '06-settings.png'];
+  const tabFiles = ['04-program.png', '05-progress.png', '06-settings.png', '08-blocker.png'];
   for (let i = 0; i < L.tabs.length; i += 1) {
     await cdp.eval(`await window.__press(window.__tab(${JSON.stringify(L.tabs[i])}));`);
     await sleep(500);
@@ -299,7 +312,7 @@ async function main() {
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
 
     await cdp.send('Page.navigate', { url: BASE_URL });
-    await waitFor(cdp, `document.body && document.body.innerText.includes('PUPG')`, 90000);
+    await waitFor(cdp, `document.body && document.body.innerText.includes('HÍT ĐẤT')`, 90000);
 
     rmSync(OUT_DIR, { recursive: true, force: true });
     for (const lang of Object.keys(LABELS)) await captureLanguage(cdp, lang);

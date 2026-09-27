@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_blocker_service_label">Chặn ứng dụng của Hít Đất AI</string>
+  <string name="app_blocker_service_description">Chặn các ứng dụng bạn chọn trong Hít Đất AI cho tới khi bạn hít đất để đổi thời gian, và đếm ngược thời gian đó khi bạn dùng chúng. Dịch vụ chỉ kiểm tra ứng dụng nào đang mở, không đọc nội dung màn hình hay những gì bạn gõ, và không gửi gì ra khỏi máy.</string>
+</resources>

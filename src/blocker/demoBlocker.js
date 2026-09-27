@@ -1,0 +1,88 @@
+/**
+ * An in-memory stand-in for the native blocker, for the development web build
+ * only: it lets the blocker screen be laid out, driven and screenshotted in a
+ * browser. It blocks nothing and never ships to a phone.
+ *
+ * Starting state can be seeded through localStorage (`pupg:blockerDemo`), which
+ * is how the store-screenshot script shows a blocker that is already set up.
+ */
+
+const DEMO_APPS = [
+  ['com.ss.android.ugc.trill', 'TikTok'],
+  ['com.facebook.katana', 'Facebook'],
+  ['com.google.android.youtube', 'YouTube'],
+  ['com.instagram.android', 'Instagram'],
+  ['com.netflix.mediaclient', 'Netflix'],
+  ['com.garena.game.kgvn', 'Liên Quân Mobile'],
+  ['com.android.chrome', 'Chrome'],
+  ['com.google.android.gm', 'Gmail'],
+  ['com.google.android.apps.maps', 'Maps'],
+  ['com.spotify.music', 'Spotify'],
+  ['com.shopee.vn', 'Shopee'],
+  ['com.zing.zalo', 'Zalo'],
+];
+
+const SEED_KEY = 'pupg:blockerDemo';
+
+function seededState() {
+  try {
+    const raw = globalThis.localStorage?.getItem(SEED_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function createDemoBlocker() {
+  const state = {
+    serviceEnabled: false,
+    serviceRunning: false,
+    enabled: false,
+    blocked: [],
+    balanceSeconds: 0,
+    showTimer: true,
+    earnRequestedAt: 0,
+    ...seededState(),
+  };
+  const snapshot = () => ({ ...state, blocked: [...state.blocked] });
+
+  return {
+    getState: snapshot,
+    setEnabled(value) {
+      state.enabled = !!value;
+      return snapshot();
+    },
+    setBlockedApps(packages) {
+      state.blocked = [...packages];
+      return snapshot();
+    },
+    addCredit(seconds) {
+      state.balanceSeconds = Math.min(24 * 3600, state.balanceSeconds + seconds);
+      return snapshot();
+    },
+    setShowTimer(value) {
+      state.showTimer = !!value;
+      return snapshot();
+    },
+    setLabels() {},
+    consumeEarnRequest() {
+      return 0;
+    },
+    reset() {
+      Object.assign(state, { enabled: false, blocked: [], balanceSeconds: 0, earnRequestedAt: 0 });
+      return snapshot();
+    },
+    // Stands in for the user switching the service on in system settings.
+    openAccessibilitySettings() {
+      state.serviceEnabled = true;
+      state.serviceRunning = true;
+      return true;
+    },
+    openAppSettings() {
+      return true;
+    },
+    async getInstalledApps() {
+      return DEMO_APPS.map(([packageName, label]) => ({ packageName, label, icon: null }));
+    },
+  };
+}
