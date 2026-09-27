@@ -6,7 +6,6 @@ import { WebView } from 'react-native-webview';
 import { POSE_PAGE_URL } from '../config';
 import { useT } from '../i18n/I18nContext';
 import { colors, radius, spacing, type } from '../theme/theme';
-import { PROBE_AFTER_LOAD, PROBE_BEFORE_LOAD, ProbeReadout } from './poseProbe';
 
 /**
  * Camera pose detection on native, via a WebView running MediaPipe.
@@ -32,22 +31,6 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
   const [cameraUp, setCameraUp] = useState(false);
   const [failure, setFailure] = useState(null);
 
-  // Dev-only readings from the injected probe (see poseProbe.js). Each change
-  // is logged once, so Metro shows a timeline rather than a line per second.
-  // The timeline is also kept on a global, so a debugger attached through
-  // Metro can read it after the fact.
-  const [probe, setProbe] = useState({});
-  const probeRef = useRef({});
-  const framesSeen = useRef(false);
-  const noteProbe = useCallback((event, text) => {
-    if (!__DEV__ || probeRef.current[event] === text) return;
-    probeRef.current = { ...probeRef.current, [event]: text };
-    globalThis.__pupgProbeLog = globalThis.__pupgProbeLog || [];
-    globalThis.__pupgProbeLog.push(`${new Date().toISOString().slice(11, 23)} ${event}: ${text}`);
-    console.log(`[pose] ${event}: ${text}`);
-    setProbe(probeRef.current);
-  }, []);
-
   const onRepRef = useRef(onRep);
   const onFrameRef = useRef(onFrame);
   useEffect(() => {
@@ -61,18 +44,6 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
       requestPermission();
     }
   }, [active, permission, requestPermission]);
-
-  useEffect(() => {
-    if (!active) return;
-    noteProbe(
-      'perm',
-      !permission
-        ? 'checking'
-        : permission.granted
-          ? 'granted'
-          : `not granted (canAskAgain ${permission.canAskAgain})`,
-    );
-  }, [active, permission, noteProbe]);
 
   // Pausing is a message, not an unmount: tearing the WebView down would drop
   // the camera and re-download the model on every resume.
@@ -92,15 +63,8 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
     if (message.type === 'rep') {
       onRepRef.current?.(message);
     } else if (message.type === 'frame') {
-      if (!framesSeen.current) {
-        framesSeen.current = true;
-        noteProbe('frames', 'arriving');
-      }
       onFrameRef.current?.(message);
-    } else if (message.type === 'diag') {
-      noteProbe(message.event, message.text);
     } else if (message.type === 'status') {
-      noteProbe('status', message.message ? `${message.phase} (${message.message})` : message.phase);
       if (message.phase === 'camera') {
         // Camera is live but the model is still downloading. Stop covering the
         // preview: these are the seconds when someone positions the phone.
@@ -113,7 +77,7 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
         setFailure(message.message || 'Pose detection failed.');
       }
     }
-  }, [noteProbe]);
+  }, []);
 
   if (!active) return null;
 
@@ -142,25 +106,14 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
         ref={webviewRef}
         source={{ uri: POSE_PAGE_URL }}
         onMessage={handleMessage}
-        onError={({ nativeEvent }) => {
-          noteProbe('error', nativeEvent.description);
-          setFailure(t('pose.loadFailed', { reason: nativeEvent.description }));
-        }}
-        onHttpError={({ nativeEvent }) => {
-          noteProbe('error', `HTTP ${nativeEvent.statusCode}`);
-          setFailure(t('pose.httpFailed', { code: nativeEvent.statusCode }));
-        }}
-        onLoadStart={() => noteProbe('load', 'started')}
-        onLoadProgress={({ nativeEvent }) =>
-          noteProbe('load', `${Math.round(nativeEvent.progress * 100)}%`)
+        onError={({ nativeEvent }) =>
+          setFailure(t('pose.loadFailed', { reason: nativeEvent.description }))
         }
-        onLoadEnd={() => noteProbe('load', 'done')}
-        onRenderProcessGone={({ nativeEvent }) =>
-          noteProbe('render', nativeEvent.didCrash ? 'renderer crashed' : 'renderer killed by the system')
+        onHttpError={({ nativeEvent }) =>
+          setFailure(t('pose.httpFailed', { code: nativeEvent.statusCode }))
         }
-        injectedJavaScriptBeforeContentLoaded={__DEV__ ? PROBE_BEFORE_LOAD : undefined}
-        injectedJavaScript={__DEV__ ? PROBE_AFTER_LOAD : undefined}
-        webviewDebuggingEnabled={__DEV__}
+        // Without this a crashed or killed page just leaves a black box.
+        onRenderProcessGone={() => setFailure(t('pose.viewCrashed'))}
         // Live camera in a WebView needs all four of these.
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
@@ -180,8 +133,6 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
       ) : (
         <Overlay loading title={t('pose.starting')} body={t('pose.asking')} />
       )}
-
-      {__DEV__ ? <ProbeReadout lines={probe} /> : null}
     </View>
   );
 }
@@ -206,16 +157,20 @@ function Overlay({ title, body, tone, loading }) {
   );
 }
 
+// absoluteFill, not absoluteFillObject: React Native 0.86 removed the latter,
+// and spreading the missing property silently yields nothing. The stage then
+// laid the WebView out zero pixels wide — a black box with the camera running.
+// (react-native-web still has it, so the web build never showed the problem.)
 const styles = StyleSheet.create({
   wrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: '#000',
   },
   webview: { flex: 1, backgroundColor: '#000' },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
