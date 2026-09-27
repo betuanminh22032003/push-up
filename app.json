@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "PUPG Push-up",
+    "name": "Hít Đất AI",
     "slug": "pupg-pushup",
     "version": "1.0.0",
     "description": "Hands-free push-up counter with AI camera form coaching, a 6-week program, daily goals and streaks.",
@@ -12,10 +12,10 @@
     "githubUrl": "https://github.com/betuanminh22032003/push-up",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pupg.pushup"
+      "bundleIdentifier": "com.betuanminh.hitdat"
     },
     "android": {
-      "package": "com.pupg.pushup",
+      "package": "com.betuanminh.hitdat",
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0B",
@@ -51,7 +51,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "PUPG uses the camera to count your push-ups. Video never leaves your device.",
+          "cameraPermission": "Hít Đất AI uses the camera to count your push-ups. Video never leaves your device.",
           "recordAudioAndroid": false
         }
       ],

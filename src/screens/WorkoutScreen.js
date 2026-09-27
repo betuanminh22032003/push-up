@@ -524,7 +524,7 @@ export function WorkoutScreen({ plan, onClearPlan, onStatusChange, onCelebrate, 
     >
       <View style={styles.header}>
         <View>
-          <Text style={styles.brand}>PUPG</Text>
+          <Text style={styles.brand}>HÍT ĐẤT AI</Text>
           <Text style={styles.brandSub}>PUSH-UP</Text>
         </View>
         {activePlan?.kind === 'day' ? (

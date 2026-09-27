@@ -1,4 +1,4 @@
-# Đưa PUPG Push-up lên Google Play — checklist
+# Đưa Hít Đất AI lên Google Play — checklist
 
 Mọi bước build đều chạy trên cloud của EAS, **không cần Android Studio hay JDK** trên máy.
 Chỉ cần Node, tài khoản Expo (miễn phí) và tài khoản Google Play Developer (25 USD, một lần).
@@ -42,7 +42,7 @@ Tải APK từ link EAS in ra, cài lên điện thoại Android thật và ki�
 
 ## 3. Google Play Console
 
-1. Tạo app: tên **PUPG Push-up**, ngôn ngữ mặc định English (US), ứng dụng, miễn phí.
+1. Tạo app: tên **Hít Đất AI**, ngôn ngữ mặc định English (US), ứng dụng, miễn phí.
 2. **Store listing**: dán từ `store/listing.md`, thêm bản dịch Vietnamese. Upload
    `play-icon-512.png`, `feature-graphic.png`, ít nhất 2 screenshot điện thoại từ
    `store/screenshots/`.
@@ -80,9 +80,10 @@ Các lần sau, có thể nộp thẳng từ máy:
 
 ## Rủi ro cần biết
 
-- **Tên "PUPG"** rất gần "PUBG" (thương hiệu của Krafton). Google Play có thể từ chối vì
-  "impersonation" hoặc Krafton có thể khiếu nại. Nếu đổi tên, đổi luôn `android.package`
-  **trước** khi upload lần đầu — package không đổi được sau khi đã lên Play.
+- Tên cũ "PUPG" (quá gần "PUBG" của Krafton) đã đổi thành **Hít Đất AI**, package
+  `com.betuanminh.hitdat`, trước lần upload đầu. Package không đổi được sau khi đã lên Play.
+  Khoá lưu trữ nội bộ `pupg:*` và slug EAS `pupg-pushup` giữ nguyên: người dùng không thấy,
+  còn đổi thì mất dữ liệu đã lưu và đứt liên kết với project EAS.
 - Chế độ Camera AI phụ thuộc trang `pose.html` trên GitHub Pages và CDN (jsDelivr, Google
   Storage). Nếu đổi tên repo/tài khoản GitHub, cập nhật `POSE_PAGE_URL` trong `src/config.js`.
 - Nhắc tập dùng alarm không chính xác (inexact) để không cần quyền `SCHEDULE_EXACT_ALARM`;

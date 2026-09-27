@@ -1,4 +1,4 @@
-# PUPG Push-up
+# Hít Đất AI
 
 Hands-free push-up counter for Android (Expo / React Native). Dark, minimal, pure
 `StyleSheet`, no navigation library.

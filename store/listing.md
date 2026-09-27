@@ -1,4 +1,4 @@
-# Google Play listing — PUPG Push-up
+# Google Play listing — Hít Đất AI
 
 Copy-paste material for the Play Console. Character limits are Play's: title 30,
 short description 80, full description 4000.
@@ -20,7 +20,7 @@ Regenerate the icon and feature graphic with `npm run build:brand` (needs Python
 **Title** (30)
 
 ```
-PUPG Push-up: AI Counter
+Hít Đất AI: Push-up Counter
 ```
 
 **Short description** (80)
@@ -32,7 +32,7 @@ Hands-free push-up counter. AI camera, 6-week program, goals and streaks.
 **Full description**
 
 ```
-Put the phone down and just do push-ups. PUPG counts every rep for you — with the camera, the sensor, or a tap of your nose — and turns them into a habit.
+Put the phone down and just do push-ups. Hít Đất AI counts every rep for you — with the camera, the sensor, or a tap of your nose — and turns them into a habit.
 
 COUNTS HANDS-FREE
 • AI camera: prop the phone up, get into position, and the camera counts your reps and coaches your form ("go lower", "keep your body straight").
@@ -69,7 +69,7 @@ Available in English and Vietnamese.
 **Title** (30)
 
 ```
-PUPG Hít đất: Đếm bằng AI
+Hít Đất AI: Đếm bằng camera
 ```
 
 **Short description** (80)
@@ -81,7 +81,7 @@ PUPG Hít đất: Đếm bằng AI
 **Full description**
 
 ```
-Đặt điện thoại xuống và chỉ việc hít đất. PUPG đếm từng cái cho bạn — bằng camera, cảm biến, hoặc chạm mũi — và biến nó thành thói quen.
+Đặt điện thoại xuống và chỉ việc hít đất. Hít Đất AI đếm từng cái cho bạn — bằng camera, cảm biến, hoặc chạm mũi — và biến nó thành thói quen.
 
 ĐẾM RẢNH TAY
 • Camera AI: dựng điện thoại lên, vào tư thế, camera đếm số cái và nhắc tư thế ("xuống thấp hơn", "giữ thẳng người").

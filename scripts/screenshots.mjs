@@ -209,7 +209,7 @@ async function captureLanguage(cdp, lang) {
   `);
   await cdp.send('Page.reload', { ignoreCache: false });
   await sleep(1500);
-  await waitFor(cdp, `document.body.innerText.includes('PUPG')`);
+  await waitFor(cdp, `document.body.innerText.includes('HÍT ĐẤT')`);
   await cdp.eval(HELPERS);
   await waitFor(cdp, `window.__btn(${JSON.stringify(L.go)})`);
   await sleep(600);
@@ -299,7 +299,7 @@ async function main() {
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
 
     await cdp.send('Page.navigate', { url: BASE_URL });
-    await waitFor(cdp, `document.body && document.body.innerText.includes('PUPG')`, 90000);
+    await waitFor(cdp, `document.body && document.body.innerText.includes('HÍT ĐẤT')`, 90000);
 
     rmSync(OUT_DIR, { recursive: true, force: true });
     for (const lang of Object.keys(LABELS)) await captureLanguage(cdp, lang);

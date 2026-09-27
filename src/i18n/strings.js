@@ -135,7 +135,7 @@ const en = {
   'confirm.restart': 'Restart',
 
   // --- share --------------------------------------------------------------
-  'share.text': 'I just did {reps} push-ups in {time} with PUPG Push-up 💪',
+  'share.text': 'I just did {reps} push-ups in {time} with Hít Đất AI 💪',
   'share.sets': ' ({sets} sets)',
 
   // --- program ------------------------------------------------------------
@@ -273,7 +273,7 @@ const en = {
   'reminder.body': 'Keep your streak alive. One set is enough.',
 
   // --- onboarding ---------------------------------------------------------
-  'onboarding.title': 'Welcome to PUPG',
+  'onboarding.title': 'Welcome to Hít Đất AI',
   'onboarding.s1.title': 'Hands-free counting',
   'onboarding.s1.body':
     'Prop the phone up to your side so your whole body is in frame: the AI camera counts every rep and coaches your form. No camera? Put the phone on the floor and use the sensor, or tap the screen with your nose.',
@@ -404,7 +404,7 @@ const vi = {
   'confirm.restartBody': 'Tiến độ ngày sẽ được đặt lại. Lịch sử tập vẫn giữ nguyên.',
   'confirm.restart': 'Bắt đầu lại',
 
-  'share.text': 'Tôi vừa hít đất {reps} cái trong {time} với PUPG Push-up 💪',
+  'share.text': 'Tôi vừa hít đất {reps} cái trong {time} với Hít Đất AI 💪',
   'share.sets': ' ({sets} set)',
 
   'program.title': 'Chương trình 6 tuần',
@@ -534,7 +534,7 @@ const vi = {
   'reminder.title': 'Đến giờ hít đất 💪',
   'reminder.body': 'Giữ chuỗi ngày của bạn. Một set là đủ.',
 
-  'onboarding.title': 'Chào mừng đến PUPG',
+  'onboarding.title': 'Chào mừng đến Hít Đất AI',
   'onboarding.s1.title': 'Đếm không cần chạm',
   'onboarding.s1.body':
     'Dựng điện thoại bên hông để thấy toàn thân: camera AI đếm từng cái và nhắc tư thế. Không dùng camera? Đặt máy trên sàn, dùng cảm biến hoặc chạm mũi vào màn hình.',
