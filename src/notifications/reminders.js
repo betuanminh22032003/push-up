@@ -1,26 +1,34 @@
+import { isRunningInExpoGo } from 'expo';
 import { Platform } from 'react-native';
 
 /**
  * The daily workout reminder — a local notification, nothing remote.
  *
  * expo-notifications has no web implementation, and importing it there
- * throws, so it is required lazily and every call is a no-op on web. Android
- * schedules it with an inexact alarm (expo-notifications falls back to one
- * when the exact-alarm permission is absent), which is right for a reminder:
- * a few minutes' drift costs nothing and avoids a special permission that
- * Google Play restricts to alarm-clock apps.
+ * throws, so it is required lazily and every call is a no-op on web. Expo Go
+ * on Android gets the same treatment: push support was removed there in
+ * SDK 53, and the package's push-token auto-registration runs on import and
+ * throws, which would crash the whole app before it renders — even though
+ * only local notifications are used here. Development and store builds are
+ * unaffected.
+ *
+ * Android schedules it with an inexact alarm (expo-notifications falls back
+ * to one when the exact-alarm permission is absent), which is right for a
+ * reminder: a few minutes' drift costs nothing and avoids a special
+ * permission that Google Play restricts to alarm-clock apps.
  */
 
 const CHANNEL_ID = 'reminders';
 const REMINDER_ID = 'daily-reminder';
 
+export const remindersSupported =
+  Platform.OS !== 'web' && !(Platform.OS === 'android' && isRunningInExpoGo());
+
 function mod() {
-  if (Platform.OS === 'web') return null;
+  if (!remindersSupported) return null;
   // eslint-disable-next-line global-require
   return require('expo-notifications');
 }
-
-export const remindersSupported = Platform.OS !== 'web';
 
 /** Show reminders as banners even while the app is in the foreground. */
 export function configureNotifications() {

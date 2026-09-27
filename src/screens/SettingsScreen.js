@@ -170,7 +170,10 @@ export function SettingsScreen({ onShowOnboarding }) {
             ) : null}
           </>
         ) : (
-          <Row title={t('settings.reminderToggle')} body={t('settings.reminderWeb')} />
+          <Row
+            title={t('settings.reminderToggle')}
+            body={t(Platform.OS === 'web' ? 'settings.reminderWeb' : 'settings.reminderExpoGo')}
+          />
         )}
       </Section>
 
