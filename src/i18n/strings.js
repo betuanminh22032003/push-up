@@ -248,6 +248,7 @@ const en = {
   'blocker.balance': 'Fun time left',
   'blocker.earn': 'Do push-ups to earn more',
   'blocker.statusOn': 'Blocking {apps}',
+  'blocker.statusOnApps': 'Blocking {apps}, without Accessibility',
   'blocker.appOne': '1 app',
   'blocker.appMany': '{n} apps',
   'blocker.siteOne': '1 site',
@@ -255,25 +256,45 @@ const en = {
   'blocker.and': 'and',
   'blocker.statusOff': 'Blocking is off',
   'blocker.statusNoApps': 'Choose at least one app or site to block',
-  'blocker.statusSwitchedOff': 'Blocking stopped: the accessibility permission was switched off',
-  'blocker.statusStalled': 'Blocking stopped: the service is not running',
-  'blocker.statusNoService': 'Turn on the accessibility permission to start blocking',
+  'blocker.statusSwitchedOff': 'Blocking stopped: Accessibility was switched off',
+  'blocker.statusStalled': 'Blocking stopped: the phone stopped the blocker',
+  'blocker.statusNeedsPermission': 'Allow the two permissions below to start blocking',
+  'blocker.statusSitesNeedA11y': 'Websites can only be blocked with Accessibility on',
   'blocker.statusStarting': 'Starting the blocker…',
   'blocker.alertTitle': 'Blocking is not running',
   'blocker.alertSwitchedOff':
-    'Android switched the accessibility permission off, usually because the phone closed Hít Đất AI in the background (realme, OPPO and Xiaomi phones do this). Turn it back on, then follow "Keep blocking running" below so it stays on.',
+    'Accessibility is off: you switched it off, or the phone closed Hít Đất AI in the background (realme, OPPO and Xiaomi phones do this). Turn it back on, then follow "Keep blocking running" below so it stays on.',
+  'blocker.alertOrUsage':
+    'Or block without Accessibility, so banking apps keep working: allow "See which app is open" and "Display over other apps" below.',
   'blocker.alertStalled':
     'The permission is on, but the phone stopped the service and did not let it restart. In Accessibility, open Hít Đất AI, switch it off and on again.',
+  'blocker.alertWatcher':
+    'Both permissions are on, but the phone stopped the blocker. Allow Hít Đất AI to auto-launch and turn battery optimisation off for it, then open the app again.',
   'blocker.alertPrevent':
     'So it does not happen again, allow Hít Đất AI to auto-launch and lock it in Recents (steps below).',
   'blocker.alertTurnOn': 'Turn it back on',
+  'blocker.alertUseUsage': 'Block without Accessibility',
   'blocker.alertOpen': 'Open Accessibility',
   'blocker.sectionBlocking': 'Blocking',
   'blocker.toggle': 'Block apps',
-  'blocker.permission': 'Accessibility permission',
-  'blocker.permissionOn': 'On. The blocker can see which app is open.',
-  'blocker.permissionOff': 'Needed to notice when a blocked app opens. Only the app name is checked.',
+  'blocker.waysNote':
+    'The first two are enough to block apps, and banking apps keep working. Accessibility is only needed to block websites too.',
+  'blocker.usage': 'See which app is open',
+  'blocker.usageOn': 'On (usage access).',
+  'blocker.usageOff':
+    'Usage access, to notice when a blocked app opens. Only the app is checked, and banking apps are not affected.',
+  'blocker.overlay': 'Display over other apps',
+  'blocker.overlayOn': 'On.',
+  'blocker.overlayOff': 'To put the block screen and the countdown over a blocked app.',
+  'blocker.permission': 'Accessibility (optional)',
+  'blocker.permissionOn':
+    'On: websites are blocked too. If a banking app refuses to open, switch it off; apps stay blocked.',
+  'blocker.permissionOnOnly':
+    'On. If a banking app refuses to open, allow the two permissions above first, then switch this off.',
+  'blocker.permissionOff':
+    'Also blocks websites in browsers. Many banking apps will not open while any app has Accessibility on.',
   'blocker.permissionButton': 'Turn on',
+  'blocker.permissionManage': 'Settings',
   'blocker.restrictedHint':
     'Greyed out, or Android says "Restricted setting"? Open app info, tap ⋮ in the top corner, choose "Allow restricted settings", then try again.',
   'blocker.openAppInfo': 'Open app info',
@@ -289,6 +310,7 @@ const en = {
   'blocker.sectionSites': 'Blocked websites ({n})',
   'blocker.sitesBody':
     "In a browser (Chrome, Cốc Cốc, Edge, Samsung Internet…) these are blocked too. The chosen apps' own sites are included automatically.",
+  'blocker.sitesNeedA11y': 'Websites are only blocked while Accessibility is on.',
   'blocker.siteAuto': 'with the app',
   'blocker.sitePlaceholder': 'e.g. vnexpress.net',
   'blocker.siteAdd': 'Add',
@@ -300,7 +322,7 @@ const en = {
   'blocker.timerBody': 'A small timer over a blocked app while your time runs.',
   'blocker.keepTitle': 'Keep blocking running',
   'blocker.keepBody':
-    'Some phones (realme, OPPO, Xiaomi, vivo…) close apps in the background, and Android then switches the accessibility permission off, so blocking works one moment and not the next. To stop that:',
+    'Some phones (realme, OPPO, Xiaomi, vivo…) close apps in the background, which stops blocking and can switch Accessibility off, so it works one moment and not the next. To stop that:',
   'blocker.keep1':
     'Lock Hít Đất AI in Recents: open the recent apps, then pull its card down or open its menu and choose Lock.',
   'blocker.keep2':
@@ -314,7 +336,7 @@ const en = {
   'blocker.howBody':
     'Finish a workout and its reps turn into fun time. Open a blocked app or site and the time counts down while it is on screen, split screen and floating windows included; it pauses when you leave it or lock the phone. At zero it is covered until you do more push-ups. You can switch blocking off here at any time.',
   'blocker.privacy':
-    'The blocker only checks which app is open and, in a browser, the domain of the page. It never reads anything else on screen or what you type, and nothing leaves your phone.',
+    'The blocker only checks which app is open and, with Accessibility on, the domain of the page in a browser. It never reads anything else on screen or what you type, and nothing leaves your phone.',
   'blocker.androidOnly': 'The app blocker is only available on Android.',
   'blocker.expoGo':
     'Expo Go cannot run the app blocker, because it needs native code. Install a build of the app instead (npm run build:apk).',
@@ -323,7 +345,7 @@ const en = {
   'blocker.chipOff': 'Blocking off',
   'blocker.disclosureTitle': 'Allow accessibility access?',
   'blocker.disclosureBody':
-    "To block apps, Hít Đất AI uses Android's Accessibility Service to see which app is open on your screen.",
+    "To block websites too, Hít Đất AI uses Android's Accessibility Service to see which app is open on your screen. Note that many banking apps refuse to open while any app has it on.",
   'blocker.disclosure1':
     'It only checks the name of the app in front and, in a browser, the domain of the page. It does not read anything else on the screen, your messages or what you type.',
   'blocker.disclosure2': 'Nothing is recorded as history, and nothing leaves your phone.',
@@ -333,6 +355,17 @@ const en = {
     'On the next screen, find the entry with "Hít Đất AI" in its name (often under "Downloaded apps" or "Installed apps") and switch it on.',
   'blocker.disclosureAgree': 'Agree and open Settings',
   'blocker.disclosureLater': 'Not now',
+  'blocker.usageDisclosureTitle': 'Block without Accessibility?',
+  'blocker.usageDisclosureBody':
+    'Instead of Accessibility, Hít Đất AI can use two other Android permissions, which banking apps generally do not object to.',
+  'blocker.usageDisclosure1':
+    '"Usage access" tells it which app is in front. Only the app is checked, and no history is kept.',
+  'blocker.usageDisclosure2':
+    '"Display over other apps" lets it put the block screen and the countdown over a blocked app.',
+  'blocker.usageDisclosure3':
+    'A notification stays while blocking is on. Websites are not blocked this way, and nothing leaves your phone.',
+  'blocker.usageDisclosureSteps':
+    'On the next screen, find "Hít Đất AI" and switch it on, then come back here for the other permission.',
 
   // --- app picker ---------------------------------------------------------
   'picker.title': 'Choose apps to block',
@@ -352,6 +385,9 @@ const en = {
   'native.homeButton': 'Go to the home screen',
   'native.lowTime': 'Less than a minute of fun time left',
   'native.blockedToast': '{app} is blocked. Earn time with push-ups.',
+  'native.watchTitle': 'Blocking apps',
+  'native.watchBody': 'Every push-up earns more fun time.',
+  'native.watchChannel': 'App blocker',
 
   // --- settings -----------------------------------------------------------
   'settings.title': 'Settings',
@@ -631,6 +667,7 @@ const vi = {
   'blocker.balance': 'Thời gian giải trí còn lại',
   'blocker.earn': 'Hít đất để kiếm thêm',
   'blocker.statusOn': 'Đang chặn {apps}',
+  'blocker.statusOnApps': 'Đang chặn {apps}, không cần Trợ năng',
   'blocker.appOne': '1 ứng dụng',
   'blocker.appMany': '{n} ứng dụng',
   'blocker.siteOne': '1 trang web',
@@ -638,25 +675,45 @@ const vi = {
   'blocker.and': 'và',
   'blocker.statusOff': 'Đang tắt chặn',
   'blocker.statusNoApps': 'Chọn ít nhất một ứng dụng hoặc trang web để chặn',
-  'blocker.statusSwitchedOff': 'Chặn đã dừng: quyền Trợ năng bị tắt',
-  'blocker.statusStalled': 'Chặn đã dừng: dịch vụ không chạy',
-  'blocker.statusNoService': 'Bật quyền Trợ năng để bắt đầu chặn',
+  'blocker.statusSwitchedOff': 'Chặn đã dừng: Trợ năng đã bị tắt',
+  'blocker.statusStalled': 'Chặn đã dừng: máy đã dừng dịch vụ chặn',
+  'blocker.statusNeedsPermission': 'Cấp 2 quyền bên dưới để bắt đầu chặn',
+  'blocker.statusSitesNeedA11y': 'Chỉ chặn được trang web khi bật Trợ năng',
   'blocker.statusStarting': 'Đang khởi động…',
   'blocker.alertTitle': 'Chặn đang không chạy',
   'blocker.alertSwitchedOff':
-    'Android đã tắt quyền Trợ năng, thường vì máy tự đóng Hít Đất AI khi chạy nền (máy realme, OPPO, Xiaomi hay làm vậy). Bật lại, rồi làm theo mục "Giữ chặn luôn chạy" bên dưới để nó không bị tắt nữa.',
+    'Trợ năng đang tắt: do bạn tắt, hoặc do máy tự đóng Hít Đất AI khi chạy nền (máy realme, OPPO, Xiaomi hay làm vậy). Bật lại, rồi làm theo mục "Giữ chặn luôn chạy" bên dưới để nó không bị tắt nữa.',
+  'blocker.alertOrUsage':
+    'Hoặc chặn không cần Trợ năng để app ngân hàng vẫn dùng được: cấp quyền "Xem ứng dụng đang mở" và "Hiển thị trên ứng dụng khác" bên dưới.',
   'blocker.alertStalled':
     'Quyền vẫn bật nhưng máy đã dừng dịch vụ và không cho chạy lại. Vào Trợ năng, mở Hít Đất AI, tắt rồi bật lại.',
+  'blocker.alertWatcher':
+    'Đã cấp đủ 2 quyền nhưng máy đã dừng dịch vụ chặn. Cho phép Hít Đất AI tự khởi chạy và tắt tối ưu pin cho nó, rồi mở lại app.',
   'blocker.alertPrevent':
     'Để không bị lại: cho phép Hít Đất AI tự khởi chạy và khoá app trong đa nhiệm (các bước bên dưới).',
   'blocker.alertTurnOn': 'Bật lại',
+  'blocker.alertUseUsage': 'Chặn không cần Trợ năng',
   'blocker.alertOpen': 'Mở Trợ năng',
   'blocker.sectionBlocking': 'Chặn',
   'blocker.toggle': 'Chặn ứng dụng',
-  'blocker.permission': 'Quyền Trợ năng',
-  'blocker.permissionOn': 'Đã bật. App biết được ứng dụng nào đang mở.',
-  'blocker.permissionOff': 'Cần để biết khi nào ứng dụng bị chặn được mở. Chỉ kiểm tra tên ứng dụng.',
+  'blocker.waysNote':
+    'Hai quyền đầu là đủ để chặn ứng dụng, và app ngân hàng vẫn dùng bình thường. Trợ năng chỉ cần nếu muốn chặn cả trang web.',
+  'blocker.usage': 'Xem ứng dụng đang mở',
+  'blocker.usageOn': 'Đã bật (quyền truy cập dữ liệu sử dụng).',
+  'blocker.usageOff':
+    'Quyền "Truy cập dữ liệu sử dụng", để biết khi nào ứng dụng bị chặn được mở. Chỉ kiểm tra tên ứng dụng, không ảnh hưởng app ngân hàng.',
+  'blocker.overlay': 'Hiển thị trên ứng dụng khác',
+  'blocker.overlayOn': 'Đã bật.',
+  'blocker.overlayOff': 'Để hiện màn hình chặn và đồng hồ đếm ngược lên trên ứng dụng bị chặn.',
+  'blocker.permission': 'Trợ năng (không bắt buộc)',
+  'blocker.permissionOn':
+    'Đang bật: chặn cả trang web. App ngân hàng không cho mở thì tắt nó đi, ứng dụng vẫn bị chặn.',
+  'blocker.permissionOnOnly':
+    'Đang bật. Nếu app ngân hàng không cho mở, cấp 2 quyền ở trên trước rồi hãy tắt Trợ năng.',
+  'blocker.permissionOff':
+    'Chặn thêm cả trang web trong trình duyệt. Nhiều app ngân hàng không cho mở khi có app đang bật Trợ năng.',
   'blocker.permissionButton': 'Bật',
+  'blocker.permissionManage': 'Cài đặt',
   'blocker.restrictedHint':
     'Không bật được, hoặc Android báo "Cài đặt bị hạn chế"? Mở Thông tin ứng dụng, bấm ⋮ ở góc trên, chọn "Cho phép cài đặt bị hạn chế", rồi thử lại.',
   'blocker.openAppInfo': 'Mở thông tin ứng dụng',
@@ -672,6 +729,7 @@ const vi = {
   'blocker.sectionSites': 'Trang web bị chặn ({n})',
   'blocker.sitesBody':
     'Mở bằng trình duyệt (Chrome, Cốc Cốc, Edge, Samsung Internet…) cũng bị chặn. Trang web của các ứng dụng đã chọn được chặn kèm tự động.',
+  'blocker.sitesNeedA11y': 'Trang web chỉ bị chặn khi Trợ năng đang bật.',
   'blocker.siteAuto': 'kèm ứng dụng',
   'blocker.sitePlaceholder': 'vd. vnexpress.net',
   'blocker.siteAdd': 'Thêm',
@@ -683,7 +741,7 @@ const vi = {
   'blocker.timerBody': 'Một đồng hồ nhỏ hiện trên ứng dụng bị chặn khi thời gian đang chạy.',
   'blocker.keepTitle': 'Giữ chặn luôn chạy',
   'blocker.keepBody':
-    'Một số máy (realme, OPPO, Xiaomi, vivo…) tự đóng ứng dụng chạy nền, rồi Android tắt luôn quyền Trợ năng, nên chặn lúc được lúc không. Để tránh:',
+    'Một số máy (realme, OPPO, Xiaomi, vivo…) tự đóng ứng dụng chạy nền, làm chặn dừng lại và có thể tắt luôn Trợ năng, nên chặn lúc được lúc không. Để tránh:',
   'blocker.keep1':
     'Khoá Hít Đất AI trong đa nhiệm: mở màn hình ứng dụng gần đây, kéo thẻ của app xuống hoặc mở menu của thẻ và chọn Khoá.',
   'blocker.keep2':
@@ -697,7 +755,7 @@ const vi = {
   'blocker.howBody':
     'Tập xong một buổi, số cái được đổi thành thời gian giải trí. Mở ứng dụng hoặc trang web bị chặn thì thời gian đếm ngược khi nó đang trên màn hình, kể cả chia đôi màn hình hay cửa sổ nổi, và dừng khi bạn thoát ra hoặc khoá máy. Về 0 thì nó bị che lại cho tới khi bạn hít đất tiếp. Bạn có thể tắt chặn ở đây bất cứ lúc nào.',
   'blocker.privacy':
-    'Tính năng chặn chỉ kiểm tra ứng dụng nào đang mở và, trong trình duyệt, tên miền của trang. Nó không đọc gì khác trên màn hình hay những gì bạn gõ, và không gửi gì ra khỏi máy.',
+    'Tính năng chặn chỉ kiểm tra ứng dụng nào đang mở và, khi bật Trợ năng, tên miền của trang trong trình duyệt. Nó không đọc gì khác trên màn hình hay những gì bạn gõ, và không gửi gì ra khỏi máy.',
   'blocker.androidOnly': 'Tính năng chặn ứng dụng chỉ có trên Android.',
   'blocker.expoGo':
     'Expo Go không chạy được tính năng chặn ứng dụng vì cần mã native. Hãy cài bản build của app (npm run build:apk).',
@@ -706,7 +764,7 @@ const vi = {
   'blocker.chipOff': 'Chặn đã tắt',
   'blocker.disclosureTitle': 'Cho phép quyền Trợ năng?',
   'blocker.disclosureBody':
-    'Để chặn ứng dụng, Hít Đất AI dùng dịch vụ Trợ năng (Accessibility) của Android để biết ứng dụng nào đang mở trên màn hình.',
+    'Để chặn cả trang web, Hít Đất AI dùng dịch vụ Trợ năng (Accessibility) của Android để biết ứng dụng nào đang mở trên màn hình. Lưu ý: nhiều app ngân hàng không cho mở khi có app đang bật Trợ năng.',
   'blocker.disclosure1':
     'Chỉ kiểm tra tên ứng dụng đang mở và, trong trình duyệt, tên miền của trang. Không đọc gì khác trên màn hình, tin nhắn hay những gì bạn gõ.',
   'blocker.disclosure2': 'Không lưu lịch sử sử dụng, không gửi gì ra khỏi máy.',
@@ -716,6 +774,17 @@ const vi = {
     'Ở màn hình tiếp theo, tìm mục có chữ "Hít Đất AI" (thường nằm trong "Ứng dụng đã tải xuống" hoặc "Ứng dụng đã cài đặt") rồi bật lên.',
   'blocker.disclosureAgree': 'Đồng ý và mở Cài đặt',
   'blocker.disclosureLater': 'Để sau',
+  'blocker.usageDisclosureTitle': 'Chặn không cần Trợ năng?',
+  'blocker.usageDisclosureBody':
+    'Thay cho Trợ năng, Hít Đất AI có thể dùng hai quyền khác của Android, thường không bị app ngân hàng phản đối.',
+  'blocker.usageDisclosure1':
+    '"Truy cập dữ liệu sử dụng" cho biết ứng dụng nào đang mở. Chỉ kiểm tra tên ứng dụng, không lưu lịch sử.',
+  'blocker.usageDisclosure2':
+    '"Hiển thị trên ứng dụng khác" để hiện màn hình chặn và đồng hồ đếm ngược lên trên ứng dụng bị chặn.',
+  'blocker.usageDisclosure3':
+    'Khi đang chặn sẽ có một thông báo thường trực. Cách này không chặn được trang web, và không gửi gì ra khỏi máy.',
+  'blocker.usageDisclosureSteps':
+    'Ở màn hình tiếp theo, tìm "Hít Đất AI" và bật lên, rồi quay lại đây để cấp quyền còn lại.',
 
   'picker.title': 'Chọn ứng dụng cần chặn',
   'picker.search': 'Tìm ứng dụng',
@@ -734,6 +803,9 @@ const vi = {
   'native.homeButton': 'Về màn hình chính',
   'native.lowTime': 'Còn chưa đầy 1 phút giải trí',
   'native.blockedToast': '{app} đang bị chặn. Hít đất để có thêm thời gian.',
+  'native.watchTitle': 'Đang chặn ứng dụng',
+  'native.watchBody': 'Mỗi cái hít đất đổi thêm thời gian giải trí.',
+  'native.watchChannel': 'Chặn ứng dụng',
 
   'settings.title': 'Cài đặt',
   'settings.workout': 'Buổi tập',

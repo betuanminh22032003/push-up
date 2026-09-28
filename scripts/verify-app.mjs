@@ -61,6 +61,13 @@ const {
   isSetUp,
   isBlocking,
   wasSwitchedOff,
+  watcherReady,
+  wantsWatcher,
+  blockingMode,
+  hasWayToBlock,
+  looksStalled,
+  statusKey,
+  alertKind,
   creditFor,
   formatAmount,
   filterApps,
@@ -373,6 +380,54 @@ await check('a service the system switched off is told apart from one never swit
   assert.equal(s.serviceConnectedAt, 5);
   assert.equal(s.batteryOptimized, true);
   assert.deepEqual(s.sites, ['x.com']);
+});
+
+await check('without Accessibility, usage access and the overlay block apps (not sites)', () => {
+  const on = { ...EMPTY_STATE, enabled: true, blocked: ['a'] };
+  const granted = { ...on, usageAccess: true, overlayAllowed: true };
+  assert.equal(watcherReady({ ...on, usageAccess: true }), false, 'both permissions are needed');
+  assert.equal(wantsWatcher(granted), true);
+  assert.equal(wantsWatcher({ ...granted, blocked: [], sites: ['x.com'] }), false, 'it cannot see sites');
+  assert.equal(wantsWatcher({ ...granted, enabled: false }), false);
+  assert.equal(blockingMode(granted), null, 'granted, not started yet');
+  assert.equal(blockingMode({ ...granted, watcherRunning: true }), 'usage');
+  assert.equal(isBlocking({ ...granted, watcherRunning: true }), true);
+  const both = { ...granted, watcherRunning: true, serviceEnabled: true, serviceRunning: true };
+  assert.equal(blockingMode(both), 'accessibility', 'Accessibility goes first when both run');
+  const n = normalizeState({ usageAccess: true, overlayAllowed: 1, watcherRunning: true });
+  assert.deepEqual([n.usageAccess, n.overlayAllowed, n.watcherRunning], [true, false, true]);
+});
+
+await check('switching Accessibility off for a banking app keeps apps blocked, with no alarm', () => {
+  const on = { ...EMPTY_STATE, enabled: true, blocked: ['a'], sites: ['x.com'], serviceConnectedAt: 1000 };
+  const usage = { ...on, usageAccess: true, overlayAllowed: true, watcherRunning: true };
+  assert.equal(wasSwitchedOff(usage), true, 'Accessibility did go off');
+  assert.equal(statusKey(usage, false), 'blocker.statusOnApps');
+  assert.equal(alertKind(usage, false), null, 'the watcher took over');
+  assert.equal(looksStalled(usage), false);
+  // Without the other permissions the same switch-off stops everything.
+  assert.equal(statusKey(on, false), 'blocker.statusSwitchedOff');
+  assert.equal(alertKind(on, false), 'switchedOff');
+  assert.equal(hasWayToBlock(on), false);
+});
+
+await check('the status line and warning card pick the most urgent gap', () => {
+  const on = { ...EMPTY_STATE, enabled: true, blocked: ['a'] };
+  assert.equal(statusKey({ ...on, enabled: false }, false), 'blocker.statusOff');
+  assert.equal(statusKey({ ...on, blocked: [] }, false), 'blocker.statusNoApps');
+  assert.equal(statusKey(on, false), 'blocker.statusNeedsPermission');
+  assert.equal(statusKey({ ...on, blocked: [], sites: ['x.com'] }, false), 'blocker.statusSitesNeedA11y');
+  const a11y = { ...on, serviceEnabled: true };
+  assert.equal(statusKey(a11y, false), 'blocker.statusStarting', 'just switched on');
+  assert.equal(looksStalled(a11y), true);
+  assert.equal(statusKey(a11y, true), 'blocker.statusStalled');
+  assert.equal(alertKind(a11y, true), 'stalled');
+  assert.equal(statusKey({ ...a11y, serviceRunning: true }, false), 'blocker.statusOn');
+  const granted = { ...on, usageAccess: true, overlayAllowed: true };
+  assert.equal(looksStalled(granted), true, 'granted but not running');
+  assert.equal(alertKind(granted, false), null, 'not before the second look');
+  assert.equal(alertKind(granted, true), 'watcher');
+  assert.equal(alertKind({ ...on, enabled: false, serviceConnectedAt: 5 }, true), null, 'blocking off');
 });
 
 await check('typed sites become bare domains, anything else is refused', () => {

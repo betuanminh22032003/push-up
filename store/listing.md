@@ -162,13 +162,30 @@ Camera: the camera is used only on device for live pose estimation; frames are n
 The manifest requests only:
 
 - `CAMERA` — AI camera mode (runtime permission, requested on first use)
-- `POST_NOTIFICATIONS` — daily reminder (runtime, requested when enabled)
-- `RECEIVE_BOOT_COMPLETED` — expo-notifications re-schedules the reminder after a reboot
+- `POST_NOTIFICATIONS` — daily reminder (runtime, requested when enabled); it also shows the app blocker's notification
+- `RECEIVE_BOOT_COMPLETED` — expo-notifications re-schedules the reminder after a reboot, and the app blocker restarts its watcher
+- `PACKAGE_USAGE_STATS` — app blocker: which app is in front. Special access the user grants in Settings → Usage access, after an in-app explanation
+- `SYSTEM_ALERT_WINDOW` — app blocker: opens the block screen from the background and draws the countdown. Special access the user grants
+- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` — the app blocker's watcher (declaration below)
 - `VIBRATE`, `INTERNET`, `MODIFY_AUDIO_SETTINGS` — normal permissions, no prompt
 
-`RECORD_AUDIO`, `ACTIVITY_RECOGNITION` and the foreground-service permissions that the Expo modules add by default are blocked in `app.json`.
+`RECORD_AUDIO`, `ACTIVITY_RECOGNITION` and the media-playback foreground-service permission that the Expo modules add by default are blocked in `app.json`.
 
-The app blocker adds no permission, but it does declare an **accessibility service** (`modules/app-blocker`), which needs its own declaration. It finds installed apps and browsers through targeted `<queries>` intents, so `QUERY_ALL_PACKAGES` is not requested.
+The app blocker (`modules/app-blocker`) works either way the user chooses: usage access plus "display over other apps", run by a **special-use foreground service**, or an **accessibility service**. Many Vietnamese banking apps refuse to open while any accessibility service is on, which is why the first way exists. Each needs its own declaration, below. It finds installed apps and browsers through targeted `<queries>` intents, so `QUERY_ALL_PACKAGES` is not requested.
+
+## Foreground service declaration
+
+Play Console → App content → Foreground service permissions → **Special use** (`FOREGROUND_SERVICE_SPECIAL_USE`, subtype in the manifest: "App blocker").
+
+```
+Hít Đất AI is a push-up counter with an optional app blocker for digital wellbeing: the user picks apps they want to limit, and those stay blocked until the user earns time by doing push-ups.
+
+The special-use foreground service runs only while the user has switched blocking on, chosen at least one app and granted usage access and "display over other apps". While the screen is on, it reads the usage events (UsageStatsManager) twice a second to know which app is in the foreground, so it can count the user's earned time down while a blocked app is open and cover the app with a block screen once that time is used up. It has to keep running while the user is in other apps, which is the whole point, and no other foreground service type describes this: it is not media, location, a data sync, a connected device or a user-initiated transfer.
+
+Its ongoing notification says that blocking is on. Turning blocking off in the app, or withdrawing either permission, stops the service. Nothing is recorded or sent off the device.
+```
+
+Attach a short screen recording: the Blocker tab → the disclosure → granting usage access and "display over other apps" → the notification → opening a blocked app → the block screen.
 
 ## Accessibility API declaration
 

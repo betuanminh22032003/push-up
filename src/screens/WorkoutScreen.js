@@ -4,7 +4,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { newlyUnlocked, unlockedAchievements } from '../achievements/achievements';
-import { creditFor, formatAmount, isSetUp } from '../blocker/blockerLogic';
+import { creditFor, formatAmount, hasWayToBlock, isSetUp } from '../blocker/blockerLogic';
 import { Button } from '../components/Button';
 import { StatTile } from '../components/StatTile';
 import { useCountdown } from '../hooks/useCountdown';
@@ -77,8 +77,8 @@ export function WorkoutScreen({
   const { settings, updateSettings } = useSettings();
   const { state: blocker, rate: blockerRate, creditReps, serviceStalled } = useBlocker();
   const earning = isSetUp(blocker);
-  // Set up, but the service is switched off or stopped: nothing is blocked.
-  const blockerOff = earning && (!blocker.serviceEnabled || serviceStalled);
+  // Set up, but no way to block is switched on, or it stopped: nothing is blocked.
+  const blockerOff = earning && (!hasWayToBlock(blocker) || serviceStalled);
   const {
     sessions,
     stats,

@@ -13,10 +13,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   RATE_OPTIONS,
+  alertKind,
+  blockingMode,
   effectiveSites,
   formatAmount,
   searchKey,
-  wasSwitchedOff,
+  statusKey,
+  watcherReady,
 } from '../blocker/blockerLogic';
 import { AppIcon } from '../components/AppIcon';
 import { AppPickerModal } from '../components/AppPickerModal';
@@ -40,24 +43,46 @@ function blockingPhrase(state, t) {
   return parts.join(` ${t('blocker.and')} `);
 }
 
+const CALM_STATUS = ['blocker.statusOff', 'blocker.statusOn', 'blocker.statusOnApps', 'blocker.statusStarting'];
+
 /** One line on what the blocker is doing right now, most urgent gap first. */
 function statusLine(state, stalled, t) {
-  if (!state.enabled) return { text: t('blocker.statusOff'), warn: false };
-  if (state.blocked.length === 0 && state.sites.length === 0) {
-    return { text: t('blocker.statusNoApps'), warn: true };
-  }
-  if (wasSwitchedOff(state)) return { text: t('blocker.statusSwitchedOff'), warn: true };
-  if (!state.serviceEnabled) return { text: t('blocker.statusNoService'), warn: true };
-  if (stalled) return { text: t('blocker.statusStalled'), warn: true };
-  if (!state.serviceRunning) return { text: t('blocker.statusStarting'), warn: false };
-  return { text: t('blocker.statusOn', { apps: blockingPhrase(state, t) }), warn: false };
+  const key = statusKey(state, stalled);
+  // Without Accessibility only apps are blocked, so only they are named.
+  const apps = blockingPhrase(key === 'blocker.statusOnApps' ? { ...state, sites: [] } : state, t);
+  return { text: t(key, { apps }), warn: !CALM_STATUS.includes(key) };
 }
 
+/** The warning card's copy and buttons for each kind of stop (see alertKind). */
+const ALERTS = {
+  watcher: { body: ['blocker.alertWatcher'], fix: 'battery' },
+  stalled: { body: ['blocker.alertStalled', 'blocker.alertPrevent'], fix: 'accessibility' },
+  switchedOff: { body: ['blocker.alertSwitchedOff'], fix: 'turnOn' },
+};
+
+/** Which disclosure each permission is asked with. */
+const DISCLOSURES = {
+  accessibility: {
+    title: 'blocker.disclosureTitle',
+    body: 'blocker.disclosureBody',
+    bullets: ['blocker.disclosure1', 'blocker.disclosure2', 'blocker.disclosure3'],
+    steps: 'blocker.disclosureSteps',
+  },
+  usage: {
+    title: 'blocker.usageDisclosureTitle',
+    body: 'blocker.usageDisclosureBody',
+    bullets: ['blocker.usageDisclosure1', 'blocker.usageDisclosure2', 'blocker.usageDisclosure3'],
+    steps: 'blocker.usageDisclosureSteps',
+  },
+};
+
 /**
- * The app blocker: the fun time banked, the apps and sites it guards, the one
- * system permission it needs, and what keeps that permission from being
- * switched off behind the user's back. Reps turn into time on the workout
- * screen; this screen is where it is all set up.
+ * The app blocker: the fun time banked, the apps and sites it guards, the
+ * system permissions it runs on, and what keeps it from being stopped behind
+ * the user's back. Two ways to block: usage access plus "display over other
+ * apps" (apps only, and banking apps keep working), or Accessibility (websites
+ * too, but many banking apps refuse to open next to it). Reps turn into time
+ * on the workout screen; this screen is where it is all set up.
  */
 export function BlockerScreen({ onGoWorkout }) {
   const t = useT();
@@ -80,12 +105,15 @@ export function BlockerScreen({ onGoWorkout }) {
     addSite,
     removeSite,
     openAccessibilitySettings,
+    openUsageAccessSettings,
+    openOverlaySettings,
     openAppSettings,
     openBatterySettings,
     openAutostartSettings,
   } = useBlocker();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [disclosureOpen, setDisclosureOpen] = useState(false);
+  // The permission waiting behind its disclosure: 'accessibility', 'usage' or 'overlay'.
+  const [asking, setAsking] = useState(null);
   const [siteDraft, setSiteDraft] = useState('');
   const [siteError, setSiteError] = useState(false);
 
@@ -127,13 +155,31 @@ export function BlockerScreen({ onGoWorkout }) {
     }
   };
 
+  const openers = {
+    accessibility: openAccessibilitySettings,
+    usage: openUsageAccessSettings,
+    overlay: openOverlaySettings,
+  };
+
+  /** Settings for one permission, behind its disclosure. One covers both usage-way permissions. */
+  const ask = (permission) => {
+    if (permission !== 'accessibility' && (state.usageAccess || state.overlayAllowed)) {
+      openers[permission]();
+    } else {
+      setAsking(permission);
+    }
+  };
+
   const agreeAndOpen = () => {
-    setDisclosureOpen(false);
-    openAccessibilitySettings();
+    const permission = asking;
+    setAsking(null);
+    openers[permission]?.();
   };
 
   const status = statusLine(state, serviceStalled, t);
-  const switchedOff = wasSwitchedOff(state);
+  const alert = ALERTS[alertKind(state, serviceStalled)];
+  const mode = blockingMode(state);
+  const ready = watcherReady(state);
 
   return (
     <ScrollView
@@ -164,18 +210,34 @@ export function BlockerScreen({ onGoWorkout }) {
         <ActivityIndicator color={colors.accent} style={styles.loading} />
       ) : (
         <>
-          {state.enabled && (switchedOff || serviceStalled) ? (
+          {alert ? (
             <View style={styles.alert}>
               <Text style={styles.alertTitle}>{t('blocker.alertTitle')}</Text>
-              <Text style={styles.alertBody}>
-                {t(switchedOff ? 'blocker.alertSwitchedOff' : 'blocker.alertStalled')}
-              </Text>
-              <Text style={styles.alertBody}>{t('blocker.alertPrevent')}</Text>
+              {alert.body.map((key) => (
+                <Text key={key} style={styles.alertBody}>
+                  {t(key)}
+                </Text>
+              ))}
+              {alert.fix === 'turnOn' ? (
+                <Text style={styles.alertBody}>{t(ready ? 'blocker.alertPrevent' : 'blocker.alertOrUsage')}</Text>
+              ) : null}
               <View style={styles.alertButtons}>
-                <SmallButton
-                  label={t(switchedOff ? 'blocker.alertTurnOn' : 'blocker.alertOpen')}
-                  onPress={switchedOff ? () => setDisclosureOpen(true) : openAccessibilitySettings}
-                />
+                {alert.fix === 'battery' ? (
+                  <SmallButton label={t('blocker.keepBattery')} onPress={openBatterySettings} />
+                ) : alert.fix === 'turnOn' ? (
+                  <>
+                    {/* Often switched off for a banking app: offer the way that app accepts first. */}
+                    {ready ? null : (
+                      <SmallButton
+                        label={t('blocker.alertUseUsage')}
+                        onPress={() => ask(state.usageAccess ? 'overlay' : 'usage')}
+                      />
+                    )}
+                    <SmallButton label={t('blocker.alertTurnOn')} onPress={() => ask('accessibility')} secondary={!ready} />
+                  </>
+                ) : (
+                  <SmallButton label={t('blocker.alertOpen')} onPress={openAccessibilitySettings} />
+                )}
                 <SmallButton label={t('blocker.keepAutostart')} onPress={openAutostartSettings} secondary />
               </View>
             </View>
@@ -185,15 +247,39 @@ export function BlockerScreen({ onGoWorkout }) {
             <Row title={t('blocker.toggle')}>
               <Toggle value={state.enabled} onChange={setEnabled} label={t('blocker.toggle')} />
             </Row>
+            <Text style={styles.sectionNote}>{t('blocker.waysNote')}</Text>
+            <Permission
+              title={t('blocker.usage')}
+              body={t(state.usageAccess ? 'blocker.usageOn' : 'blocker.usageOff')}
+              granted={state.usageAccess}
+              warn={!mode}
+              onGrant={() => ask('usage')}
+            />
+            <Permission
+              title={t('blocker.overlay')}
+              body={t(state.overlayAllowed ? 'blocker.overlayOn' : 'blocker.overlayOff')}
+              granted={state.overlayAllowed}
+              warn={!mode}
+              onGrant={() => ask('overlay')}
+            />
             <Row
               title={t('blocker.permission')}
-              body={state.serviceEnabled ? t('blocker.permissionOn') : t('blocker.permissionOff')}
-              bodyWarn={!state.serviceEnabled}
+              body={t(
+                !state.serviceEnabled
+                  ? 'blocker.permissionOff'
+                  : ready
+                    ? 'blocker.permissionOn'
+                    : 'blocker.permissionOnOnly',
+              )}
             >
               {state.serviceEnabled ? (
-                <Text style={styles.okMark}>✓</Text>
+                <SmallButton label={t('blocker.permissionManage')} onPress={openAccessibilitySettings} secondary />
               ) : (
-                <SmallButton label={t('blocker.permissionButton')} onPress={() => setDisclosureOpen(true)} />
+                <SmallButton
+                  label={t('blocker.permissionButton')}
+                  onPress={() => ask('accessibility')}
+                  secondary
+                />
               )}
             </Row>
             {state.serviceEnabled ? null : (
@@ -241,6 +327,9 @@ export function BlockerScreen({ onGoWorkout }) {
 
           <Section label={t('blocker.sectionSites', { n: state.sites.length })}>
             <Text style={styles.sectionNote}>{t('blocker.sitesBody')}</Text>
+            {mode === 'accessibility' ? null : (
+              <Text style={[styles.sectionNote, styles.noteWarn]}>{t('blocker.sitesNeedA11y')}</Text>
+            )}
             {appSites.map((domain) => (
               <View key={domain} style={styles.itemRow}>
                 <Text style={styles.itemLabel} numberOfLines={1}>
@@ -313,7 +402,12 @@ export function BlockerScreen({ onGoWorkout }) {
         <Text style={styles.paragraph}>{t('blocker.privacy')}</Text>
       </Section>
 
-      <Disclosure visible={disclosureOpen} onAgree={agreeAndOpen} onClose={() => setDisclosureOpen(false)} />
+      <Disclosure
+        copy={DISCLOSURES[asking === 'accessibility' ? 'accessibility' : 'usage']}
+        visible={asking !== null}
+        onAgree={agreeAndOpen}
+        onClose={() => setAsking(null)}
+      />
       <AppPickerModal
         visible={pickerOpen}
         apps={apps}
@@ -343,6 +437,20 @@ function SmallButton({ label, onPress, secondary, style }) {
   );
 }
 
+/** One system permission: what it is for, and a tick or the button that asks for it. */
+function Permission({ title, body, granted, warn, onGrant }) {
+  const t = useT();
+  return (
+    <Row title={title} body={body} bodyWarn={warn && !granted}>
+      {granted ? (
+        <Text style={styles.okMark}>✓</Text>
+      ) : (
+        <SmallButton label={t('blocker.permissionButton')} onPress={onGrant} />
+      )}
+    </Row>
+  );
+}
+
 function RemoveButton({ label, onPress }) {
   return (
     <Pressable
@@ -359,25 +467,26 @@ function RemoveButton({ label, onPress }) {
 
 /**
  * Google Play requires this before an app sends anyone to switch on its
- * accessibility service: what the service can see, what it does with it, and
- * an explicit yes. Declining leaves everything as it was.
+ * accessibility service, and it is shown the same way for usage access: what
+ * the permission lets the app see, what it does with it, and an explicit yes.
+ * Declining leaves everything as it was.
  */
-function Disclosure({ visible, onAgree, onClose }) {
+function Disclosure({ copy, visible, onAgree, onClose }) {
   const t = useT();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.backdrop}>
         <View style={styles.dialog}>
           <ScrollView contentContainerStyle={styles.dialogContent} showsVerticalScrollIndicator={false}>
-            <Text style={styles.dialogTitle}>{t('blocker.disclosureTitle')}</Text>
-            <Text style={styles.dialogBody}>{t('blocker.disclosureBody')}</Text>
-            {['blocker.disclosure1', 'blocker.disclosure2', 'blocker.disclosure3'].map((key) => (
+            <Text style={styles.dialogTitle}>{t(copy.title)}</Text>
+            <Text style={styles.dialogBody}>{t(copy.body)}</Text>
+            {copy.bullets.map((key) => (
               <View key={key} style={styles.bullet}>
                 <Text style={styles.bulletDot}>•</Text>
                 <Text style={styles.bulletText}>{t(key)}</Text>
               </View>
             ))}
-            <Text style={styles.dialogSteps}>{t('blocker.disclosureSteps')}</Text>
+            <Text style={styles.dialogSteps}>{t(copy.steps)}</Text>
           </ScrollView>
           <Button label={t('blocker.disclosureAgree')} onPress={onAgree} />
           <Button
@@ -466,6 +575,7 @@ const styles = StyleSheet.create({
 
   empty: { fontSize: 14, color: colors.textDim, paddingVertical: spacing.md },
   sectionNote: { fontSize: 13, color: colors.textDim, lineHeight: 18, paddingTop: spacing.md },
+  noteWarn: { color: colors.warn },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',

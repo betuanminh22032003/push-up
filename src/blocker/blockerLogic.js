@@ -69,6 +69,9 @@ export const EMPTY_STATE = Object.freeze({
   serviceEnabled: false,
   serviceRunning: false,
   serviceConnectedAt: 0,
+  usageAccess: false,
+  overlayAllowed: false,
+  watcherRunning: false,
   batteryOptimized: false,
   enabled: false,
   blocked: [],
@@ -93,6 +96,9 @@ export function normalizeState(raw) {
     serviceEnabled: raw.serviceEnabled === true,
     serviceRunning: raw.serviceRunning === true,
     serviceConnectedAt: finite(raw.serviceConnectedAt),
+    usageAccess: raw.usageAccess === true,
+    overlayAllowed: raw.overlayAllowed === true,
+    watcherRunning: raw.watcherRunning === true,
     batteryOptimized: raw.batteryOptimized === true,
     enabled: raw.enabled === true,
     blocked: strings(raw.blocked),
@@ -109,12 +115,81 @@ export function isSetUp(state) {
 }
 
 /**
- * The service ran once and is now off in the system settings. Android does
- * this when an app is force-stopped, which aggressive OEM builds (realme,
- * OPPO, Xiaomi…) do to background apps, so blocking stops without a word.
+ * The accessibility service ran once and is now off in the system settings.
+ * Android does this when an app is force-stopped, which aggressive OEM builds
+ * (realme, OPPO, Xiaomi…) do to background apps; people also switch it off
+ * themselves, because many banking apps refuse to open while it is on.
  */
 export function wasSwitchedOff(state) {
   return isSetUp(state) && !state.serviceEnabled && state.serviceConnectedAt > 0;
+}
+
+/**
+ * Both permissions of the way to block without the accessibility service:
+ * usage access and "display over other apps". Banking apps do not object to
+ * them, but this way blocks apps only, not websites.
+ */
+export function watcherReady(state) {
+  return state.usageAccess && state.overlayAllowed;
+}
+
+/** The accessibility-free watcher has work: blocking on, apps chosen, both permissions granted. */
+export function wantsWatcher(state) {
+  return state.enabled && state.blocked.length > 0 && watcherReady(state);
+}
+
+/**
+ * Which way is blocking right now: 'accessibility' (apps and websites),
+ * 'usage' (apps only; banking apps keep working) or null. The accessibility
+ * service goes first when both run; the other one waits.
+ */
+export function blockingMode(state) {
+  if (!isSetUp(state)) return null;
+  if (state.serviceEnabled && state.serviceRunning) return 'accessibility';
+  if (wantsWatcher(state) && state.watcherRunning) return 'usage';
+  return null;
+}
+
+/** A way to block is switched on, running or not. False: a permission is still to grant. */
+export function hasWayToBlock(state) {
+  return state.serviceEnabled || wantsWatcher(state);
+}
+
+/**
+ * Set up and switched on, yet nothing blocking: stopped by the phone, or
+ * still starting. The context looks twice before calling it stuck.
+ */
+export function looksStalled(state) {
+  return isSetUp(state) && blockingMode(state) === null && hasWayToBlock(state);
+}
+
+/**
+ * The blocker tab's one-line status, as a translation key, most urgent gap
+ * first. `stalled` is the context's confirmed second look.
+ */
+export function statusKey(state, stalled) {
+  if (!state.enabled) return 'blocker.statusOff';
+  if (state.blocked.length === 0 && state.sites.length === 0) return 'blocker.statusNoApps';
+  const mode = blockingMode(state);
+  if (mode === 'accessibility') return 'blocker.statusOn';
+  if (mode === 'usage') return 'blocker.statusOnApps';
+  if (hasWayToBlock(state)) return stalled ? 'blocker.statusStalled' : 'blocker.statusStarting';
+  if (wasSwitchedOff(state)) return 'blocker.statusSwitchedOff';
+  if (state.blocked.length === 0) return 'blocker.statusSitesNeedA11y';
+  return 'blocker.statusNeedsPermission';
+}
+
+/**
+ * Which warning card the tab shows, if any: 'watcher' (both permissions
+ * granted, the phone stopped it), 'stalled' (accessibility on, not running)
+ * or 'switchedOff' (accessibility turned off, nothing else blocking).
+ */
+export function alertKind(state, stalled) {
+  if (!isSetUp(state) || blockingMode(state) !== null) return null;
+  if (stalled && wantsWatcher(state)) return 'watcher';
+  if (stalled && state.serviceEnabled) return 'stalled';
+  if (wasSwitchedOff(state)) return 'switchedOff';
+  return null;
 }
 
 /**
@@ -143,9 +218,9 @@ export function effectiveSites(blockedPackages, customSites) {
   return [...out].sort();
 }
 
-/** Actually blocking right now: set up, and the system has the service bound. */
+/** Actually blocking right now, one way or the other. */
 export function isBlocking(state) {
-  return isSetUp(state) && state.serviceEnabled && state.serviceRunning;
+  return blockingMode(state) !== null;
 }
 
 /** Seconds of fun time a workout of `reps` earns at `secondsPerRep`. */

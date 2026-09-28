@@ -38,6 +38,9 @@ export function createDemoBlocker() {
     serviceEnabled: false,
     serviceRunning: false,
     serviceConnectedAt: 0,
+    usageAccess: false,
+    overlayAllowed: false,
+    watcherRunning: false,
     batteryOptimized: false,
     enabled: false,
     blocked: [],
@@ -47,7 +50,13 @@ export function createDemoBlocker() {
     earnRequestedAt: 0,
     ...seededState(),
   };
-  const snapshot = () => ({ ...state, blocked: [...state.blocked], sites: [...state.sites] });
+  // The watcher runs whenever it has work and both of its permissions, as on a phone.
+  const snapshot = () => ({
+    ...state,
+    watcherRunning: state.enabled && state.blocked.length > 0 && state.usageAccess && state.overlayAllowed,
+    blocked: [...state.blocked],
+    sites: [...state.sites],
+  });
 
   return {
     getState: snapshot,
@@ -84,6 +93,15 @@ export function createDemoBlocker() {
       state.serviceEnabled = true;
       state.serviceRunning = true;
       state.serviceConnectedAt = Date.now();
+      return true;
+    },
+    // Stand in for the user granting each permission in system settings.
+    openUsageAccessSettings() {
+      state.usageAccess = true;
+      return true;
+    },
+    openOverlaySettings() {
+      state.overlayAllowed = true;
       return true;
     },
     openAppSettings() {

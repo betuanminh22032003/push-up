@@ -103,7 +103,24 @@ Reps count only once the blocker is set up (switched on, at least one app or sit
 hours cannot be banked before it bites, and a discarded workout earns nothing, exactly as
 it records nothing.
 
-What it covers:
+Two ways to see what is on screen, whichever permissions the user grants:
+
+- **Usage access + "display over other apps"** (`WatchService`): apps only, and banking
+  apps keep working. VCB, BIDV, VietinBank, Agribank and other Vietnamese banks refuse to
+  open while *any* app has an accessibility service on, Play Store installs included, so a
+  blocker that needs Accessibility is one that gets switched off. A foreground service reads
+  Android's usage events twice a second while the screen is on (`ForegroundApps` turns
+  resumed/paused/stopped into "on screen", re-reading a 3 s overlap, and a screen-off clears
+  it so a lost pause cannot keep an app "open"), then starts the block screen, which that
+  permission allows from the background. Where an OEM build still drops the start, the block
+  screen goes up as an overlay (`Cover`), and from there the real one opens.
+- **Accessibility** (`BlockerService`): also websites and picture-in-picture, as below.
+
+Both hand what they see to the same `Enforcer` (meter, countdown, block screen,
+escalation), so the rules are identical. When both run, Accessibility blocks and the watcher
+waits; switching Accessibility off for a banking app hands over at once.
+
+What the accessibility way covers:
 
 - **Every app window on screen**, not just the focused one: split screen, floating
   windows and picture-in-picture count as use, and a blocked app in picture-in-picture is
@@ -117,16 +134,22 @@ What it covers:
   app was still launching found no content, and no later event came. A heartbeat runs
   while the screen is on and blocking is set up, and a block screen that did not appear
   within 1.5 s is escalated (Back for a site, then the home screen).
-- **Its own process.** The service, the block screen and the state run in `:blocker`,
+For both ways:
+
+- **Its own process.** Both watchers, the block screen and the state run in `:blocker`,
   apart from the React Native process (JS engine, camera, WebView). That big process is
   what the system reclaims for memory and what a JS crash kills; sharing it, the service
   died too, and realme then declined to restart it ("on in settings, not running"). The
   JS module reaches the state through a `ContentProvider` in that process, and every
-  entry point of the service is wrapped so no exception can crash it.
-- **Being stopped by the phone anyway.** A force-stop makes Android remove the service
-  from the enabled list; a kill without restart leaves it on but not running. The tab
-  tells both apart from "never switched on", explains the fix, flags battery
-  optimisation and opens the maker's auto-launch screen (realme/OPPO, Xiaomi, vivo,
+  entry point is wrapped so no exception can crash it. The watcher answers every start
+  with `startForeground()` before anything else: missing it crashes the process, the
+  accessibility service included.
+- **Being stopped by the phone anyway.** A force-stop makes Android remove the
+  accessibility service from the enabled list; a kill without restart leaves it on but not
+  running. The watcher is sticky, restarts after a reboot or an update, and is started
+  again whenever the app talks to the blocker (it is in front then, so Android allows it).
+  The tab tells all of these apart from "never switched on", explains the fix, flags
+  battery optimisation and opens the maker's auto-launch screen (realme/OPPO, Xiaomi, vivo,
   Huawei, Asus) directly; the home chip turns into a warning.
 
 It is a **local Expo module**, [`modules/app-blocker`](modules/app-blocker/), autolinked
@@ -135,8 +158,15 @@ from `modules/`:
 | File | Role |
 | --- | --- |
 | `BlockerEngine.kt` | every decision (meter, block, wait, escalate, close picture-in-picture), plain Kotlin with JUnit tests |
-| `BlockerService.kt` | `AccessibilityService`: looks at the screen on window events and on the heartbeat, reads browser address bars, carries out the engine's commands, shows the countdown as an accessibility overlay (no "draw over apps" permission) |
-| `BlockActivity.kt` | the block screen, built in code so it appears even when the JS is not loaded; Back goes home |
+| `Enforcer.kt` | carries out the engine's commands for either watcher: meter, countdown pill, block screen, toasts |
+| `WatchService.kt` | foreground service (`specialUse`): reads usage events twice a second, blocks apps without Accessibility, waits while Accessibility runs |
+| `ForegroundApps.kt` | usage events to "which apps are on screen", plain Kotlin with JUnit tests |
+| `BlockerService.kt` | `AccessibilityService`: looks at the screen on window events and on the heartbeat, reads browser address bars; its countdown is an accessibility overlay |
+| `BlockScreen.kt` | the block screen's content, built in code so it appears even when the JS is not loaded |
+| `BlockActivity.kt` | the block screen as an activity; Back goes home |
+| `Cover.kt` | the block screen as an overlay window, for OEM builds that drop the activity start |
+| `Access.kt` | which permissions are granted |
+| `BootReceiver.kt` | restarts the watcher after a reboot or an update |
 | `BlockerStore.kt` | the one copy of the state, in the `:blocker` process, persisted in SharedPreferences |
 | `BlockerProvider.kt` | `ContentProvider` in `:blocker`: the JS module's only way to the state |
 | `Sites.kt` | address-bar text to host, domain matching; JUnit-tested |
@@ -145,8 +175,8 @@ from `modules/`:
 
 The JUnit tests (`android/src/test`) need no device. Android Studio runs them with the
 module's `testDebugUnitTest`; without an Android SDK, compile `BlockerEngine.kt`,
-`Sites.kt` and the two test files with `kotlinc` against JUnit 4 and run
-`org.junit.runner.JUnitCore`.
+`Sites.kt`, `ForegroundApps.kt` and the three test files with `kotlinc` against JUnit 4
+and run `org.junit.runner.JUnitCore`.
 
 Custom native code does not run in **Expo Go**: there the module is absent
 (`requireOptionalNativeModule` returns null) and the tab explains why. Use a build —
@@ -157,8 +187,9 @@ Play installs are exempt. The dev web build uses an in-memory stand-in
 
 Google Play allows accessibility services outside accessibility tools only with a
 prominent disclosure and consent before the user is sent to settings (the tab shows
-one), a privacy-policy section, and the Accessibility API declaration in Play Console —
-text in [`store/listing.md`](store/listing.md).
+one, and a second one before usage access), a privacy-policy section, and the
+Accessibility API declaration in Play Console; the special-use foreground service needs
+its own declaration — both texts in [`store/listing.md`](store/listing.md).
 
 ## AI camera detection
 
@@ -214,7 +245,7 @@ src/
     WorkoutScreen.js          the workout state machine and stage
     ProgramScreen.js          test, level, day list
     ProgressScreen.js         chart, records, achievements, history
-    BlockerScreen.js          app blocker: balance, permission, blocked apps, rate
+    BlockerScreen.js          app blocker: balance, permissions, blocked apps, rate
     SettingsScreen.js         every setting
     OnboardingModal.js        first-run cards
   program/program.js          level table + day generator (pure)
@@ -233,7 +264,7 @@ src/
   state/                      settings, sessions/program and blocker contexts
   components/                 Button, StatTile, ProgressBar, WeeklyChart, …
   utils/                      time, stats, confirm, share
-modules/app-blocker/          native Android module: accessibility service, block screen
+modules/app-blocker/          native Android module: the two watchers, block screen
 assets/                       icons, splash, cue sounds (generated by scripts/)
 docs/                         GitHub Pages: pose.html, privacy.html
 store/                        Play listing, graphics, screenshots, checklist
@@ -243,7 +274,7 @@ store/                        Play listing, graphics, screenshots, checklist
 
 | Script | What |
 | --- | --- |
-| `npm run verify` | 95 assertions in plain Node: time/streaks/storage, pose analyser, program/achievements/strings/blocker rules, and the pose page drift check |
+| `npm run verify` | 98 assertions in plain Node: time/streaks/storage, pose analyser, program/achievements/strings/blocker rules, and the pose page drift check |
 | `npm run build:pose` | regenerate `docs/pose.html` from `src/pose/` |
 | `npm run build:sounds` | regenerate the cue WAVs |
 | `npm run build:brand` | regenerate icons, splash, notification icon, Play icon and feature graphic (Python + Pillow) |
