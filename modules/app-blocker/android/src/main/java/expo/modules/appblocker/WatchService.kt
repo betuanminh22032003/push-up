@@ -38,6 +38,10 @@ import expo.modules.appblocker.BlockerEngine.Seen
  * only by the accessibility service, and dismiss picture-in-picture. While
  * that service runs, it blocks and this one waits, ready to take over the
  * moment it is switched off.
+ *
+ * When a banking app is in front it stands aside (see [Banks]): every overlay
+ * comes down and nothing is blocked, so a bank that checks for an overlay on
+ * top of itself finds none and opens.
  */
 class WatchService : Service() {
   private val handler = Handler(Looper.getMainLooper())
@@ -241,6 +245,16 @@ class WatchService : Service() {
       }
     }
     val seen = look(BlockerStore.snapshot())
+    // A banking app on screen: stand aside. Take every overlay down and block
+    // nothing, so a bank that looks for an overlay on top of itself finds none
+    // and opens. (One that scans for the granted permission still complains;
+    // then the permission has to go off in settings.) look() has just refreshed
+    // the on-screen list.
+    if (apps.onScreen().any { Banks.isBank(it) }) {
+      if (cover.isShowing) cover.hide()
+      enforcer.see(Seen.Clear)
+      return
+    }
     // The cover gives way to the block screen proper, or goes once its app has left.
     val left = seen == Seen.Clear || (seen is Seen.Blocked && seen.key != cover.key)
     if (cover.isShowing && (BlockActivity.isVisible || left)) cover.hide()

@@ -42,6 +42,7 @@ export function createDemoBlocker() {
     overlayAllowed: false,
     watcherRunning: false,
     batteryOptimized: false,
+    developerOptions: false,
     enabled: false,
     blocked: [],
     sites: [],
@@ -93,6 +94,16 @@ export function createDemoBlocker() {
       state.serviceEnabled = true;
       state.serviceRunning = true;
       state.serviceConnectedAt = Date.now();
+      return true;
+    },
+    switchOffAccessibility() {
+      state.serviceEnabled = false;
+      state.serviceRunning = false;
+      return true;
+    },
+    // Stands in for the user switching Developer options off.
+    openDeveloperSettings() {
+      state.developerOptions = false;
       return true;
     },
     // Stand in for the user granting each permission in system settings.

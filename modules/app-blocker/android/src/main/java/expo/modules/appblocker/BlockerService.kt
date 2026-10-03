@@ -33,8 +33,9 @@ import expo.modules.appblocker.BlockerEngine.Seen
  * browser the address bar is read, so a blocked app's website is blocked too.
  *
  * Many banking apps refuse to open while any accessibility service is on.
- * When the user switches this one off for them, [WatchService] takes over the
- * apps (not the sites), if its permissions are granted.
+ * When the user switches this one off for them, in settings or with one tap
+ * in the blocker tab ([switchOff]), [WatchService] takes over the apps (not
+ * the sites), if its permissions are granted.
  */
 class BlockerService : AccessibilityService() {
   private val handler = Handler(Looper.getMainLooper())
@@ -151,6 +152,7 @@ class BlockerService : AccessibilityService() {
 
     connected = true
     isRunning = true
+    instance = this
     // The usage-events watcher, if it runs, waits while this one blocks.
     WatchService.engineChanged(this)
     scheduleEvaluate(0L)
@@ -185,6 +187,7 @@ class BlockerService : AccessibilityService() {
     enforcer.release()
     connected = false
     isRunning = false
+    if (instance === this) instance = null
     handler.removeCallbacksAndMessages(null)
     evaluatePending = false
     beatPending = false
@@ -402,5 +405,28 @@ class BlockerService : AccessibilityService() {
     @Volatile
     var isRunning = false
       private set
+
+    /** The connected service, which [switchOff] reaches from the provider's thread. */
+    @Volatile
+    private var instance: BlockerService? = null
+
+    /**
+     * Switches the service off from the inside, as its switch in settings
+     * would, for a banking app: those refuse to open while it is on, whichever
+     * apps it watches. [WatchService] then takes over the apps. Android lets
+     * an app switch its service off, never back on; that is up to the user.
+     * False when it is still on, typically because the phone had already
+     * stopped it and there was nothing connected to ask.
+     */
+    fun switchOff(context: Context): Boolean {
+      val service = instance ?: return false
+      try {
+        // A binder call, so any thread will do.
+        service.disableSelf()
+      } catch (e: RuntimeException) {
+        return false
+      }
+      return !Access.accessibilityEnabled(context)
+    }
   }
 }

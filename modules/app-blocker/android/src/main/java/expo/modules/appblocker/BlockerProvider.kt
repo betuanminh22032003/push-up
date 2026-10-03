@@ -37,6 +37,8 @@ class BlockerProvider : ContentProvider() {
         SET_SHOW_TIMER -> BlockerStore.setShowTimer(extras?.getBoolean(VALUE) == true)
         SET_LABELS -> BlockerStore.setLabels(labelsFrom(extras?.getBundle(VALUE)))
         CONSUME_EARN -> return Bundle().apply { putLong(VALUE, BlockerStore.consumeEarnRequest()) }
+        // The service runs here. Once it goes, its shutdown hands over to the watcher.
+        SWITCH_OFF_ACCESSIBILITY -> return Bundle().apply { putBoolean(VALUE, BlockerService.switchOff(ctx)) }
         RESET -> BlockerStore.reset()
         else -> return null
       }
@@ -105,6 +107,7 @@ class BlockerProvider : ContentProvider() {
     const val SET_SHOW_TIMER = "setShowTimer"
     const val SET_LABELS = "setLabels"
     const val CONSUME_EARN = "consumeEarnRequest"
+    const val SWITCH_OFF_ACCESSIBILITY = "switchOffAccessibility"
     const val RESET = "reset"
     const val VALUE = "value"
 

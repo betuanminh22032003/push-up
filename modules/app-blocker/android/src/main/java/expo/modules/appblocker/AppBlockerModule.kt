@@ -71,8 +71,20 @@ class AppBlockerModule : Module() {
       state(store(BlockerProvider.RESET))
     }
 
+    // For banking apps, which refuse to open while it is on. Android lets an
+    // app switch its own service off, never on; false when it is still on.
+    AsyncFunction("switchOffAccessibility") {
+      store(BlockerProvider.SWITCH_OFF_ACCESSIBILITY)?.getBoolean(BlockerProvider.VALUE) ?: false
+    }
+
     Function("openAccessibilitySettings") {
       openSettings(accessibilitySettingsIntent())
+    }
+
+    // Where Developer options, USB debugging included, are switched off.
+    Function("openDeveloperSettings") {
+      openSettings(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) ||
+        openSettings(Intent(Settings.ACTION_SETTINGS))
     }
 
     Function("openAppSettings") {
@@ -130,6 +142,7 @@ class AppBlockerModule : Module() {
     "overlayAllowed" to Access.overlay(context),
     "watcherRunning" to (bundle?.getBoolean("watcherRunning") ?: false),
     "batteryOptimized" to isBatteryOptimized(),
+    "developerOptions" to Access.developerOptions(context),
     "enabled" to (bundle?.getBoolean("enabled") ?: false),
     "blocked" to (bundle?.getStringArrayList("blocked") ?: arrayListOf<String>()).toList(),
     "sites" to (bundle?.getStringArrayList("sites") ?: arrayListOf<String>()).toList(),
