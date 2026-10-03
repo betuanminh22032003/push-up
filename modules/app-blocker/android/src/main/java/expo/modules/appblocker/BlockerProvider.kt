@@ -10,11 +10,11 @@ import android.util.Log
 /**
  * The door into the blocker's own process.
  *
- * The service, the block screen and [BlockerStore] run in ":blocker", apart
- * from the React Native process. That process holds the camera, a WebView and
- * the JS engine; it is the one the system reclaims under memory pressure and
- * the one a JS crash takes down. Before the split, either took the service
- * with it, and on realme the system then declined to restart it.
+ * The two watchers, the block screen and [BlockerStore] run in ":blocker",
+ * apart from the React Native process. That process holds the camera, a
+ * WebView and the JS engine; it is the one the system reclaims under memory
+ * pressure and the one a JS crash takes down. Before the split, either took the
+ * service with it, and on realme the system then declined to restart it.
  *
  * The JS module in the main process reaches the state only through [call],
  * which runs here, so there is exactly one copy of it.
@@ -37,9 +37,15 @@ class BlockerProvider : ContentProvider() {
         SET_SHOW_TIMER -> BlockerStore.setShowTimer(extras?.getBoolean(VALUE) == true)
         SET_LABELS -> BlockerStore.setLabels(labelsFrom(extras?.getBundle(VALUE)))
         CONSUME_EARN -> return Bundle().apply { putLong(VALUE, BlockerStore.consumeEarnRequest()) }
+        // The service runs here. Once it goes, its shutdown hands over to the watcher.
+        SWITCH_OFF_ACCESSIBILITY -> return Bundle().apply { putBoolean(VALUE, BlockerService.switchOff(ctx)) }
         RESET -> BlockerStore.reset()
         else -> return null
       }
+      // The app calls while it is in front, when a foreground service may be
+      // started: bring the watcher in line with the state, and with
+      // permissions just granted or withdrawn in settings.
+      WatchService.sync(ctx)
       stateBundle()
     } catch (e: RuntimeException) {
       Log.w(TAG, "call $method failed", e)
@@ -57,8 +63,9 @@ class BlockerProvider : ContentProvider() {
       putBoolean("showTimer", s.showTimer)
       putLong("earnRequestedAt", s.earnRequestedAt)
       putLong("serviceConnectedAt", s.serviceConnectedAt)
-      // Only this process can tell: the service runs here.
+      // Only this process can tell: the watchers run here.
       putBoolean("serviceRunning", BlockerService.isRunning)
+      putBoolean("watcherRunning", WatchService.isRunning)
     }
   }
 
@@ -100,6 +107,7 @@ class BlockerProvider : ContentProvider() {
     const val SET_SHOW_TIMER = "setShowTimer"
     const val SET_LABELS = "setLabels"
     const val CONSUME_EARN = "consumeEarnRequest"
+    const val SWITCH_OFF_ACCESSIBILITY = "switchOffAccessibility"
     const val RESET = "reset"
     const val VALUE = "value"
 

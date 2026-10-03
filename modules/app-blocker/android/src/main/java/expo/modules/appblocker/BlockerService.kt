@@ -6,31 +6,21 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.PixelFormat
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import android.util.Log
-import android.util.TypedValue
-import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
-import android.widget.TextView
-import android.widget.Toast
-import expo.modules.appblocker.BlockerEngine.Command
 import expo.modules.appblocker.BlockerEngine.Seen
-import java.util.Locale
 
 /**
- * Looks at what is on screen and carries out [BlockerEngine]'s decisions:
- * spend the balance while a blocked app or site is in use, cover it with the
- * block screen once nothing is left.
+ * The accessibility way of blocking: looks at what is on screen and hands it
+ * to [Enforcer], which spends the balance while a blocked app or site is in
+ * use and covers it with the block screen once nothing is left.
  *
  * It looks on two triggers, because either one alone misses things. Window
  * events give a fast reaction. A heartbeat every second, while the screen is on
@@ -41,15 +31,34 @@ import java.util.Locale
  * Every app window on screen counts, not only the focused one, so split
  * screen, floating windows and picture-in-picture cannot slip past. In a
  * browser the address bar is read, so a blocked app's website is blocked too.
+ *
+ * Many banking apps refuse to open while any accessibility service is on.
+ * When the user switches this one off for them, in settings or with one tap
+ * in the blocker tab ([switchOff]), [WatchService] takes over the apps (not
+ * the sites), if its permissions are granted.
  */
 class BlockerService : AccessibilityService() {
   private val handler = Handler(Looper.getMainLooper())
-  private val engine = BlockerEngine()
 
-  private var lastTickAt = 0L
-  private var ticksSinceSave = 0
-  private var warnedLow = false
-  private var lastToastAt = 0L
+  private val enforcer = Enforcer(
+    this,
+    object : Enforcer.Host {
+      // An accessibility overlay needs no "draw over other apps" permission.
+      override val overlayType = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+      override val inCharge: Boolean
+        get() = connected
+
+      override fun pressBack() {
+        performGlobalAction(GLOBAL_ACTION_BACK)
+      }
+
+      override fun escalate(target: Seen.Blocked) {
+        performGlobalAction(GLOBAL_ACTION_HOME)
+      }
+
+      override fun closePip(target: Seen.Blocked): Boolean = closePipWindow(target)
+    },
+  )
 
   private var lastEventPackage: String? = null
   private var protectedPackages: Set<String> = emptySet()
@@ -68,7 +77,6 @@ class BlockerService : AccessibilityService() {
   /** Picture-in-picture windows seen in the last look, to close on a block. */
   private val pipRoots = HashMap<String, AccessibilityNodeInfo>()
 
-  private var timerView: TextView? = null
   private var connected = false
   private var evaluatePending = false
   private var beatPending = false
@@ -83,6 +91,15 @@ class BlockerService : AccessibilityService() {
     beatPending = false
     safely("beat") { beat() }
     safely("reschedule") { ensureBeat() } // even if the beat failed, keep beating
+  }
+
+  private val storeListener: () -> Unit = {
+    handler.post {
+      safely("store change") {
+        scheduleEvaluate(0L)
+        ensureBeat()
+      }
+    }
   }
 
   private val screenReceiver = object : BroadcastReceiver() {
@@ -114,14 +131,7 @@ class BlockerService : AccessibilityService() {
     } catch (e: RuntimeException) {
       emptySet()
     } + KNOWN_BROWSERS - protectedPackages
-    BlockerStore.onChange = {
-      handler.post {
-        safely("store change") {
-          scheduleEvaluate(0L)
-          ensureBeat()
-        }
-      }
-    }
+    BlockerStore.addListener(storeListener)
 
     val filter = IntentFilter().apply {
       addAction(Intent.ACTION_SCREEN_OFF)
@@ -142,6 +152,9 @@ class BlockerService : AccessibilityService() {
 
     connected = true
     isRunning = true
+    instance = this
+    // The usage-events watcher, if it runs, waits while this one blocks.
+    WatchService.engineChanged(this)
     scheduleEvaluate(0L)
     ensureBeat()
   }
@@ -169,29 +182,24 @@ class BlockerService : AccessibilityService() {
     super.onDestroy()
   }
 
-  private inline fun safely(what: String, block: () -> Unit) {
-    try {
-      block()
-    } catch (t: Throwable) {
-      Log.w(TAG, "$what failed", t)
-    }
-  }
-
   private fun shutdown() {
     if (!connected) return
-    execute(engine.step(Seen.Clear, 0L, false, SystemClock.elapsedRealtime()))
+    enforcer.release()
     connected = false
     isRunning = false
+    if (instance === this) instance = null
     handler.removeCallbacksAndMessages(null)
     evaluatePending = false
     beatPending = false
     pipRoots.clear()
-    BlockerStore.onChange = null
+    BlockerStore.removeListener(storeListener)
     try {
       unregisterReceiver(screenReceiver)
     } catch (e: IllegalArgumentException) {
       // never registered
     }
+    // Switched off, often for a banking app: the usage-events watcher takes over.
+    WatchService.engineChanged(this)
   }
 
   /** A burst of window events (an app launching) is looked at once, after it settles. */
@@ -216,30 +224,13 @@ class BlockerService : AccessibilityService() {
   private fun beat() {
     if (!connected) return
     evaluate()
-    if (engine.metering != null) {
-      val remaining = spendSinceLastTick()
-      if (remaining <= 0L) {
-        execute(engine.timeUp(SystemClock.elapsedRealtime()))
-      } else {
-        syncTimer(remaining)
-        if (!warnedLow && remaining <= LOW_TIME_MS) {
-          warnedLow = true
-          toast(BlockerStore.label("lowTime", "Less than a minute of fun time left"))
-        }
-        ticksSinceSave += 1
-        if (ticksSinceSave >= SAVE_EVERY_TICKS) {
-          ticksSinceSave = 0
-          BlockerStore.saveBalance()
-        }
-      }
-    }
+    enforcer.tick()
   }
 
   private fun evaluate() {
     if (!connected) return
     val state = BlockerStore.snapshot()
-    val seen = if (state.active && screenInUse()) look(state) else Seen.Clear
-    execute(engine.step(seen, state.balanceMs, BlockActivity.isVisible, SystemClock.elapsedRealtime()))
+    enforcer.see(if (state.active && screenInUse()) look(state) else Seen.Clear)
   }
 
   private fun screenInUse(): Boolean {
@@ -350,200 +341,25 @@ class BlockerService : AccessibilityService() {
     return null
   }
 
-  // --- acting ---------------------------------------------------------------------
-
-  private fun execute(commands: List<Command>) {
-    for (command in commands) {
-      when (command) {
-        is Command.StartMeter -> startMeter()
-        Command.StopMeter -> stopMeter()
-        is Command.Block -> block(command.target, command.timeUp)
-        is Command.GoBack -> {
-          performGlobalAction(GLOBAL_ACTION_BACK)
-          blockedToast(command.target)
-        }
-        is Command.GoHome -> {
-          performGlobalAction(GLOBAL_ACTION_HOME)
-          blockedToast(command.target)
-        }
-        is Command.ClosePip -> closePip(command.target)
-      }
-    }
-  }
-
-  private fun startMeter() {
-    lastTickAt = SystemClock.elapsedRealtime()
-    ticksSinceSave = 0
-    warnedLow = false
-    syncTimer(BlockerStore.snapshot().balanceMs)
-  }
-
-  private fun stopMeter() {
-    spendSinceLastTick()
-    hideTimer()
-    BlockerStore.saveBalance()
-  }
-
-  /** Charges the time since the last tick, measured on the monotonic clock. */
-  private fun spendSinceLastTick(): Long {
-    val now = SystemClock.elapsedRealtime()
-    val spent = (now - lastTickAt).coerceAtLeast(0L)
-    lastTickAt = now
-    return BlockerStore.spend(spent)
-  }
-
-  private fun block(target: Seen.Blocked, timeUp: Boolean) {
-    if (!target.isSite) {
-      showBlockScreen(target, timeUp)
-      return
-    }
-    // Leave the page first, so reopening the browser does not land on it
-    // again; the block screen follows once Back has reached the browser.
-    performGlobalAction(GLOBAL_ACTION_BACK)
-    handler.postDelayed(
-      { safely("block screen") { if (connected) showBlockScreen(target, timeUp) } },
-      SITE_BACK_SETTLE_MS,
-    )
-  }
-
-  /**
-   * NO_USER_ACTION keeps the covered app from treating this as the user
-   * leaving, which is what sends video apps into picture-in-picture. If the
-   * start is refused (some OEM builds restrict it), the heartbeat escalates.
-   */
-  private fun showBlockScreen(target: Seen.Blocked, timeUp: Boolean) {
-    val intent = Intent(this, BlockActivity::class.java)
-      .addFlags(
-        Intent.FLAG_ACTIVITY_NEW_TASK or
-          Intent.FLAG_ACTIVITY_CLEAR_TOP or
-          Intent.FLAG_ACTIVITY_NO_USER_ACTION,
-      )
-      .putExtra(BlockActivity.EXTRA_LABEL, target.label)
-      .putExtra(BlockActivity.EXTRA_ICON_PACKAGE, target.iconPackage)
-      .putExtra(BlockActivity.EXTRA_TIME_UP, timeUp)
-    try {
-      startActivity(intent)
-    } catch (e: RuntimeException) {
-      // the next heartbeat sees the app still in front and escalates
-    }
-  }
-
   /**
    * Picture-in-picture floats above every activity, so the block screen cannot
    * cover it. The system lets accessibility services dismiss it, or failing
    * that expand it, after which it is blocked like any app.
    */
-  private fun closePip(target: Seen.Blocked) {
-    val root = pipRoots[target.key]
-    val done = try {
-      root != null && (
-        root.performAction(AccessibilityNodeInfo.ACTION_DISMISS) ||
-          root.performAction(AccessibilityNodeInfo.ACTION_EXPAND)
-        )
+  private fun closePipWindow(target: Seen.Blocked): Boolean {
+    val root = pipRoots[target.key] ?: return false
+    return try {
+      root.performAction(AccessibilityNodeInfo.ACTION_DISMISS) ||
+        root.performAction(AccessibilityNodeInfo.ACTION_EXPAND)
     } catch (e: RuntimeException) {
       false
     }
-    if (done) blockedToast(target)
-  }
-
-  private fun blockedToast(target: Seen.Blocked) {
-    val now = SystemClock.elapsedRealtime()
-    if (now - lastToastAt < TOAST_GAP_MS) return
-    lastToastAt = now
-    val template = BlockerStore.label("blockedToast", "{app} is blocked. Earn time with push-ups.")
-    toast(template.replace("{app}", target.label))
-  }
-
-  // --- the countdown pill -----------------------------------------------------
-
-  /** Shows, updates or hides the small countdown over the blocked app. */
-  private fun syncTimer(remainingMs: Long) {
-    if (!BlockerStore.snapshot().showTimer) {
-      hideTimer()
-      return
-    }
-    val view = timerView ?: addTimerView() ?: return
-    view.text = "⏱ ${formatRemaining(remainingMs)}"
-    val color = when {
-      remainingMs <= 10_000L -> COLOR_DANGER
-      remainingMs <= LOW_TIME_MS -> COLOR_WARN
-      else -> COLOR_ACCENT
-    }
-    view.setTextColor(color)
-    (view.background as? GradientDrawable)?.setStroke(dp(1), color)
-  }
-
-  private fun addTimerView(): TextView? {
-    val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return null
-    val view = TextView(this).apply {
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-      typeface = Typeface.DEFAULT_BOLD
-      fontFeatureSettings = "tnum"
-      setPadding(dp(12), dp(6), dp(12), dp(6))
-      background = GradientDrawable().apply {
-        cornerRadius = dp(16).toFloat()
-        setColor(COLOR_PILL_BG)
-      }
-    }
-    // An accessibility overlay needs no "draw over other apps" permission, and
-    // with NOT_TOUCHABLE every tap goes straight through to the app below.
-    val params = WindowManager.LayoutParams(
-      WindowManager.LayoutParams.WRAP_CONTENT,
-      WindowManager.LayoutParams.WRAP_CONTENT,
-      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-      PixelFormat.TRANSLUCENT,
-    ).apply {
-      gravity = Gravity.TOP or Gravity.END
-      x = dp(12)
-      y = statusBarHeight() + dp(6)
-    }
-    return try {
-      wm.addView(view, params)
-      timerView = view
-      view
-    } catch (e: RuntimeException) {
-      null
-    }
-  }
-
-  private fun hideTimer() {
-    val view = timerView ?: return
-    timerView = null
-    try {
-      (getSystemService(Context.WINDOW_SERVICE) as? WindowManager)?.removeView(view)
-    } catch (e: RuntimeException) {
-      // already gone with the window token
-    }
-  }
-
-  private fun statusBarHeight(): Int {
-    val id = resources.getIdentifier("status_bar_height", "dimen", "android")
-    return if (id > 0) resources.getDimensionPixelSize(id) else dp(24)
-  }
-
-  private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
-
-  private fun toast(text: String) {
-    Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
   }
 
   companion object {
-    private const val TAG = "AppBlocker"
     private const val EVENT_SETTLE_MS = 120L
     private const val BEAT_MS = 1000L
-    private const val SAVE_EVERY_TICKS = 5
-    private const val LOW_TIME_MS = 60_000L
-    private const val SITE_BACK_SETTLE_MS = 400L
     private const val URL_BAR_RETRY_MS = 10_000L
-    private const val TOAST_GAP_MS = 3_000L
-
-    private const val COLOR_PILL_BG = 0xE60A0A0B.toInt()
-    private const val COLOR_ACCENT = 0xFF4ADE80.toInt()
-    private const val COLOR_WARN = 0xFFFBBF24.toInt()
-    private const val COLOR_DANGER = 0xFFF87171.toInt()
 
     /** Browsers that may not answer the generic web-link query. */
     private val KNOWN_BROWSERS = setOf(
@@ -590,17 +406,27 @@ class BlockerService : AccessibilityService() {
     var isRunning = false
       private set
 
-    /** "12:34", or "1:02:03" past an hour; rounded up so it reads 0:00 only at zero. */
-    fun formatRemaining(ms: Long): String {
-      val total = (ms.coerceAtLeast(0L) + 999L) / 1000L
-      val h = total / 3600L
-      val m = (total % 3600L) / 60L
-      val s = total % 60L
-      return if (h > 0L) {
-        String.format(Locale.ROOT, "%d:%02d:%02d", h, m, s)
-      } else {
-        String.format(Locale.ROOT, "%d:%02d", m, s)
+    /** The connected service, which [switchOff] reaches from the provider's thread. */
+    @Volatile
+    private var instance: BlockerService? = null
+
+    /**
+     * Switches the service off from the inside, as its switch in settings
+     * would, for a banking app: those refuse to open while it is on, whichever
+     * apps it watches. [WatchService] then takes over the apps. Android lets
+     * an app switch its service off, never back on; that is up to the user.
+     * False when it is still on, typically because the phone had already
+     * stopped it and there was nothing connected to ask.
+     */
+    fun switchOff(context: Context): Boolean {
+      val service = instance ?: return false
+      try {
+        // A binder call, so any thread will do.
+        service.disableSelf()
+      } catch (e: RuntimeException) {
+        return false
       }
+      return !Access.accessibilityEnabled(context)
     }
   }
 }

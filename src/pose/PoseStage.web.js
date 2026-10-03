@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fromMediaPipe, SKELETON_BONES } from './landmarks';
-import { createPushupAnalyzer, ISSUES } from './pushupAnalyzer';
+import { createAnalyzer, ISSUES } from './analyzers';
 import { useT } from '../i18n/I18nContext';
 import { colors } from '../theme/theme';
 
@@ -9,8 +9,9 @@ import { colors } from '../theme/theme';
  * Camera + pose detection for the web build.
  *
  * Everything here is glue: grab frames, run MediaPipe, hand normalised
- * landmarks to the analyser, draw the result. All the counting rules live in
- * pushupAnalyzer.js, which is why they can be tested without a camera.
+ * landmarks to the analyser for `exercise`, draw the result. All the counting
+ * rules live in the analysers (./analyzers), which is why they can be tested
+ * without a camera.
  *
  * Metro resolves this file only for web. The native build gets PoseStage.js,
  * which explains the dev-build requirement instead — expo-camera exposes no
@@ -69,7 +70,14 @@ const STALE_FRAME_MS = 250;
 /** Consecutive inference failures before we stop claiming everything is fine. */
 const MAX_CONSECUTIVE_ERRORS = 30;
 
-export function PoseStage({ active, paused, onRep, onFrame, analyzerOptions }) {
+export function PoseStage({
+  active,
+  paused,
+  onRep,
+  onFrame,
+  analyzerOptions,
+  exercise = 'pushup',
+}) {
   const t = useT();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -78,6 +86,21 @@ export function PoseStage({ active, paused, onRep, onFrame, analyzerOptions }) {
   const analyzerRef = useRef(null);
   const timerRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
+  /** Frame aspect of the running camera, kept to rebuild the analyser with. */
+  const aspectRef = useRef(1);
+  const exerciseRef = useRef(exercise);
+
+  // A different exercise needs a different analyser, but not a new camera or
+  // a model download: swap the analyser alone. While the camera is off there is
+  // none to swap, and the next start creates the right one.
+  useEffect(() => {
+    exerciseRef.current = exercise;
+    if (analyzerRef.current) {
+      analyzerRef.current = createAnalyzer(exercise, { ...analyzerOptions, aspect: aspectRef.current });
+    }
+    // analyzerOptions is read once per analyser, as in the camera effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercise]);
 
   // loading -> camera (stream live, model still downloading) -> ready | error
   const [phase, setPhase] = useState('loading');
@@ -239,9 +262,10 @@ export function PoseStage({ active, paused, onRep, onFrame, analyzerOptions }) {
         }
 
         landmarkerRef.current = landmarker;
-        analyzerRef.current = createPushupAnalyzer({
+        aspectRef.current = (video.videoWidth || 640) / (video.videoHeight || 480);
+        analyzerRef.current = createAnalyzer(exerciseRef.current, {
           ...analyzerOptions,
-          aspect: (video.videoWidth || 640) / (video.videoHeight || 480),
+          aspect: aspectRef.current,
         });
 
         setPhase('ready');

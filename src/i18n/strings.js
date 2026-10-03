@@ -35,6 +35,7 @@ const en = {
   'time.sec': '{n} sec',
   'time.min': '{n} min',
   'time.minSec': '{m} min {s} sec',
+  'time.decimal': '.',
 
   // --- home stats ---------------------------------------------------------
   'stat.total': 'Total',
@@ -64,10 +65,13 @@ const en = {
   'workout.restHint': 'Take a breath. Next set when the timer ends or when you are ready.',
   'workout.tapHold': 'HOLD, THEN RELEASE',
   'workout.tapTouch': 'TOUCH TO COUNT',
+  'workout.holdToUnlock': 'HOLD TO UNLOCK',
+  'workout.lockHint': 'Locked while the phone is on you. Press and hold to pause.',
   'workout.summaryTitle': 'Workout saved',
   'workout.summaryTest': 'Test complete',
   'workout.summaryDay': 'Day {day} complete',
   'workout.earned': '+{time} fun time',
+  'workout.exercisePicker': 'Choose an exercise',
 
   // --- buttons ------------------------------------------------------------
   'btn.start': 'Start',
@@ -90,6 +94,47 @@ const en = {
   'coach.notHorizontal': 'Get into a push-up position',
   'coach.bodySag': 'Keep your body straight',
   'coach.shallow': 'Go lower',
+  'coach.notUpright': 'Stand up straight',
+  'coach.notLying': 'Start lying on your back',
+  // Per-exercise wording, used instead of `coach.<issue>` where it exists.
+  'coach.squat.shallow': 'Squat lower',
+  'coach.situp.shallow': 'Come up higher',
+  'coach.jumpingjack.shallow': 'Hands all the way up',
+
+  // --- exercises (src/exercises/exercises.js) -----------------------------
+  // hint.<source>: how to set the phone up for that exercise and source.
+  'exercise.pushup': 'Push-ups',
+  'exercise.pushup.noun': 'push-ups',
+  'exercise.pushup.hint.ai':
+    'Prop the phone up so your whole body is in frame from the side, then push up. Form is checked on every rep.',
+  'exercise.pushup.hint.light':
+    'Phone on the floor, screen up. Cover the sensor at the top of the phone at the bottom of each rep.',
+  'exercise.pushup.hint.tap':
+    'Phone on the floor, screen up. Touch the screen with your nose at the bottom of each rep, then release.',
+  'exercise.squat': 'Squats',
+  'exercise.squat.noun': 'squats',
+  'exercise.squat.hint.ai':
+    'Prop the phone up 2–3 m in front of you, facing you, whole body in frame. Hips down close to knee height.',
+  'exercise.squat.hint.motion':
+    'Phone in a front trouser pocket, screen toward your thigh. Start standing straight, then squat.',
+  'exercise.squat.hint.tap':
+    'Hold the phone in front of you. Touch the screen at the bottom of each squat, then release.',
+  'exercise.situp': 'Sit-ups',
+  'exercise.situp.noun': 'sit-ups',
+  'exercise.situp.hint.ai':
+    'Prop the phone on the floor about 2 m to your side, whole body in frame side-on. Start lying on your back.',
+  'exercise.situp.hint.motion':
+    'Lie on your back holding the phone flat on your chest. Each sit-up counts as you lie back down.',
+  'exercise.situp.hint.tap':
+    'Phone on the floor beside you. Touch the screen each time you come up, then release.',
+  'exercise.jumpingjack': 'Jumping jacks',
+  'exercise.jumpingjack.noun': 'jumping jacks',
+  'exercise.jumpingjack.hint.ai':
+    'Prop the phone up 2–3 m in front of you, facing you, whole body and raised arms in frame. Hands all the way up.',
+  'exercise.jumpingjack.hint.motion':
+    'Hold the phone firmly in one hand, arm at your side to start. Each swing overhead and back is one rep.',
+  'exercise.jumpingjack.hint.tap':
+    'Hold the phone in one hand. Press the screen with your thumb once per jumping jack, then release.',
 
   // --- detection sources --------------------------------------------------
   'source.ai': 'AI camera',
@@ -101,20 +146,25 @@ const en = {
   'source.tap': 'Tap',
   'source.tap.hint':
     'Phone on the floor, screen up. Touch the screen with your nose at the bottom of each rep, then release.',
+  'source.motion': 'Motion',
+  'source.motion.hint':
+    'Keep the phone on your body the way the exercise describes. Each time it tilts away and back is one rep.',
 
   // --- pose stage (camera) ------------------------------------------------
   'pose.starting': 'Starting camera',
   'pose.checkingPermission': 'Checking camera permission…',
   'pose.asking': 'Asking for the camera…',
   'pose.needCamera': 'Camera access needed',
-  'pose.allowCamera': 'Allow camera access to count push-ups with the camera.',
+  'pose.allowCamera': 'Allow camera access to count your reps with the camera.',
   'pose.denied':
-    'Camera access was denied. Enable it for this app in your device settings, or switch to Sensor or Tap mode.',
+    'Camera access was denied. Enable it for this app in your device settings, or switch to another mode, such as Tap.',
   'pose.loadingModel': 'Loading the model… you can frame yourself now',
   'pose.problem': 'Detector problem',
   'pose.loadFailed': 'Could not load the detector ({reason}). AI camera needs an internet connection the first time.',
   'pose.httpFailed': 'Detector page returned HTTP {code}. Try again in a moment.',
   'pose.viewCrashed': 'The camera view stopped unexpectedly. End the set and start again.',
+  'pose.outdated':
+    'The online detector is still an older version that only counts push-ups. Switch to another mode, such as Tap, for now; it updates by itself once the new version is published.',
 
   // --- notices ------------------------------------------------------------
   'notice.nothingSaved': 'No reps counted, nothing saved.',
@@ -144,7 +194,7 @@ const en = {
   'confirm.restart': 'Restart',
 
   // --- share --------------------------------------------------------------
-  'share.text': 'I just did {reps} push-ups in {time} with Hít Đất AI 💪',
+  'share.text': 'I just did {reps} {exercise} in {time} with Hít Đất AI 💪',
   'share.sets': ' ({sets} sets)',
 
   // --- program ------------------------------------------------------------
@@ -186,6 +236,8 @@ const en = {
   'progress.empty': 'No workouts yet',
   'progress.emptyBody': 'Finish a workout and it will show up here.',
   'progress.weekTotal': '{reps} reps this week',
+  'progress.filter': 'Show exercise',
+  'progress.filterAll': 'All',
 
   // --- session rows -------------------------------------------------------
   'session.today': 'Today',
@@ -240,6 +292,14 @@ const en = {
   'ach.program_day.body': 'Complete a program day',
   'ach.program_done.title': 'Graduate',
   'ach.program_done.body': 'Complete the 6-week program',
+  'ach.squats_100.title': 'Leg day',
+  'ach.squats_100.body': '100 squats in total',
+  'ach.situps_100.title': 'Six-pack',
+  'ach.situps_100.body': '100 sit-ups in total',
+  'ach.jacks_200.title': 'Star jumper',
+  'ach.jacks_200.body': '200 jumping jacks in total',
+  'ach.all_rounder.title': 'All-rounder',
+  'ach.all_rounder.body': 'Do every exercise at least once',
 
   // --- app blocker --------------------------------------------------------
   'blocker.title': 'App blocker',
@@ -248,6 +308,7 @@ const en = {
   'blocker.balance': 'Fun time left',
   'blocker.earn': 'Do push-ups to earn more',
   'blocker.statusOn': 'Blocking {apps}',
+  'blocker.statusOnApps': 'Blocking {apps}, without Accessibility',
   'blocker.appOne': '1 app',
   'blocker.appMany': '{n} apps',
   'blocker.siteOne': '1 site',
@@ -255,25 +316,50 @@ const en = {
   'blocker.and': 'and',
   'blocker.statusOff': 'Blocking is off',
   'blocker.statusNoApps': 'Choose at least one app or site to block',
-  'blocker.statusSwitchedOff': 'Blocking stopped: the accessibility permission was switched off',
-  'blocker.statusStalled': 'Blocking stopped: the service is not running',
-  'blocker.statusNoService': 'Turn on the accessibility permission to start blocking',
+  'blocker.statusSwitchedOff': 'Blocking stopped: Accessibility was switched off',
+  'blocker.statusStalled': 'Blocking stopped: the phone stopped the blocker',
+  'blocker.statusNeedsPermission': 'Allow the two permissions below to start blocking',
+  'blocker.statusSitesNeedA11y': 'Websites can only be blocked with Accessibility on',
   'blocker.statusStarting': 'Starting the blocker…',
   'blocker.alertTitle': 'Blocking is not running',
   'blocker.alertSwitchedOff':
-    'Android switched the accessibility permission off, usually because the phone closed Hít Đất AI in the background (realme, OPPO and Xiaomi phones do this). Turn it back on, then follow "Keep blocking running" below so it stays on.',
+    'Accessibility is off: you switched it off, or the phone closed Hít Đất AI in the background (realme, OPPO and Xiaomi phones do this). Turn it back on, then follow "Keep blocking running" below so it stays on.',
+  'blocker.alertOrUsage':
+    'Or block without Accessibility, so banking apps keep working: allow "See which app is open" and "Display over other apps" below.',
   'blocker.alertStalled':
     'The permission is on, but the phone stopped the service and did not let it restart. In Accessibility, open Hít Đất AI, switch it off and on again.',
+  'blocker.alertWatcher':
+    'Both permissions are on, but the phone stopped the blocker. Allow Hít Đất AI to auto-launch and turn battery optimisation off for it, then open the app again.',
   'blocker.alertPrevent':
     'So it does not happen again, allow Hít Đất AI to auto-launch and lock it in Recents (steps below).',
   'blocker.alertTurnOn': 'Turn it back on',
+  'blocker.alertUseUsage': 'Block without Accessibility',
   'blocker.alertOpen': 'Open Accessibility',
   'blocker.sectionBlocking': 'Blocking',
   'blocker.toggle': 'Block apps',
-  'blocker.permission': 'Accessibility permission',
-  'blocker.permissionOn': 'On. The blocker can see which app is open.',
-  'blocker.permissionOff': 'Needed to notice when a blocked app opens. Only the app name is checked.',
+  'blocker.waysNote':
+    'The first two are enough to block apps. When you open a banking app the blocker steps aside, so most keep working; Accessibility is only needed to block websites too.',
+  'blocker.usage': 'See which app is open',
+  'blocker.usageOn': 'On (usage access).',
+  'blocker.usageOff':
+    'Usage access, to notice when a blocked app opens. Only the app is checked, and banking apps are not affected.',
+  'blocker.overlay': 'Display over other apps',
+  'blocker.overlayOn': 'On.',
+  'blocker.overlayOff': 'To put the block screen and the countdown over a blocked app.',
+  'blocker.permission': 'Accessibility (optional)',
+  'blocker.permissionOn':
+    'On: websites are blocked too. Banking apps refuse to open while it is on, and it cannot be set to leave them out. To use one, turn it off: apps stay blocked.',
+  'blocker.permissionOnOnly':
+    'On. Banking apps refuse to open while it is on. To use one and keep apps blocked, allow the two permissions above, then turn this off.',
+  'blocker.permissionOff':
+    'Also blocks websites in browsers. Many banking apps will not open while any app has Accessibility on.',
   'blocker.permissionButton': 'Turn on',
+  'blocker.permissionManage': 'Settings',
+  'blocker.permissionSwitchOff': 'Turn off',
+  'blocker.devOptions': 'Developer options',
+  'blocker.devOptionsOn':
+    'On. Since March 2026 many banking apps close while Developer options or USB debugging is on, even with Accessibility off. Switch it off at the top of that screen.',
+  'blocker.devOptionsButton': 'Open',
   'blocker.restrictedHint':
     'Greyed out, or Android says "Restricted setting"? Open app info, tap ⋮ in the top corner, choose "Allow restricted settings", then try again.',
   'blocker.openAppInfo': 'Open app info',
@@ -289,6 +375,7 @@ const en = {
   'blocker.sectionSites': 'Blocked websites ({n})',
   'blocker.sitesBody':
     "In a browser (Chrome, Cốc Cốc, Edge, Samsung Internet…) these are blocked too. The chosen apps' own sites are included automatically.",
+  'blocker.sitesNeedA11y': 'Websites are only blocked while Accessibility is on.',
   'blocker.siteAuto': 'with the app',
   'blocker.sitePlaceholder': 'e.g. vnexpress.net',
   'blocker.siteAdd': 'Add',
@@ -296,11 +383,12 @@ const en = {
   'blocker.removeSite': 'Unblock {site}',
   'blocker.sectionRate': 'Earning',
   'blocker.rate': 'Each push-up earns',
+  'blocker.ratePerExercise': 'By exercise, one rep earns: {list}',
   'blocker.timer': 'Countdown on screen',
   'blocker.timerBody': 'A small timer over a blocked app while your time runs.',
   'blocker.keepTitle': 'Keep blocking running',
   'blocker.keepBody':
-    'Some phones (realme, OPPO, Xiaomi, vivo…) close apps in the background, and Android then switches the accessibility permission off, so blocking works one moment and not the next. To stop that:',
+    'Some phones (realme, OPPO, Xiaomi, vivo…) close apps in the background, which stops blocking and can switch Accessibility off, so it works one moment and not the next. To stop that:',
   'blocker.keep1':
     'Lock Hít Đất AI in Recents: open the recent apps, then pull its card down or open its menu and choose Lock.',
   'blocker.keep2':
@@ -314,7 +402,7 @@ const en = {
   'blocker.howBody':
     'Finish a workout and its reps turn into fun time. Open a blocked app or site and the time counts down while it is on screen, split screen and floating windows included; it pauses when you leave it or lock the phone. At zero it is covered until you do more push-ups. You can switch blocking off here at any time.',
   'blocker.privacy':
-    'The blocker only checks which app is open and, in a browser, the domain of the page. It never reads anything else on screen or what you type, and nothing leaves your phone.',
+    'The blocker only checks which app is open and, with Accessibility on, the domain of the page in a browser. It never reads anything else on screen or what you type, and nothing leaves your phone.',
   'blocker.androidOnly': 'The app blocker is only available on Android.',
   'blocker.expoGo':
     'Expo Go cannot run the app blocker, because it needs native code. Install a build of the app instead (npm run build:apk).',
@@ -323,7 +411,7 @@ const en = {
   'blocker.chipOff': 'Blocking off',
   'blocker.disclosureTitle': 'Allow accessibility access?',
   'blocker.disclosureBody':
-    "To block apps, Hít Đất AI uses Android's Accessibility Service to see which app is open on your screen.",
+    "To block websites too, Hít Đất AI uses Android's Accessibility Service to see which app is open on your screen. Note that many banking apps refuse to open while any app has it on.",
   'blocker.disclosure1':
     'It only checks the name of the app in front and, in a browser, the domain of the page. It does not read anything else on the screen, your messages or what you type.',
   'blocker.disclosure2': 'Nothing is recorded as history, and nothing leaves your phone.',
@@ -333,6 +421,17 @@ const en = {
     'On the next screen, find the entry with "Hít Đất AI" in its name (often under "Downloaded apps" or "Installed apps") and switch it on.',
   'blocker.disclosureAgree': 'Agree and open Settings',
   'blocker.disclosureLater': 'Not now',
+  'blocker.usageDisclosureTitle': 'Block without Accessibility?',
+  'blocker.usageDisclosureBody':
+    'Instead of Accessibility, Hít Đất AI can use two other Android permissions, which banking apps generally do not object to.',
+  'blocker.usageDisclosure1':
+    '"Usage access" tells it which app is in front. Only the app is checked, and no history is kept.',
+  'blocker.usageDisclosure2':
+    '"Display over other apps" lets it put the block screen and the countdown over a blocked app.',
+  'blocker.usageDisclosure3':
+    'A notification stays while blocking is on. Websites are not blocked this way, and nothing leaves your phone.',
+  'blocker.usageDisclosureSteps':
+    'On the next screen, find "Hít Đất AI" and switch it on, then come back here for the other permission.',
 
   // --- app picker ---------------------------------------------------------
   'picker.title': 'Choose apps to block',
@@ -352,6 +451,9 @@ const en = {
   'native.homeButton': 'Go to the home screen',
   'native.lowTime': 'Less than a minute of fun time left',
   'native.blockedToast': '{app} is blocked. Earn time with push-ups.',
+  'native.watchTitle': 'Blocking apps',
+  'native.watchBody': 'Every push-up earns more fun time.',
+  'native.watchChannel': 'App blocker',
 
   // --- settings -----------------------------------------------------------
   'settings.title': 'Settings',
@@ -362,7 +464,7 @@ const en = {
   'settings.data': 'Data',
   'settings.about': 'About',
   'settings.dailyGoal': 'Daily goal',
-  'settings.dailyGoalBody': 'Reps per day. Today counts toward it in every mode.',
+  'settings.dailyGoalBody': 'Reps per day. Every exercise and every counting mode counts toward it.',
   'settings.countdown': 'Countdown before a set',
   'settings.countdownBody': 'Time to get into position after pressing Start.',
   'settings.rest': 'Rest between sets',
@@ -397,7 +499,7 @@ const en = {
   'onboarding.title': 'Welcome to Hít Đất AI',
   'onboarding.s1.title': 'Hands-free counting',
   'onboarding.s1.body':
-    'Prop the phone up to your side so your whole body is in frame: the AI camera counts every rep and coaches your form. No camera? Put the phone on the floor and use the sensor, or tap the screen with your nose.',
+    'Push-ups, squats, sit-ups or jumping jacks: pick one on the Workout tab. Prop the phone up so your whole body is in frame, and the AI camera counts every rep and coaches your form. No camera? Use the sensor for push-ups, carry the phone for the others (pocket for squats, chest for sit-ups, hand for jumping jacks), or tap the screen. Each exercise shows where to put the phone.',
   'onboarding.s2.title': 'Sets, rest and voice',
   'onboarding.s2.body':
     'Every set starts with a countdown so you can get into position, and ends with a rest timer. Turn on voice count and hear the number instead of looking.',
@@ -434,6 +536,7 @@ const vi = {
   'time.sec': '{n} giây',
   'time.min': '{n} phút',
   'time.minSec': '{m} phút {s} giây',
+  'time.decimal': ',',
 
   'stat.total': 'Tổng',
   'stat.today': 'Hôm nay',
@@ -460,10 +563,13 @@ const vi = {
   'workout.restHint': 'Thở đều. Set tiếp theo khi hết giờ hoặc khi bạn sẵn sàng.',
   'workout.tapHold': 'GIỮ, RỒI THẢ',
   'workout.tapTouch': 'CHẠM ĐỂ ĐẾM',
+  'workout.holdToUnlock': 'GIỮ ĐỂ MỞ KHOÁ',
+  'workout.lockHint': 'Màn hình khoá khi điện thoại đang ở trên người. Nhấn giữ để tạm dừng.',
   'workout.summaryTitle': 'Đã lưu buổi tập',
   'workout.summaryTest': 'Kiểm tra xong',
   'workout.summaryDay': 'Hoàn thành ngày {day}',
   'workout.earned': '+{time} giải trí',
+  'workout.exercisePicker': 'Chọn bài tập',
 
   'btn.start': 'Bắt đầu',
   'btn.startDay': 'Bắt đầu ngày {day}',
@@ -484,6 +590,44 @@ const vi = {
   'coach.notHorizontal': 'Vào tư thế hít đất',
   'coach.bodySag': 'Giữ thẳng người',
   'coach.shallow': 'Xuống thấp hơn',
+  'coach.notUpright': 'Đứng thẳng người lên',
+  'coach.notLying': 'Bắt đầu từ tư thế nằm ngửa',
+  'coach.squat.shallow': 'Hạ hông thấp hơn',
+  'coach.situp.shallow': 'Gập người lên cao hơn',
+  'coach.jumpingjack.shallow': 'Đưa tay lên hết qua đầu',
+
+  'exercise.pushup': 'Hít đất',
+  'exercise.pushup.noun': 'hít đất',
+  'exercise.pushup.hint.ai':
+    'Dựng điện thoại để thấy toàn thân bạn từ bên hông, rồi hít đất. Tư thế được kiểm tra ở mỗi cái.',
+  'exercise.pushup.hint.light':
+    'Đặt điện thoại trên sàn, màn hình hướng lên. Che cảm biến ở đỉnh máy khi xuống thấp nhất mỗi cái.',
+  'exercise.pushup.hint.tap':
+    'Đặt điện thoại trên sàn, màn hình hướng lên. Chạm mũi vào màn hình khi xuống thấp nhất, rồi nhấc lên.',
+  'exercise.squat': 'Squat',
+  'exercise.squat.noun': 'squat',
+  'exercise.squat.hint.ai':
+    'Dựng điện thoại cách 2–3 m trước mặt, hướng về bạn, thấy toàn thân. Mỗi cái hạ hông gần ngang gối.',
+  'exercise.squat.hint.motion':
+    'Bỏ điện thoại vào túi quần trước, màn hình áp vào đùi. Bắt đầu ở tư thế đứng thẳng, rồi squat.',
+  'exercise.squat.hint.tap':
+    'Cầm điện thoại trước mặt. Chạm vào màn hình khi xuống thấp nhất mỗi cái, rồi thả ra.',
+  'exercise.situp': 'Gập bụng',
+  'exercise.situp.noun': 'gập bụng',
+  'exercise.situp.hint.ai':
+    'Dựng điện thoại trên sàn, cách bên hông bạn khoảng 2 m, thấy toàn thân. Bắt đầu từ tư thế nằm ngửa.',
+  'exercise.situp.hint.motion':
+    'Nằm ngửa, giữ điện thoại áp phẳng trên ngực. Mỗi cái được đếm khi bạn nằm xuống lại.',
+  'exercise.situp.hint.tap':
+    'Đặt điện thoại trên sàn cạnh bạn. Chạm vào màn hình mỗi lần gập người lên, rồi thả ra.',
+  'exercise.jumpingjack': 'Bật nhảy',
+  'exercise.jumpingjack.noun': 'bật nhảy',
+  'exercise.jumpingjack.hint.ai':
+    'Dựng điện thoại cách 2–3 m trước mặt, hướng về bạn, thấy toàn thân cả khi giơ tay. Đưa tay lên hết cỡ.',
+  'exercise.jumpingjack.hint.motion':
+    'Cầm chắc điện thoại trong một tay, bắt đầu với tay buông dọc người. Mỗi lần vung qua đầu rồi hạ là một cái.',
+  'exercise.jumpingjack.hint.tap':
+    'Cầm điện thoại trong một tay. Mỗi cái bật nhảy, ấn ngón cái vào màn hình rồi thả ra.',
 
   'source.ai': 'Camera AI',
   'source.ai.hint':
@@ -494,19 +638,24 @@ const vi = {
   'source.tap': 'Chạm',
   'source.tap.hint':
     'Đặt điện thoại trên sàn, màn hình hướng lên. Chạm mũi vào màn hình khi xuống thấp nhất, rồi nhấc lên.',
+  'source.motion': 'Chuyển động',
+  'source.motion.hint':
+    'Giữ điện thoại trên người theo hướng dẫn của bài tập. Mỗi lần máy nghiêng đi rồi trở lại là một cái.',
 
   'pose.starting': 'Đang bật camera',
   'pose.checkingPermission': 'Đang kiểm tra quyền camera…',
   'pose.asking': 'Đang xin quyền camera…',
   'pose.needCamera': 'Cần quyền camera',
-  'pose.allowCamera': 'Cho phép dùng camera để đếm hít đất bằng camera.',
+  'pose.allowCamera': 'Cho phép dùng camera để đếm số cái bằng camera.',
   'pose.denied':
-    'Quyền camera đã bị từ chối. Bật lại trong cài đặt của máy, hoặc chuyển sang chế độ Cảm biến hoặc Chạm.',
+    'Quyền camera đã bị từ chối. Bật lại trong cài đặt của máy, hoặc chuyển sang chế độ khác, ví dụ Chạm.',
   'pose.loadingModel': 'Đang tải mô hình… bạn có thể vào khung hình',
   'pose.problem': 'Lỗi nhận diện',
   'pose.loadFailed': 'Không tải được bộ nhận diện ({reason}). Camera AI cần internet ở lần đầu.',
   'pose.httpFailed': 'Trang nhận diện trả về HTTP {code}. Thử lại sau ít phút.',
   'pose.viewCrashed': 'Khung camera bị dừng đột ngột. Hãy kết thúc hiệp và bắt đầu lại.',
+  'pose.outdated':
+    'Trang nhận diện trực tuyến vẫn là bản cũ, chỉ đếm được hít đất. Tạm thời hãy chuyển sang chế độ khác, ví dụ Chạm; trang sẽ tự cập nhật khi bản mới được phát hành.',
 
   'notice.nothingSaved': 'Không đếm được cái nào, không lưu.',
   'notice.saved': 'Đã lưu {reps} cái trong {time}.',
@@ -533,7 +682,7 @@ const vi = {
   'confirm.restartBody': 'Tiến độ ngày sẽ được đặt lại. Lịch sử tập vẫn giữ nguyên.',
   'confirm.restart': 'Bắt đầu lại',
 
-  'share.text': 'Tôi vừa hít đất {reps} cái trong {time} với Hít Đất AI 💪',
+  'share.text': 'Tôi vừa tập {reps} cái {exercise} trong {time} với Hít Đất AI 💪',
   'share.sets': ' ({sets} set)',
 
   'program.title': 'Chương trình 6 tuần',
@@ -573,6 +722,8 @@ const vi = {
   'progress.empty': 'Chưa có buổi tập nào',
   'progress.emptyBody': 'Tập xong một buổi, nó sẽ hiện ở đây.',
   'progress.weekTotal': '{reps} cái tuần này',
+  'progress.filter': 'Lọc theo bài tập',
+  'progress.filterAll': 'Tất cả',
 
   'session.today': 'Hôm nay',
   'session.yesterday': 'Hôm qua',
@@ -593,19 +744,19 @@ const vi = {
   'ach.first_workout.title': 'Buổi đầu tiên',
   'ach.first_workout.body': 'Hoàn thành buổi tập đầu tiên',
   'ach.reps_100.title': 'Một trăm',
-  'ach.reps_100.body': 'Tổng 100 cái',
+  'ach.reps_100.body': 'Tổng 100 cái hít đất',
   'ach.reps_500.title': 'Bốc lửa',
-  'ach.reps_500.body': 'Tổng 500 cái',
+  'ach.reps_500.body': 'Tổng 500 cái hít đất',
   'ach.reps_1000.title': 'Một nghìn',
-  'ach.reps_1000.body': 'Tổng 1.000 cái',
+  'ach.reps_1000.body': 'Tổng 1.000 cái hít đất',
   'ach.reps_5000.title': 'Cỗ máy',
-  'ach.reps_5000.body': 'Tổng 5.000 cái',
+  'ach.reps_5000.body': 'Tổng 5.000 cái hít đất',
   'ach.set_25.title': 'Set chắc tay',
-  'ach.set_25.body': '25 cái trong một set',
+  'ach.set_25.body': '25 cái hít đất trong một set',
   'ach.set_50.title': 'Năm mươi',
-  'ach.set_50.body': '50 cái trong một set',
+  'ach.set_50.body': '50 cái hít đất trong một set',
   'ach.set_100.title': 'Trăm cái',
-  'ach.set_100.body': '100 cái trong một set',
+  'ach.set_100.body': '100 cái hít đất trong một set',
   'ach.streak_3.title': 'Thành thói quen',
   'ach.streak_3.body': '3 ngày liên tiếp',
   'ach.streak_7.title': 'Trọn tuần',
@@ -624,6 +775,14 @@ const vi = {
   'ach.program_day.body': 'Hoàn thành một ngày trong chương trình',
   'ach.program_done.title': 'Tốt nghiệp',
   'ach.program_done.body': 'Hoàn thành chương trình 6 tuần',
+  'ach.squats_100.title': 'Chân thép',
+  'ach.squats_100.body': 'Tổng 100 cái squat',
+  'ach.situps_100.title': 'Bụng sáu múi',
+  'ach.situps_100.body': 'Tổng 100 cái gập bụng',
+  'ach.jacks_200.title': 'Lò xo',
+  'ach.jacks_200.body': 'Tổng 200 cái bật nhảy',
+  'ach.all_rounder.title': 'Toàn năng',
+  'ach.all_rounder.body': 'Tập mỗi bài ít nhất một lần',
 
   'blocker.title': 'Chặn ứng dụng',
   'blocker.subtitle':
@@ -631,6 +790,7 @@ const vi = {
   'blocker.balance': 'Thời gian giải trí còn lại',
   'blocker.earn': 'Hít đất để kiếm thêm',
   'blocker.statusOn': 'Đang chặn {apps}',
+  'blocker.statusOnApps': 'Đang chặn {apps}, không cần Trợ năng',
   'blocker.appOne': '1 ứng dụng',
   'blocker.appMany': '{n} ứng dụng',
   'blocker.siteOne': '1 trang web',
@@ -638,25 +798,50 @@ const vi = {
   'blocker.and': 'và',
   'blocker.statusOff': 'Đang tắt chặn',
   'blocker.statusNoApps': 'Chọn ít nhất một ứng dụng hoặc trang web để chặn',
-  'blocker.statusSwitchedOff': 'Chặn đã dừng: quyền Trợ năng bị tắt',
-  'blocker.statusStalled': 'Chặn đã dừng: dịch vụ không chạy',
-  'blocker.statusNoService': 'Bật quyền Trợ năng để bắt đầu chặn',
+  'blocker.statusSwitchedOff': 'Chặn đã dừng: Trợ năng đã bị tắt',
+  'blocker.statusStalled': 'Chặn đã dừng: máy đã dừng dịch vụ chặn',
+  'blocker.statusNeedsPermission': 'Cấp 2 quyền bên dưới để bắt đầu chặn',
+  'blocker.statusSitesNeedA11y': 'Chỉ chặn được trang web khi bật Trợ năng',
   'blocker.statusStarting': 'Đang khởi động…',
   'blocker.alertTitle': 'Chặn đang không chạy',
   'blocker.alertSwitchedOff':
-    'Android đã tắt quyền Trợ năng, thường vì máy tự đóng Hít Đất AI khi chạy nền (máy realme, OPPO, Xiaomi hay làm vậy). Bật lại, rồi làm theo mục "Giữ chặn luôn chạy" bên dưới để nó không bị tắt nữa.',
+    'Trợ năng đang tắt: do bạn tắt, hoặc do máy tự đóng Hít Đất AI khi chạy nền (máy realme, OPPO, Xiaomi hay làm vậy). Bật lại, rồi làm theo mục "Giữ chặn luôn chạy" bên dưới để nó không bị tắt nữa.',
+  'blocker.alertOrUsage':
+    'Hoặc chặn không cần Trợ năng để app ngân hàng vẫn dùng được: cấp quyền "Xem ứng dụng đang mở" và "Hiển thị trên ứng dụng khác" bên dưới.',
   'blocker.alertStalled':
     'Quyền vẫn bật nhưng máy đã dừng dịch vụ và không cho chạy lại. Vào Trợ năng, mở Hít Đất AI, tắt rồi bật lại.',
+  'blocker.alertWatcher':
+    'Đã cấp đủ 2 quyền nhưng máy đã dừng dịch vụ chặn. Cho phép Hít Đất AI tự khởi chạy và tắt tối ưu pin cho nó, rồi mở lại app.',
   'blocker.alertPrevent':
     'Để không bị lại: cho phép Hít Đất AI tự khởi chạy và khoá app trong đa nhiệm (các bước bên dưới).',
   'blocker.alertTurnOn': 'Bật lại',
+  'blocker.alertUseUsage': 'Chặn không cần Trợ năng',
   'blocker.alertOpen': 'Mở Trợ năng',
   'blocker.sectionBlocking': 'Chặn',
   'blocker.toggle': 'Chặn ứng dụng',
-  'blocker.permission': 'Quyền Trợ năng',
-  'blocker.permissionOn': 'Đã bật. App biết được ứng dụng nào đang mở.',
-  'blocker.permissionOff': 'Cần để biết khi nào ứng dụng bị chặn được mở. Chỉ kiểm tra tên ứng dụng.',
+  'blocker.waysNote':
+    'Hai quyền đầu là đủ để chặn ứng dụng. Khi bạn mở app ngân hàng, phần chặn tự nhường nên hầu hết vẫn dùng được; Trợ năng chỉ cần nếu muốn chặn cả trang web.',
+  'blocker.usage': 'Xem ứng dụng đang mở',
+  'blocker.usageOn': 'Đã bật (quyền truy cập dữ liệu sử dụng).',
+  'blocker.usageOff':
+    'Quyền "Truy cập dữ liệu sử dụng", để biết khi nào ứng dụng bị chặn được mở. Chỉ kiểm tra tên ứng dụng, không ảnh hưởng app ngân hàng.',
+  'blocker.overlay': 'Hiển thị trên ứng dụng khác',
+  'blocker.overlayOn': 'Đã bật.',
+  'blocker.overlayOff': 'Để hiện màn hình chặn và đồng hồ đếm ngược lên trên ứng dụng bị chặn.',
+  'blocker.permission': 'Trợ năng (không bắt buộc)',
+  'blocker.permissionOn':
+    'Đang bật: chặn được cả trang web. App ngân hàng cứ thấy Trợ năng bật là không cho mở, và không cài được kiểu chừa app ngân hàng ra. Muốn dùng thì bấm Tắt: ứng dụng vẫn bị chặn.',
+  'blocker.permissionOnOnly':
+    'Đang bật. App ngân hàng cứ thấy Trợ năng bật là không cho mở. Muốn dùng app ngân hàng mà vẫn chặn được ứng dụng: cấp 2 quyền ở trên rồi tắt Trợ năng.',
+  'blocker.permissionOff':
+    'Chặn thêm cả trang web trong trình duyệt. Nhiều app ngân hàng không cho mở khi có app đang bật Trợ năng.',
   'blocker.permissionButton': 'Bật',
+  'blocker.permissionManage': 'Cài đặt',
+  'blocker.permissionSwitchOff': 'Tắt',
+  'blocker.devOptions': 'Tùy chọn nhà phát triển',
+  'blocker.devOptionsOn':
+    'Đang bật. Từ tháng 3/2026 nhiều app ngân hàng tự thoát khi Tùy chọn nhà phát triển hoặc Gỡ lỗi USB đang bật, kể cả khi đã tắt Trợ năng. Tắt ở nút gạt trên cùng của màn hình đó.',
+  'blocker.devOptionsButton': 'Mở',
   'blocker.restrictedHint':
     'Không bật được, hoặc Android báo "Cài đặt bị hạn chế"? Mở Thông tin ứng dụng, bấm ⋮ ở góc trên, chọn "Cho phép cài đặt bị hạn chế", rồi thử lại.',
   'blocker.openAppInfo': 'Mở thông tin ứng dụng',
@@ -672,6 +857,7 @@ const vi = {
   'blocker.sectionSites': 'Trang web bị chặn ({n})',
   'blocker.sitesBody':
     'Mở bằng trình duyệt (Chrome, Cốc Cốc, Edge, Samsung Internet…) cũng bị chặn. Trang web của các ứng dụng đã chọn được chặn kèm tự động.',
+  'blocker.sitesNeedA11y': 'Trang web chỉ bị chặn khi Trợ năng đang bật.',
   'blocker.siteAuto': 'kèm ứng dụng',
   'blocker.sitePlaceholder': 'vd. vnexpress.net',
   'blocker.siteAdd': 'Thêm',
@@ -679,11 +865,12 @@ const vi = {
   'blocker.removeSite': 'Bỏ chặn {site}',
   'blocker.sectionRate': 'Quy đổi',
   'blocker.rate': 'Mỗi cái hít đất đổi được',
+  'blocker.ratePerExercise': 'Theo từng bài, mỗi cái đổi được: {list}',
   'blocker.timer': 'Đồng hồ đếm ngược',
   'blocker.timerBody': 'Một đồng hồ nhỏ hiện trên ứng dụng bị chặn khi thời gian đang chạy.',
   'blocker.keepTitle': 'Giữ chặn luôn chạy',
   'blocker.keepBody':
-    'Một số máy (realme, OPPO, Xiaomi, vivo…) tự đóng ứng dụng chạy nền, rồi Android tắt luôn quyền Trợ năng, nên chặn lúc được lúc không. Để tránh:',
+    'Một số máy (realme, OPPO, Xiaomi, vivo…) tự đóng ứng dụng chạy nền, làm chặn dừng lại và có thể tắt luôn Trợ năng, nên chặn lúc được lúc không. Để tránh:',
   'blocker.keep1':
     'Khoá Hít Đất AI trong đa nhiệm: mở màn hình ứng dụng gần đây, kéo thẻ của app xuống hoặc mở menu của thẻ và chọn Khoá.',
   'blocker.keep2':
@@ -697,7 +884,7 @@ const vi = {
   'blocker.howBody':
     'Tập xong một buổi, số cái được đổi thành thời gian giải trí. Mở ứng dụng hoặc trang web bị chặn thì thời gian đếm ngược khi nó đang trên màn hình, kể cả chia đôi màn hình hay cửa sổ nổi, và dừng khi bạn thoát ra hoặc khoá máy. Về 0 thì nó bị che lại cho tới khi bạn hít đất tiếp. Bạn có thể tắt chặn ở đây bất cứ lúc nào.',
   'blocker.privacy':
-    'Tính năng chặn chỉ kiểm tra ứng dụng nào đang mở và, trong trình duyệt, tên miền của trang. Nó không đọc gì khác trên màn hình hay những gì bạn gõ, và không gửi gì ra khỏi máy.',
+    'Tính năng chặn chỉ kiểm tra ứng dụng nào đang mở và, khi bật Trợ năng, tên miền của trang trong trình duyệt. Nó không đọc gì khác trên màn hình hay những gì bạn gõ, và không gửi gì ra khỏi máy.',
   'blocker.androidOnly': 'Tính năng chặn ứng dụng chỉ có trên Android.',
   'blocker.expoGo':
     'Expo Go không chạy được tính năng chặn ứng dụng vì cần mã native. Hãy cài bản build của app (npm run build:apk).',
@@ -706,7 +893,7 @@ const vi = {
   'blocker.chipOff': 'Chặn đã tắt',
   'blocker.disclosureTitle': 'Cho phép quyền Trợ năng?',
   'blocker.disclosureBody':
-    'Để chặn ứng dụng, Hít Đất AI dùng dịch vụ Trợ năng (Accessibility) của Android để biết ứng dụng nào đang mở trên màn hình.',
+    'Để chặn cả trang web, Hít Đất AI dùng dịch vụ Trợ năng (Accessibility) của Android để biết ứng dụng nào đang mở trên màn hình. Lưu ý: nhiều app ngân hàng không cho mở khi có app đang bật Trợ năng.',
   'blocker.disclosure1':
     'Chỉ kiểm tra tên ứng dụng đang mở và, trong trình duyệt, tên miền của trang. Không đọc gì khác trên màn hình, tin nhắn hay những gì bạn gõ.',
   'blocker.disclosure2': 'Không lưu lịch sử sử dụng, không gửi gì ra khỏi máy.',
@@ -716,6 +903,17 @@ const vi = {
     'Ở màn hình tiếp theo, tìm mục có chữ "Hít Đất AI" (thường nằm trong "Ứng dụng đã tải xuống" hoặc "Ứng dụng đã cài đặt") rồi bật lên.',
   'blocker.disclosureAgree': 'Đồng ý và mở Cài đặt',
   'blocker.disclosureLater': 'Để sau',
+  'blocker.usageDisclosureTitle': 'Chặn không cần Trợ năng?',
+  'blocker.usageDisclosureBody':
+    'Thay cho Trợ năng, Hít Đất AI có thể dùng hai quyền khác của Android, thường không bị app ngân hàng phản đối.',
+  'blocker.usageDisclosure1':
+    '"Truy cập dữ liệu sử dụng" cho biết ứng dụng nào đang mở. Chỉ kiểm tra tên ứng dụng, không lưu lịch sử.',
+  'blocker.usageDisclosure2':
+    '"Hiển thị trên ứng dụng khác" để hiện màn hình chặn và đồng hồ đếm ngược lên trên ứng dụng bị chặn.',
+  'blocker.usageDisclosure3':
+    'Khi đang chặn sẽ có một thông báo thường trực. Cách này không chặn được trang web, và không gửi gì ra khỏi máy.',
+  'blocker.usageDisclosureSteps':
+    'Ở màn hình tiếp theo, tìm "Hít Đất AI" và bật lên, rồi quay lại đây để cấp quyền còn lại.',
 
   'picker.title': 'Chọn ứng dụng cần chặn',
   'picker.search': 'Tìm ứng dụng',
@@ -734,6 +932,9 @@ const vi = {
   'native.homeButton': 'Về màn hình chính',
   'native.lowTime': 'Còn chưa đầy 1 phút giải trí',
   'native.blockedToast': '{app} đang bị chặn. Hít đất để có thêm thời gian.',
+  'native.watchTitle': 'Đang chặn ứng dụng',
+  'native.watchBody': 'Mỗi cái hít đất đổi thêm thời gian giải trí.',
+  'native.watchChannel': 'Chặn ứng dụng',
 
   'settings.title': 'Cài đặt',
   'settings.workout': 'Buổi tập',
@@ -743,7 +944,7 @@ const vi = {
   'settings.data': 'Dữ liệu',
   'settings.about': 'Giới thiệu',
   'settings.dailyGoal': 'Mục tiêu mỗi ngày',
-  'settings.dailyGoalBody': 'Số cái mỗi ngày. Mọi chế độ tập đều tính vào.',
+  'settings.dailyGoalBody': 'Số cái mỗi ngày. Mọi bài tập và mọi chế độ đếm đều tính vào.',
   'settings.countdown': 'Đếm ngược trước set',
   'settings.countdownBody': 'Thời gian để vào tư thế sau khi bấm Bắt đầu.',
   'settings.rest': 'Nghỉ giữa các set',
@@ -776,7 +977,7 @@ const vi = {
   'onboarding.title': 'Chào mừng đến Hít Đất AI',
   'onboarding.s1.title': 'Đếm không cần chạm',
   'onboarding.s1.body':
-    'Dựng điện thoại bên hông để thấy toàn thân: camera AI đếm từng cái và nhắc tư thế. Không dùng camera? Đặt máy trên sàn, dùng cảm biến hoặc chạm mũi vào màn hình.',
+    'Hít đất, squat, gập bụng hay bật nhảy: chọn bài ở tab Tập. Dựng điện thoại để thấy toàn thân, camera AI sẽ đếm từng cái và nhắc tư thế. Không dùng camera? Hít đất thì dùng cảm biến, các bài khác thì mang máy theo người (túi quần khi squat, áp ngực khi gập bụng, cầm tay khi bật nhảy), hoặc chạm vào màn hình. Mỗi bài đều hướng dẫn cách đặt máy.',
   'onboarding.s2.title': 'Set, nghỉ và giọng đọc',
   'onboarding.s2.body':
     'Mỗi set bắt đầu bằng đếm ngược để bạn kịp vào tư thế, và kết thúc bằng đồng hồ nghỉ. Bật đọc số để nghe số lần thay vì nhìn.',

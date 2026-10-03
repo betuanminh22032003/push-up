@@ -73,3 +73,25 @@ export function midpoint(a, b) {
   if (a && b) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, score: Math.min(a.score, b.score) };
   return a || b || null;
 }
+
+/**
+ * Midpoint of a left/right pair from only the joints confident enough to
+ * trust: a guessed far-side hip must not drag the hip somewhere it is not.
+ * Null when neither is.
+ */
+export function seenMidpoint(pose, left, right, minVisibility) {
+  const seen = (j) => (pose[j] && pose[j].score >= minVisibility ? pose[j] : null);
+  return midpoint(seen(left), seen(right));
+}
+
+/**
+ * Angle of the line a-b against the horizontal, in degrees (0..90), whichever
+ * way it points. Null when an end is missing or the two coincide.
+ */
+export function tiltFromHorizontal(a, b, aspect = 1) {
+  if (!a || !b) return null;
+  const dx = Math.abs(a.x - b.x) * aspect;
+  const dy = Math.abs(a.y - b.y);
+  if (dx === 0 && dy === 0) return null;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}

@@ -25,24 +25,32 @@
 <body>
 <main>
   <h1>Hít Đất AI — Privacy Policy</h1>
-  <p class="meta">Effective 27 September 2026 · App package <code>com.betuanminh.hitdat</code> · <a href="#vi">Tiếng Việt bên dưới</a></p>
+  <p class="meta">Effective 2 October 2026 · App package <code>com.betuanminh.hitdat</code> · <a href="#vi">Tiếng Việt bên dưới</a></p>
 
   <h2>Summary</h2>
   <p>Hít Đất AI does not collect, store or share any personal data. Everything the app records — your workouts, program progress, settings and app-blocker choices — stays on your device. There is no account, no analytics, no advertising and no tracking of any kind.</p>
 
   <h2>Camera</h2>
-  <p>The optional <strong>AI camera</strong> mode uses your front camera to count push-ups by estimating body position. Frames are processed <strong>on your device</strong>, in real time, and are never recorded, stored or uploaded. The camera is only active while a camera-mode workout is running, and you can use the sensor or tap modes instead without ever granting camera access.</p>
+  <p>The optional <strong>AI camera</strong> mode uses your front camera to count your reps (push-ups, squats, sit-ups, jumping jacks) by estimating body position. Frames are processed <strong>on your device</strong>, in real time, and are never recorded, stored or uploaded. The camera is only active while a camera-mode workout is running, and you can use the sensor, motion or tap modes instead without ever granting camera access.</p>
   <p>To run the pose model, the app loads the detector page and the model file over the internet (from GitHub Pages, the jsDelivr CDN and Google Cloud Storage). These are ordinary static file downloads; like any web request they expose your IP address to those hosts, which is not something the app controls or records. No workout data is sent anywhere.</p>
 
+  <h2>Motion sensors</h2>
+  <p>The optional <strong>Motion</strong> mode reads the phone's motion sensors (its orientation) during a workout to count reps. The readings are processed on your device and never stored or sent.</p>
+
   <h2>App blocker (optional, Android)</h2>
-  <p>If you turn on the app blocker, Hít Đất AI uses Android's <strong>Accessibility Service</strong> API for one purpose: to know which app is in the foreground, so it can cover an app you chose to block when you have no earned time left, and count your earned time down while you use it. The service only looks at the package name of the app on screen. It does not read, record or transmit screen content, messages, passwords or anything you type, and it keeps no history of the apps you use.</p>
+  <p>If you turn on the app blocker, Hít Đất AI needs to know which app is in the foreground, for one purpose: to cover an app you chose to block when you have no earned time left, and to count your earned time down while you use it. It can learn this in either of two ways, whichever permissions you grant.</p>
+  <h3>Usage access and "display over other apps"</h3>
+  <p>With <strong>usage access</strong>, the app reads Android's record of which app was opened or left, and only to tell whether an app you chose to block is on screen right now. It keeps no history of the apps you use and sends nothing anywhere. <strong>Display over other apps</strong> lets it put the block screen and the small countdown over a blocked app. While blocking runs this way, a notification says so. This way does not block websites.</p>
+  <h3>Accessibility Service</h3>
+  <p>With Android's <strong>Accessibility Service</strong> API, the service looks at the package name of the app on screen. It does not read, record or transmit screen content, messages, passwords or anything you type, and it keeps no history of the apps you use.</p>
   <p>In a web browser it also reads the address bar, only to take the website's domain (for example youtube.com) and compare it with the sites you chose to block. Nothing from the address bar is kept beyond that comparison or sent anywhere, and no browsing history is recorded.</p>
+  <h3>Both ways</h3>
   <p>So that you can pick the apps to block, the app reads the list of apps installed on your phone (their names and icons). The list is only used on your device and is never uploaded.</p>
-  <p>The blocker stays off until you switch the service on yourself in Android's accessibility settings, after an explanation in the app. You can switch it off there at any time, and turn blocking off in the app.</p>
+  <p>The blocker stays off until you grant these permissions yourself in Android's settings, after an explanation in the app. You can withdraw them there at any time, and turn blocking off in the app.</p>
 
   <h2>Data stored on your device</h2>
   <ul>
-    <li>Workout history: date, rep counts, set durations, which counting mode was used.</li>
+    <li>Workout history: date, rep counts, set durations, which exercise and counting mode was used.</li>
     <li>Program progress: your test result, level and completed days.</li>
     <li>Settings: goal, countdown and rest lengths, sound, vibration, voice, language, reminder time.</li>
     <li>App blocker: the apps and websites you chose to block, your earned fun time, and whether blocking is on.</li>
@@ -58,7 +66,10 @@
     <li><strong>Notifications</strong> — only if you turn on the daily reminder.</li>
     <li><strong>Internet</strong> — to download the pose detector and model for the AI camera mode.</li>
     <li><strong>Vibrate</strong> — for the rep haptics.</li>
-    <li><strong>Accessibility service</strong> — only if you turn on the app blocker, to detect which app is open and, in a browser, which website, as described above.</li>
+    <li><strong>High-rate motion sensors</strong> — for the Motion mode, to read motion fast enough to count fast reps such as jumping jacks; no prompt.</li>
+    <li><strong>Usage access</strong> and <strong>display over other apps</strong> — only if you grant them for the app blocker, to detect which app is open and to show the block screen, as described above.</li>
+    <li><strong>Foreground service</strong> and <strong>run at startup</strong> — so the app blocker keeps running with a notification, and starts again after the phone restarts.</li>
+    <li><strong>Accessibility service</strong> — only if you turn it on for the app blocker, to detect which app is open and, in a browser, which website, as described above.</li>
   </ul>
 
   <h2>Children</h2>
@@ -72,24 +83,32 @@
 
   <section class="lang" id="vi" lang="vi">
     <h1>Hít Đất AI — Chính sách quyền riêng tư</h1>
-    <p class="meta">Có hiệu lực từ 27/09/2026 · Gói ứng dụng <code>com.betuanminh.hitdat</code></p>
+    <p class="meta">Có hiệu lực từ 02/10/2026 · Gói ứng dụng <code>com.betuanminh.hitdat</code></p>
 
     <h2>Tóm tắt</h2>
     <p>Hít Đất AI không thu thập, lưu trữ hay chia sẻ bất kỳ dữ liệu cá nhân nào. Mọi thứ ứng dụng ghi lại — buổi tập, tiến độ chương trình, cài đặt và lựa chọn chặn ứng dụng — đều nằm trên thiết bị của bạn. Không có tài khoản, không phân tích, không quảng cáo, không theo dõi dưới bất kỳ hình thức nào.</p>
 
     <h2>Camera</h2>
-    <p>Chế độ <strong>Camera AI</strong> (tuỳ chọn) dùng camera trước để đếm hít đất bằng cách ước lượng tư thế cơ thể. Khung hình được xử lý <strong>ngay trên thiết bị</strong>, theo thời gian thực, không bao giờ được ghi lại, lưu trữ hay tải lên. Camera chỉ hoạt động khi bạn đang tập ở chế độ camera; bạn có thể dùng chế độ Cảm biến hoặc Chạm mà không cần cấp quyền camera.</p>
+    <p>Chế độ <strong>Camera AI</strong> (tuỳ chọn) dùng camera trước để đếm số cái (hít đất, squat, gập bụng, bật nhảy) bằng cách ước lượng tư thế cơ thể. Khung hình được xử lý <strong>ngay trên thiết bị</strong>, theo thời gian thực, không bao giờ được ghi lại, lưu trữ hay tải lên. Camera chỉ hoạt động khi bạn đang tập ở chế độ camera; bạn có thể dùng chế độ Cảm biến, Chuyển động hoặc Chạm mà không cần cấp quyền camera.</p>
     <p>Để chạy mô hình nhận diện tư thế, ứng dụng tải trang nhận diện và tệp mô hình qua internet (từ GitHub Pages, CDN jsDelivr và Google Cloud Storage). Đây là các tệp tĩnh thông thường; như mọi yêu cầu web, địa chỉ IP của bạn được các máy chủ đó nhìn thấy — ứng dụng không kiểm soát hay ghi lại điều này. Không có dữ liệu tập luyện nào được gửi đi.</p>
 
+    <h2>Cảm biến chuyển động</h2>
+    <p>Chế độ <strong>Chuyển động</strong> (tuỳ chọn) đọc cảm biến chuyển động của máy (hướng nghiêng) trong lúc tập để đếm số cái. Dữ liệu chỉ xử lý trên máy, không lưu và không gửi đi.</p>
+
     <h2>Chặn ứng dụng (tuỳ chọn, Android)</h2>
-    <p>Nếu bạn bật tính năng chặn ứng dụng, Hít Đất AI dùng API <strong>Dịch vụ Trợ năng (Accessibility Service)</strong> của Android cho đúng một mục đích: biết ứng dụng nào đang ở trên màn hình, để che ứng dụng bạn đã chọn chặn khi bạn hết thời gian đã kiếm được, và đếm ngược thời gian đó khi bạn dùng. Dịch vụ chỉ xem tên gói của ứng dụng đang mở. Nó không đọc, ghi lại hay gửi đi nội dung màn hình, tin nhắn, mật khẩu hay bất cứ thứ gì bạn gõ, và không lưu lịch sử các ứng dụng bạn dùng.</p>
+    <p>Nếu bạn bật tính năng chặn ứng dụng, Hít Đất AI cần biết ứng dụng nào đang ở trên màn hình, cho đúng một mục đích: che ứng dụng bạn đã chọn chặn khi bạn hết thời gian đã kiếm được, và đếm ngược thời gian đó khi bạn dùng. Ứng dụng biết được điều này bằng một trong hai cách, tuỳ quyền bạn cấp.</p>
+    <h3>Truy cập dữ liệu sử dụng và "Hiển thị trên ứng dụng khác"</h3>
+    <p>Với quyền <strong>truy cập dữ liệu sử dụng</strong>, ứng dụng đọc ghi nhận của Android về việc ứng dụng nào được mở hay đóng, chỉ để biết một ứng dụng bạn chọn chặn có đang trên màn hình hay không. Ứng dụng không lưu lịch sử các ứng dụng bạn dùng và không gửi gì đi đâu. Quyền <strong>hiển thị trên ứng dụng khác</strong> để hiện màn hình chặn và đồng hồ đếm ngược nhỏ lên trên ứng dụng bị chặn. Khi chặn theo cách này sẽ có một thông báo cho biết. Cách này không chặn trang web.</p>
+    <h3>Dịch vụ Trợ năng</h3>
+    <p>Với API <strong>Dịch vụ Trợ năng (Accessibility Service)</strong> của Android, dịch vụ chỉ xem tên gói của ứng dụng đang mở. Nó không đọc, ghi lại hay gửi đi nội dung màn hình, tin nhắn, mật khẩu hay bất cứ thứ gì bạn gõ, và không lưu lịch sử các ứng dụng bạn dùng.</p>
     <p>Trong trình duyệt web, dịch vụ còn đọc thanh địa chỉ, chỉ để lấy tên miền của trang (ví dụ youtube.com) và so với các trang bạn đã chọn chặn. Không có gì từ thanh địa chỉ được giữ lại sau lần so sánh đó hay gửi đi đâu, và không ghi lại lịch sử duyệt web.</p>
+    <h3>Cả hai cách</h3>
     <p>Để bạn chọn ứng dụng cần chặn, ứng dụng đọc danh sách ứng dụng đã cài trên máy (tên và biểu tượng). Danh sách này chỉ dùng trên thiết bị và không bao giờ được tải lên.</p>
-    <p>Tính năng chặn luôn tắt cho tới khi chính bạn bật dịch vụ trong phần cài đặt Trợ năng của Android, sau khi đọc giải thích trong ứng dụng. Bạn có thể tắt dịch vụ ở đó bất cứ lúc nào, và tắt chặn ngay trong ứng dụng.</p>
+    <p>Tính năng chặn luôn tắt cho tới khi chính bạn cấp các quyền này trong cài đặt của Android, sau khi đọc giải thích trong ứng dụng. Bạn có thể thu hồi chúng ở đó bất cứ lúc nào, và tắt chặn ngay trong ứng dụng.</p>
 
     <h2>Dữ liệu lưu trên thiết bị</h2>
     <ul>
-      <li>Lịch sử tập: ngày giờ, số cái, thời lượng từng set, chế độ đếm đã dùng.</li>
+      <li>Lịch sử tập: ngày giờ, số cái, thời lượng từng set, bài tập và chế độ đếm đã dùng.</li>
       <li>Tiến độ chương trình: kết quả kiểm tra, cấp độ, các ngày đã hoàn thành.</li>
       <li>Cài đặt: mục tiêu, thời gian đếm ngược và nghỉ, âm thanh, rung, giọng đọc, ngôn ngữ, giờ nhắc.</li>
       <li>Chặn ứng dụng: các ứng dụng và trang web bạn chọn chặn, thời gian giải trí đã kiếm được, và việc chặn đang bật hay tắt.</li>
@@ -105,7 +124,10 @@
       <li><strong>Thông báo</strong> — chỉ khi bạn bật nhắc tập.</li>
       <li><strong>Internet</strong> — để tải bộ nhận diện và mô hình cho chế độ Camera AI.</li>
       <li><strong>Rung</strong> — cho phản hồi rung mỗi cái.</li>
-      <li><strong>Dịch vụ Trợ năng</strong> — chỉ khi bạn bật tính năng chặn ứng dụng, để biết ứng dụng nào đang mở và, trong trình duyệt, trang web nào, như mô tả ở trên.</li>
+      <li><strong>Cảm biến chuyển động tốc độ cao</strong> — cho chế độ Chuyển động, để đọc chuyển động đủ nhanh để đếm các bài nhanh như bật nhảy; không cần hỏi quyền.</li>
+      <li><strong>Truy cập dữ liệu sử dụng</strong> và <strong>hiển thị trên ứng dụng khác</strong> — chỉ khi bạn cấp cho tính năng chặn ứng dụng, để biết ứng dụng nào đang mở và hiện màn hình chặn, như mô tả ở trên.</li>
+      <li><strong>Dịch vụ nền</strong> và <strong>chạy khi khởi động</strong> — để tính năng chặn tiếp tục chạy kèm một thông báo, và chạy lại sau khi khởi động lại máy.</li>
+      <li><strong>Dịch vụ Trợ năng</strong> — chỉ khi bạn bật nó cho tính năng chặn ứng dụng, để biết ứng dụng nào đang mở và, trong trình duyệt, trang web nào, như mô tả ở trên.</li>
     </ul>
 
     <h2>Trẻ em</h2>

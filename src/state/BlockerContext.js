@@ -10,6 +10,7 @@ import {
   effectiveSites,
   formatAmount,
   isSetUp,
+  looksStalled,
   normalizeApps,
   normalizeDomain,
   normalizeState,
@@ -21,14 +22,15 @@ import { useSettings } from './SettingsContext';
 
 const BlockerContext = createContext(null);
 
-/** How long to wait before re-reading a service the system has not bound yet. */
+/** How long to wait before re-reading a watcher that has not started yet. */
 const SERVICE_RECHECK_MS = 1500;
 
 const read = async () => normalizeState(await NativeBlocker.getState());
 
 /**
  * The app blocker as the screens see it: the native state (balance, blocked
- * apps and sites, whether the accessibility service runs) plus the actions.
+ * apps and sites, which permissions are granted and which watcher runs) plus
+ * the actions.
  *
  * The state lives in the blocker's own process, which keeps blocking while
  * the app is closed, so every call is async and every action sets state from
@@ -48,7 +50,7 @@ export function BlockerProvider({ children }) {
   // Bumped when the block screen's "earn time" button brought the app up, so
   // the shell can switch to the workout tab.
   const [earnSignal, setEarnSignal] = useState(0);
-  // On in the system settings, yet still not running after a second look.
+  // A way to block is switched on, yet nothing is blocking after a second look.
   const [serviceStalled, setServiceStalled] = useState(false);
   const recheckTimer = useRef(null);
 
@@ -64,14 +66,13 @@ export function BlockerProvider({ children }) {
     if (!NativeBlocker) return;
     try {
       const next = accept(await read());
-      // Just switched on in system settings: the system binds the service a
-      // moment later, so look again before calling it stuck.
+      // Just switched on in system settings: a watcher starts a moment later,
+      // so look again before calling it stuck.
       clearTimeout(recheckTimer.current);
-      if (next.serviceEnabled && !next.serviceRunning) {
+      if (looksStalled(next)) {
         recheckTimer.current = setTimeout(async () => {
           try {
-            const later = accept(await read());
-            setServiceStalled(later.serviceEnabled && !later.serviceRunning);
+            setServiceStalled(looksStalled(accept(await read())));
           } catch {
             // the next refresh tries again
           }
@@ -133,8 +134,8 @@ export function BlockerProvider({ children }) {
     };
   }, [refresh, consumeEarnRequest]);
 
-  // The block screen and the countdown are native, so they get their copy
-  // from here, in the app's language rather than the phone's.
+  // The block screen, the countdown and the notification are native, so they
+  // get their copy from here, in the app's language rather than the phone's.
   useEffect(() => {
     if (!NativeBlocker) return;
     Promise.resolve(
@@ -146,6 +147,9 @@ export function BlockerProvider({ children }) {
         homeButton: t('native.homeButton'),
         lowTime: t('native.lowTime'),
         blockedToast: t('native.blockedToast'),
+        watchTitle: t('native.watchTitle'),
+        watchBody: t('native.watchBody'),
+        watchChannel: t('native.watchChannel'),
       }),
     ).catch(() => {});
   }, [t, rate]);
@@ -170,14 +174,15 @@ export function BlockerProvider({ children }) {
   /**
    * Turn a saved workout into fun time. Only while the blocker is set up:
    * banking hours before it is switched on would defeat it on day one.
+   * `weight` is the exercise's `creditWeight`; see creditFor.
    * @returns {Promise<number>} seconds credited (0 when nothing was)
    */
   const creditReps = useCallback(
-    async (reps) => {
+    async (reps, weight = 1) => {
       if (!NativeBlocker) return 0;
       try {
         if (!isSetUp(await read())) return 0;
-        const seconds = creditFor(reps, rate);
+        const seconds = creditFor(reps, rate, weight);
         if (seconds <= 0) return 0;
         const next = accept(normalizeState(await NativeBlocker.addCredit(seconds)));
         return next.reachable ? seconds : 0;
@@ -194,6 +199,47 @@ export function BlockerProvider({ children }) {
     refresh();
     return opened;
   }, [refresh]);
+
+  // The two permissions of the way to block that banking apps accept. Absent
+  // from builds older than it, hence the optional calls.
+  const openUsageAccessSettings = useCallback(() => {
+    if (!NativeBlocker) return false;
+    const opened = NativeBlocker.openUsageAccessSettings?.() ?? false;
+    refresh();
+    return opened;
+  }, [refresh]);
+
+  const openOverlaySettings = useCallback(() => {
+    if (!NativeBlocker) return false;
+    const opened = NativeBlocker.openOverlaySettings?.() ?? false;
+    refresh();
+    return opened;
+  }, [refresh]);
+
+  /**
+   * One tap instead of a trip through settings, for banking apps: they refuse
+   * to open while Accessibility is on, whichever apps it watches. Android lets
+   * an app switch its own service off but never on. When it stays on (the
+   * phone had already stopped the service), the settings open instead.
+   */
+  const switchOffAccessibility = useCallback(async () => {
+    if (!NativeBlocker) return false;
+    let off = false;
+    try {
+      off = (await NativeBlocker.switchOffAccessibility?.()) === true;
+    } catch {
+      // the settings, then
+    }
+    if (!off) NativeBlocker.openAccessibilitySettings();
+    refresh();
+    return off;
+  }, [refresh]);
+
+  // Many banking apps close while Developer options or USB debugging is on.
+  const openDeveloperSettings = useCallback(
+    () => NativeBlocker?.openDeveloperSettings?.() ?? false,
+    [],
+  );
 
   const openAppSettings = useCallback(() => NativeBlocker?.openAppSettings() ?? false, []);
   const openBatterySettings = useCallback(() => NativeBlocker?.openBatterySettings() ?? false, []);
@@ -258,7 +304,11 @@ export function BlockerProvider({ children }) {
       removeSite,
       creditReps,
       reset,
+      switchOffAccessibility,
       openAccessibilitySettings,
+      openUsageAccessSettings,
+      openOverlaySettings,
+      openDeveloperSettings,
       openAppSettings,
       openBatterySettings,
       openAutostartSettings,
@@ -281,7 +331,11 @@ export function BlockerProvider({ children }) {
       removeSite,
       creditReps,
       reset,
+      switchOffAccessibility,
       openAccessibilitySettings,
+      openUsageAccessSettings,
+      openOverlaySettings,
+      openDeveloperSettings,
       openAppSettings,
       openBatterySettings,
       openAutostartSettings,

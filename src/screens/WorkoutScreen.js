@@ -4,17 +4,26 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { newlyUnlocked, unlockedAchievements } from '../achievements/achievements';
-import { creditFor, formatAmount, isSetUp } from '../blocker/blockerLogic';
+import { creditFor, formatAmount, hasWayToBlock, isSetUp } from '../blocker/blockerLogic';
 import { Button } from '../components/Button';
+import { ExercisePicker } from '../components/ExercisePicker';
 import { StatTile } from '../components/StatTile';
+import {
+  DEFAULT_EXERCISE_ID,
+  EXERCISES,
+  EXERCISE_IDS,
+  getExercise,
+  supportsSource,
+} from '../exercises/exercises';
 import { useCountdown } from '../hooks/useCountdown';
 import { useFeedback } from '../hooks/useFeedback';
 import { useRepDetector } from '../hooks/useRepDetector';
 import { useWorkoutTimer } from '../hooks/useWorkoutTimer';
 import { useI18n } from '../i18n/I18nContext';
+import { STRINGS } from '../i18n/strings';
 import { PoseStage } from '../pose/PoseStage';
-import { ISSUES } from '../pose/pushupAnalyzer';
-import { SOURCES, getSourceById, resolveDefaultSource } from '../sensors/sources';
+import { ISSUES } from '../pose/analyzers';
+import { SOURCES, getSourceById } from '../sensors/sources';
 import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
@@ -28,13 +37,27 @@ const KEEP_AWAKE_TAG = 'pupg-workout';
 /** How long a coaching message stays up after the frame that produced it. */
 const COACH_STICKY_MS = 2200;
 
-/** Translation key for what to tell the user when the analyser rejects a rep. */
-const COACH_KEY = {
-  [ISSUES.LOST_TRACKING]: 'coach.lostTracking',
-  [ISSUES.NOT_HORIZONTAL]: 'coach.notHorizontal',
-  [ISSUES.BODY_SAG]: 'coach.bodySag',
-  [ISSUES.SHALLOW]: 'coach.shallow',
-};
+/**
+ * Translation key for what to tell the user when the analyser rejects a rep,
+ * per exercise and issue. An exercise that words an issue its own way has a
+ * `coach.<exercise>.<issue>` key ("shallow" is "Come up higher" for a sit-up,
+ * "Go lower" for a push-up); every other issue uses the shared
+ * `coach.<issue>`. Built once, so the per-frame lookup stays a property read.
+ */
+const COACH_KEYS = Object.fromEntries(
+  EXERCISE_IDS.map((id) => [
+    id,
+    Object.fromEntries(
+      Object.values(ISSUES).map((issue) => {
+        const own = `coach.${id}.${issue}`;
+        return [issue, own in STRINGS.en ? own : `coach.${issue}`];
+      }),
+    ),
+  ]),
+);
+
+/** The program and its max test are push-ups, whatever exercise is chosen. */
+const PROGRAM_EXERCISE = EXERCISES.find((e) => e.program) ?? getExercise(DEFAULT_EXERCISE_ID);
 
 const STATUS_COLOR = {
   idle: colors.textDim,
@@ -54,7 +77,8 @@ function freshLive() {
 
 /**
  * The workout itself: idle -> [calibrating] -> countdown -> active <-> paused
- * -> rest -> countdown -> ... -> saved.
+ * -> rest -> countdown -> ... -> saved. With a source that has to be put back
+ * in place (motion), paused -> active also goes through a countdown.
  *
  * @param {object|null} plan   what to do: null (free), { kind: 'test' } or a
  *                             program day from src/program/program.js
@@ -77,8 +101,8 @@ export function WorkoutScreen({
   const { settings, updateSettings } = useSettings();
   const { state: blocker, rate: blockerRate, creditReps, serviceStalled } = useBlocker();
   const earning = isSetUp(blocker);
-  // Set up, but the service is switched off or stopped: nothing is blocked.
-  const blockerOff = earning && (!blocker.serviceEnabled || serviceStalled);
+  // Set up, but no way to block is switched on, or it stopped: nothing is blocked.
+  const blockerOff = earning && (!hasWayToBlock(blocker) || serviceStalled);
   const {
     sessions,
     stats,
@@ -96,10 +120,31 @@ export function WorkoutScreen({
   const [summary, setSummary] = useState(null);
   const [notice, setNotice] = useState(null);
   const [coach, setCoach] = useState(null);
+  // A countdown that leads back into a paused set rather than into a new one.
+  const [resuming, setResuming] = useState(false);
 
   const [source, setSource] = useState(null);
   const [sourceConfig, setSourceConfig] = useState(null);
-  const [availableSourceIds, setAvailableSourceIds] = useState([]);
+  // null until the startup probe has answered.
+  const [availableSourceIds, setAvailableSourceIds] = useState(null);
+
+  /**
+   * On a short phone, once the exercise and source rows take their share of
+   * the screen, the stage's centred content (the 140pt counter above all) can
+   * be taller than the stage and would spill over the rows around it. It is
+   * scaled down to fit instead. Layout ignores transforms, so measuring the
+   * scaled content cannot feed back into the scale.
+   */
+  const [stageHeight, setStageHeight] = useState(0);
+  const [stageContentHeight, setStageContentHeight] = useState(0);
+  const onStageLayout = useCallback((e) => setStageHeight(e.nativeEvent.layout.height), []);
+  const onStageContentLayout = useCallback(
+    (e) => setStageContentHeight(e.nativeEvent.layout.height),
+    [],
+  );
+  const stageRoom = stageHeight - spacing.md; // a little air above and below
+  const fitScale =
+    stageRoom > 0 && stageContentHeight > stageRoom ? stageRoom / stageContentHeight : 1;
 
   // The plan being followed. Adopted from the prop only between workouts, so
   // a plan picked mid-set can never swap the targets under a running set.
@@ -115,11 +160,18 @@ export function WorkoutScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan]);
 
+  // What is being counted. A plan (program day or max test) is push-ups;
+  // otherwise the exercise picked on this screen. Both only change between
+  // workouts, so a running set keeps the exercise it started with.
+  const exercise = activePlan ? PROGRAM_EXERCISE : getExercise(settings.exerciseId);
+
   // Everything the async handlers (camera messages, timers) read is mirrored
   // here so a closure can never save a stale count.
   const live = useRef(freshLive());
 
-  const timerStatus = status === 'active' ? 'active' : status === 'paused' ? 'paused' : 'idle';
+  // The countdown before a resumed set is still part of that set's pause.
+  const timerStatus =
+    status === 'active' ? 'active' : status === 'paused' || resuming ? 'paused' : 'idle';
   const { elapsedSeconds, readElapsedMs, reset: resetTimer } = useWorkoutTimer(timerStatus);
   const { repFeedback, controlFeedback, tickFeedback, goFeedback, doneFeedback } = useFeedback(
     settings,
@@ -131,6 +183,9 @@ export function WorkoutScreen({
   const currentTarget = planSets ? planSets[Math.min(setIndex, planSets.length - 1)] : null;
   const isLastSet = !!planSets && setIndex === planSets.length - 1;
   const restSeconds = activePlan?.kind === 'day' ? activePlan.restSeconds : settings.restSeconds;
+  // A source that measures from where the phone is put (motion) always gets
+  // time to put it there, even with the countdown switched off.
+  const countdownSeconds = Math.max(settings.countdownSeconds || 0, source?.settleSeconds || 0);
 
   useEffect(() => {
     onStatusChange?.(status);
@@ -146,18 +201,34 @@ export function WorkoutScreen({
       }
       if (cancelled) return;
       setAvailableSourceIds(available);
-      // A stored choice only wins if that hardware is still present.
-      const storedIsUsable = settings.sourceId && available.includes(settings.sourceId);
-      setSource(
-        storedIsUsable ? getSourceById(settings.sourceId) : await resolveDefaultSource(),
-      );
     })();
     return () => {
       cancelled = true;
     };
-    // Runs once: the stored source is only a starting point.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Runs once: the hardware does not change between workouts.
   }, []);
+
+  /**
+   * The source for this exercise, out of the ones that can count it on this
+   * device: the one last chosen for it, else (push-ups only) the choice saved
+   * before each exercise had its own, else the exercise's best. A stored
+   * choice only wins if that hardware is still present. Picked again when the
+   * exercise changes, which only happens between workouts.
+   */
+  useEffect(() => {
+    if (!availableSourceIds || status !== 'idle') return;
+    const usable = exercise.sources.filter((id) => availableSourceIds.includes(id));
+    const stored = settings.sourceIds?.[exercise.id];
+    const legacy = exercise.id === DEFAULT_EXERCISE_ID ? settings.sourceId : null;
+    const pick = [stored, legacy].find((id) => id && usable.includes(id)) ?? usable[0];
+    const next = getSourceById(pick); // tap, if somehow nothing else is usable
+    if (next === source) return;
+    setSource(next);
+    setSourceConfig(null); // a calibration belongs to the source it measured
+    // The stored choices are read, not followed: picking a source writes the
+    // state and the setting together, so a settings write has nothing to add.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercise, availableSourceIds]);
 
   // --- keep the screen on for the duration of a workout --------------------
   useEffect(() => {
@@ -183,9 +254,10 @@ export function WorkoutScreen({
    * since that is the answer to the advice.
    */
   const coachUntilRef = useRef(0);
+  const coachKeys = COACH_KEYS[exercise.id];
   const handlePoseFrame = useCallback((frame) => {
     const now = Date.now();
-    const key = COACH_KEY[frame.issues?.[0]] ?? null;
+    const key = coachKeys[frame.issues?.[0]] ?? null;
 
     let next;
     if (frame.repCompleted) {
@@ -199,7 +271,7 @@ export function WorkoutScreen({
     }
 
     if (next !== undefined) setCoach((prev) => (prev === next ? prev : next));
-  }, []);
+  }, [coachKeys]);
 
   // --- workout lifecycle ----------------------------------------------------
   const closeRest = useCallback(() => {
@@ -218,6 +290,7 @@ export function WorkoutScreen({
     setCompletedSets([]);
     setRestOver(false);
     setCoach(null);
+    setResuming(false);
     resetTimer();
   }, [closeRest, resetTimer]);
 
@@ -250,13 +323,15 @@ export function WorkoutScreen({
       totalReps,
       durationSeconds,
       sourceId: source?.id,
+      exerciseId: exercise.id,
       sets,
       restSeconds: restTotal,
       program: followed?.kind === 'day' ? { level: followed.level, day: followed.day } : null,
     });
     // Credited with the save, so fun time always matches the history: a
-    // discarded workout earns nothing, exactly as it records nothing.
-    const earnedSeconds = await creditReps(totalReps);
+    // discarded workout earns nothing, exactly as it records nothing. Lighter
+    // exercises earn a share of a push-up's rate.
+    const earnedSeconds = await creditReps(totalReps, exercise.creditWeight);
 
     let completedDays = program?.completedDays ?? {};
     let level = null;
@@ -282,6 +357,7 @@ export function WorkoutScreen({
       kind: followed?.kind ?? 'free',
       day: followed?.day,
       level,
+      exerciseId: exercise.id,
       totalReps,
       sets: sets.length,
       durationSeconds,
@@ -310,6 +386,7 @@ export function WorkoutScreen({
     achievements,
     addSession,
     source,
+    exercise,
     program,
     completeProgramDay,
     startProgram,
@@ -318,18 +395,29 @@ export function WorkoutScreen({
     creditReps,
   ]);
 
+  // The motion source reads its tilt thresholds from the exercise; a source's
+  // own calibration result wins over them. Memoised, because a new object on
+  // every render would resubscribe the sensor mid-set.
+  const detectorConfig = useMemo(
+    () => (exercise.motion ? { ...exercise.motion, ...sourceConfig } : sourceConfig),
+    [exercise.motion, sourceConfig],
+  );
+
   const { isNear, onTouchStart, onTouchEnd, reset: resetDetector } = useRepDetector({
     source,
-    sourceConfig,
+    sourceConfig: detectorConfig,
     active: status === 'active',
     onRep: () => handleRepRef.current?.(),
+    minRepMs: exercise.minRepMs,
   });
 
   const activate = useCallback(() => {
-    goFeedback(isLastSet ? t('voice.lastSet') : t('voice.go'));
+    // "Last set" was already said when that set began; a resume is just "go".
+    goFeedback(isLastSet && !resuming ? t('voice.lastSet') : t('voice.go'));
     resetDetector();
+    setResuming(false);
     setStatus('active');
-  }, [goFeedback, isLastSet, t, resetDetector]);
+  }, [goFeedback, isLastSet, resuming, t, resetDetector]);
 
   const beginSet = useCallback(() => {
     closeRest();
@@ -339,9 +427,9 @@ export function WorkoutScreen({
     setCoach(null);
     resetTimer();
     resetDetector();
-    if (settings.countdownSeconds > 0) setStatus('countdown');
+    if (countdownSeconds > 0) setStatus('countdown');
     else activate();
-  }, [closeRest, resetTimer, resetDetector, settings.countdownSeconds, activate]);
+  }, [closeRest, resetTimer, resetDetector, countdownSeconds, activate]);
 
   const endSet = useCallback(() => {
     const setReps_ = live.current.reps;
@@ -382,7 +470,7 @@ export function WorkoutScreen({
   }, [handleRep]);
 
   const countdownRemaining = useCountdown({
-    seconds: status === 'rest' ? restSeconds : settings.countdownSeconds,
+    seconds: status === 'rest' ? restSeconds : countdownSeconds,
     active: status === 'countdown' || status === 'rest',
     runKey: `${status}-${setIndex}`,
     onTick: (left) => {
@@ -425,21 +513,35 @@ export function WorkoutScreen({
     beginSet();
   }, [source, controlFeedback, t, beginSet]);
 
+  // Also what Cancel does on the countdown back into a paused set: the set
+  // stays paused, its reps intact.
   const pause = useCallback(() => {
     controlFeedback();
+    setResuming(false);
     setStatus('paused');
   }, [controlFeedback]);
 
   const resume = useCallback(() => {
     controlFeedback();
     resetDetector();
-    setStatus('active');
-  }, [controlFeedback, resetDetector]);
+    // Resume is pressed with the phone in hand; a source that measures from
+    // where the phone sits counts down first, so it can go back in place.
+    if (source?.settleSeconds) {
+      setResuming(true);
+      setStatus('countdown');
+    } else {
+      setStatus('active');
+    }
+  }, [controlFeedback, resetDetector, source]);
 
+  // Not for a source that measures from where the phone is put (motion): the
+  // countdown is the time to put it there, and Skip is tapped with the phone
+  // still in hand, so the baseline would be the hand and the set count nothing.
   const skipCountdown = useCallback(() => {
+    if (source?.settleSeconds) return;
     controlFeedback();
     activate();
-  }, [controlFeedback, activate]);
+  }, [source, controlFeedback, activate]);
 
   const nextSet = useCallback(() => {
     controlFeedback();
@@ -478,9 +580,21 @@ export function WorkoutScreen({
       setSource(nextSource);
       setSourceConfig(null);
       setNotice(null);
-      updateSettings({ sourceId: nextSource.id });
+      // Remembered per exercise: the camera may suit squats, the sensor push-ups.
+      updateSettings({ sourceIds: { ...settings.sourceIds, [exercise.id]: nextSource.id } });
     },
-    [status, controlFeedback, updateSettings],
+    [status, controlFeedback, updateSettings, settings.sourceIds, exercise.id],
+  );
+
+  const selectExercise = useCallback(
+    (exerciseId) => {
+      // Only between workouts, and never under a plan: the program is push-ups.
+      if (status !== 'idle' || activePlan || exerciseId === exercise.id) return;
+      controlFeedback();
+      setNotice(null);
+      updateSettings({ exerciseId });
+    },
+    [status, activePlan, exercise.id, controlFeedback, updateSettings],
   );
 
   const share = useCallback(() => {
@@ -488,26 +602,35 @@ export function WorkoutScreen({
     let text = t('share.text', {
       reps: summary.totalReps,
       time: formatDuration(summary.durationSeconds),
+      exercise: t(`exercise.${summary.exerciseId}.noun`),
     });
     if (summary.sets > 1) text += t('share.sets', { sets: summary.sets });
     shareText(text);
   }, [summary, t]);
 
   // The shell's back-button handling: pause a running set instead of leaving.
+  // The countdown back into a paused set is still that set's pause, so back
+  // there keeps it paused, as Cancel does.
   useEffect(() => {
     if (!controlsRef) return;
     controlsRef.current = {
       busy: status !== 'idle',
       pause: () => {
-        if (status === 'active') pause();
+        if (status === 'active' || (status === 'countdown' && resuming)) pause();
       },
     };
-  }, [controlsRef, status, pause]);
+  }, [controlsRef, status, resuming, pause]);
 
   // --- render --------------------------------------------------------------
+  // Only sources this device has that can count this exercise, best first.
   const selectableSources = useMemo(
-    () => SOURCES.filter((s) => availableSourceIds.includes(s.id)),
-    [availableSourceIds],
+    () =>
+      exercise.sources.filter((id) => availableSourceIds?.includes(id)).map(getSourceById),
+    [exercise, availableSourceIds],
+  );
+  const exerciseOptions = useMemo(
+    () => EXERCISES.map((e) => ({ id: e.id, icon: e.icon, label: t(`exercise.${e.id}`) })),
+    [t],
   );
 
   if (!source) {
@@ -522,10 +645,23 @@ export function WorkoutScreen({
   const tapActive = !!source.isTapDriven && status === 'active';
   const poseActive = !!source.isPoseDriven && status !== 'idle' && status !== 'calibrating';
   const running = status !== 'idle';
+  // The motion source rides on the body — a pocket against the thigh, a hand
+  // gripping the phone, the chest under both hands — with the screen kept on
+  // and touchable. A brush there would press Pause or Done (and Done with no
+  // reps ends the workout), so while it counts, or counts down to counting,
+  // the screen takes no touches but a long press, which pauses. Fabric and a
+  // gripping hand move too much to hold one.
+  const pocketLock = source.id === 'motion' && (status === 'countdown' || status === 'active');
   const setsDone = completedSets.length;
   const totalSets = planSets ? planSets.length : null;
   // Reps so far this workout, for the running fun-time preview.
   const workoutReps = completedSets.reduce((sum, s) => sum + s.reps, 0) + reps;
+  // Where to put the phone depends on both. For the one render between an
+  // exercise change and its source being picked, the source's own hint.
+  const hintKey = supportsSource(exercise.id, source.id)
+    ? `exercise.${exercise.id}.hint.${source.id}`
+    : source.hintKey;
+  const summaryExercise = getExercise(summary?.exerciseId);
 
   const planLine = (() => {
     if (activePlan?.kind === 'test') return t('workout.test');
@@ -599,6 +735,17 @@ export function WorkoutScreen({
         />
       </View>
 
+      {status === 'idle' && !activePlan ? (
+        <ExercisePicker
+          options={exerciseOptions}
+          selected={exercise.id}
+          onSelect={selectExercise}
+          label={t('workout.exercisePicker')}
+          bleed={spacing.lg}
+          style={styles.exerciseRow}
+        />
+      ) : null}
+
       {/*
         Raw touch/pointer handlers rather than Pressable: Pressability inserts a
         press-responder stage before onPressIn (measured at ~69ms), which the
@@ -618,119 +765,134 @@ export function WorkoutScreen({
         accessible={tapActive}
         accessibilityRole={tapActive ? 'button' : undefined}
         accessibilityLabel={tapActive ? `${reps} ${t('common.reps')}` : undefined}
+        onLayout={onStageLayout}
       >
         {poseActive ? (
           <PoseStage
             active
+            exercise={exercise.id}
             paused={status !== 'active'}
             onRep={() => handleRepRef.current?.()}
             onFrame={handlePoseFrame}
           />
         ) : null}
 
-        {status === 'idle' && summary ? (
-          <View style={styles.summary}>
-            <Text style={styles.summaryTitle}>
-              {summary.kind === 'day'
-                ? t('workout.summaryDay', { day: summary.day })
-                : summary.kind === 'test'
-                  ? t('workout.summaryTest')
-                  : t('workout.summaryTitle')}
-            </Text>
-            <Text style={styles.summaryReps} allowFontScaling={false}>
-              {summary.totalReps}
-            </Text>
-            <Text style={styles.summaryMeta}>
-              {`${summary.sets} ${t('common.sets')} · ${formatDuration(summary.durationSeconds)}`}
-            </Text>
-            {summary.earnedSeconds ? (
-              <Text style={styles.earnedLine}>
-                {t('workout.earned', { time: formatAmount(summary.earnedSeconds, t) })}
+        <View
+          style={[styles.stageContent, fitScale < 1 && { transform: [{ scale: fitScale }] }]}
+          onLayout={onStageContentLayout}
+        >
+          {status === 'idle' && summary ? (
+            <View style={styles.summary}>
+              <Text style={styles.summaryTitle}>
+                {summary.kind === 'day'
+                  ? t('workout.summaryDay', { day: summary.day })
+                  : summary.kind === 'test'
+                    ? t('workout.summaryTest')
+                    : t('workout.summaryTitle')}
               </Text>
-            ) : null}
-            <Pressable
-              onPress={share}
-              hitSlop={8}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.shareBtn, pressed && styles.pressedDim]}
-            >
-              <Text style={styles.shareText}>{t('btn.share')}</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <>
-            <View style={[styles.statusPill, { borderColor: statusColor }]}>
-              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-              <Text style={[styles.statusText, { color: statusColor }]}>
-                {t(`status.${status}`)}
+              <Text style={styles.summaryReps} allowFontScaling={false}>
+                {summary.totalReps}
               </Text>
+              <Text style={styles.summaryMeta}>
+                {[
+                  `${summaryExercise.icon} ${t(`exercise.${summaryExercise.id}`)}`,
+                  `${summary.sets} ${t('common.sets')}`,
+                  formatDuration(summary.durationSeconds),
+                ].join(' · ')}
+              </Text>
+              {summary.earnedSeconds ? (
+                <Text style={styles.earnedLine}>
+                  {t('workout.earned', { time: formatAmount(summary.earnedSeconds, t) })}
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={share}
+                hitSlop={8}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.shareBtn, pressed && styles.pressedDim]}
+              >
+                <Text style={styles.shareText}>{t('btn.share')}</Text>
+              </Pressable>
             </View>
+          ) : (
+            <>
+              <View style={[styles.statusPill, { borderColor: statusColor }]}>
+                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                <Text style={[styles.statusText, { color: statusColor }]}>
+                  {t(`status.${status}`)}
+                </Text>
+              </View>
 
-            {status === 'calibrating' ? (
-              <ActivityIndicator color={colors.warn} style={styles.spinner} />
-            ) : status === 'countdown' ? (
-              <>
-                <Text style={styles.counter} allowFontScaling={false}>
-                  {countdownRemaining || settings.countdownSeconds}
-                </Text>
-                {planLine ? <Text style={styles.subline}>{planLine}</Text> : null}
-              </>
-            ) : status === 'rest' ? (
-              <>
-                {restOver ? (
-                  <Text style={styles.restOver} allowFontScaling={false}>
-                    {t('workout.restOver')}
-                  </Text>
-                ) : (
+              {status === 'calibrating' ? (
+                <ActivityIndicator color={colors.warn} style={styles.spinner} />
+              ) : status === 'countdown' ? (
+                <>
                   <Text style={styles.counter} allowFontScaling={false}>
-                    {countdownRemaining}
+                    {countdownRemaining || countdownSeconds}
                   </Text>
-                )}
-                <Text style={styles.subline}>
-                  {t('workout.setDone', {
-                    n: setsDone,
-                    reps: completedSets[setsDone - 1]?.reps ?? 0,
-                  })}
-                </Text>
-                <Text style={styles.stageHint}>
-                  {planSets ? t('workout.nextIn') : t('workout.restHint')}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text
-                  style={styles.counter}
-                  allowFontScaling={false}
-                  accessibilityLabel={`${reps} ${t('common.reps')}`}
-                >
-                  {reps}
-                </Text>
-                <Text style={styles.timer} allowFontScaling={false}>
-                  {formatDuration(elapsedSeconds)}
-                </Text>
-                {running && planLine ? <Text style={styles.subline}>{planLine}</Text> : null}
-                {running && earning && workoutReps > 0 ? (
-                  <Text style={styles.earnedLine}>
-                    {t('workout.earned', {
-                      time: formatAmount(creditFor(workoutReps, blockerRate), t),
+                  {planLine ? <Text style={styles.subline}>{planLine}</Text> : null}
+                </>
+              ) : status === 'rest' ? (
+                <>
+                  {restOver ? (
+                    <Text style={styles.restOver} allowFontScaling={false}>
+                      {t('workout.restOver')}
+                    </Text>
+                  ) : (
+                    <Text style={styles.counter} allowFontScaling={false}>
+                      {countdownRemaining}
+                    </Text>
+                  )}
+                  <Text style={styles.subline}>
+                    {t('workout.setDone', {
+                      n: setsDone,
+                      reps: completedSets[setsDone - 1]?.reps ?? 0,
                     })}
                   </Text>
-                ) : null}
-                {tapActive ? (
                   <Text style={styles.stageHint}>
-                    {isNear ? t('workout.tapHold') : t('workout.tapTouch')}
+                    {planSets ? t('workout.nextIn') : t('workout.restHint')}
                   </Text>
-                ) : null}
-              </>
-            )}
+                </>
+              ) : (
+                <>
+                  <Text
+                    style={styles.counter}
+                    allowFontScaling={false}
+                    accessibilityLabel={`${reps} ${t('common.reps')}`}
+                  >
+                    {reps}
+                  </Text>
+                  <Text style={styles.timer} allowFontScaling={false}>
+                    {formatDuration(elapsedSeconds)}
+                  </Text>
+                  {running && planLine ? <Text style={styles.subline}>{planLine}</Text> : null}
+                  {running && earning && workoutReps > 0 ? (
+                    <Text style={styles.earnedLine}>
+                      {t('workout.earned', {
+                        time: formatAmount(
+                          creditFor(workoutReps, blockerRate, exercise.creditWeight),
+                          t,
+                        ),
+                      })}
+                    </Text>
+                  ) : null}
+                  {tapActive ? (
+                    <Text style={styles.stageHint}>
+                      {isNear ? t('workout.tapHold') : t('workout.tapTouch')}
+                    </Text>
+                  ) : null}
+                </>
+              )}
+            </>
+          )}
+        </View>
 
-            {poseActive && coach && status === 'active' ? (
-              <View style={styles.coachPill}>
-                <Text style={styles.coachText}>{t(coach)}</Text>
-              </View>
-            ) : null}
-          </>
-        )}
+        {/* Outside the scaled content: it is pinned to the stage's bottom edge. */}
+        {poseActive && coach && status === 'active' ? (
+          <View style={styles.coachPill}>
+            <Text style={styles.coachText}>{t(coach)}</Text>
+          </View>
+        ) : null}
       </View>
 
       <Text
@@ -742,7 +904,7 @@ export function WorkoutScreen({
           : status === 'idle'
             ? activePlan?.kind === 'test'
               ? t('workout.testHint')
-              : t(source.hintKey)
+              : t(hintKey)
             : ' '}
       </Text>
 
@@ -808,9 +970,20 @@ export function WorkoutScreen({
 
         {status === 'countdown' ? (
           <>
-            <Button label={t('common.cancel')} variant="secondary" onPress={finish} style={styles.grow} />
-            <View style={styles.gap} />
-            <Button label={t('btn.skip')} onPress={skipCountdown} style={styles.grow} />
+            <Button
+              label={t('common.cancel')}
+              variant="secondary"
+              // Into a new set, Cancel ends the workout; back into a paused
+              // one it must not drop that set's reps, so the set stays paused.
+              onPress={resuming ? pause : finish}
+              style={styles.grow}
+            />
+            {source.settleSeconds ? null : (
+              <>
+                <View style={styles.gap} />
+                <Button label={t('btn.skip')} onPress={skipCountdown} style={styles.grow} />
+              </>
+            )}
           </>
         ) : null}
 
@@ -861,6 +1034,27 @@ export function WorkoutScreen({
           </View>
         ) : null}
       </View>
+
+      {pocketLock ? (
+        <View
+          style={styles.lock}
+          // Every touch that misses the unlock button lands here and goes nowhere.
+          onStartShouldSetResponder={() => true}
+          onResponderTerminationRequest={() => false}
+        >
+          <Pressable
+            // Unlocking is what Pause (or, on the countdown, Cancel) would do;
+            // the normal controls are back once it has.
+            onLongPress={status === 'active' || resuming ? pause : finish}
+            delayLongPress={1000}
+            accessibilityRole="button"
+            accessibilityHint={t('workout.lockHint')}
+            style={({ pressed }) => [styles.lockButton, pressed && styles.lockButtonPressed]}
+          >
+            <Text style={styles.lockText}>{t('workout.holdToUnlock')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -900,6 +1094,7 @@ const styles = StyleSheet.create({
   },
 
   statsRow: { flexDirection: 'row' },
+  exerciseRow: { marginTop: spacing.md },
   gap: { width: spacing.sm },
   grow: { flex: 1 },
 
@@ -912,6 +1107,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
+  stageContent: { alignSelf: 'stretch', alignItems: 'center' },
   stageArmed: { borderColor: colors.border, backgroundColor: colors.surface },
   stageNear: { borderColor: colors.accent, backgroundColor: colors.accentDim },
 
@@ -1018,6 +1214,26 @@ const styles = StyleSheet.create({
   chipTextSelected: { color: colors.text, fontWeight: '600' },
 
   controls: { flexDirection: 'row' },
+  lock: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+    elevation: 10,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: spacing.xxl * 2,
+    // Mostly see-through: the count stays readable behind it.
+    backgroundColor: 'rgba(10, 10, 11, 0.35)',
+  },
+  lockButton: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  lockButtonPressed: { borderColor: colors.accent },
+  lockText: { ...type.label, color: colors.textDim },
   footer: { height: 44, alignItems: 'center', justifyContent: 'center' },
   discard: { fontSize: 14, color: colors.danger },
   dots: { flexDirection: 'row', gap: spacing.sm },

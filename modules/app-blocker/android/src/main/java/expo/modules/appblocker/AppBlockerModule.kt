@@ -15,9 +15,10 @@ import expo.modules.kotlin.modules.ModuleDefinition
 
 /**
  * The JS side of the blocker: settings in, state out. The blocking itself is
- * done by [BlockerService] in the ":blocker" process, which keeps working
- * while the app is closed; the state lives there too and is reached through
- * [BlockerProvider].
+ * done in the ":blocker" process, which keeps working while the app is closed,
+ * by [BlockerService] (accessibility) or [WatchService] (usage access, which
+ * banking apps do not object to); the state lives there too and is reached
+ * through [BlockerProvider].
  *
  * Every call that touches the state is async, because it crosses processes
  * and may have to start the blocker's one, and it resolves to the fresh
@@ -70,12 +71,37 @@ class AppBlockerModule : Module() {
       state(store(BlockerProvider.RESET))
     }
 
+    // For banking apps, which refuse to open while it is on. Android lets an
+    // app switch its own service off, never on; false when it is still on.
+    AsyncFunction("switchOffAccessibility") {
+      store(BlockerProvider.SWITCH_OFF_ACCESSIBILITY)?.getBoolean(BlockerProvider.VALUE) ?: false
+    }
+
     Function("openAccessibilitySettings") {
       openSettings(accessibilitySettingsIntent())
     }
 
+    // Where Developer options, USB debugging included, are switched off.
+    Function("openDeveloperSettings") {
+      openSettings(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) ||
+        openSettings(Intent(Settings.ACTION_SETTINGS))
+    }
+
     Function("openAppSettings") {
       openSettings(appDetailsIntent())
+    }
+
+    // Android 10+ opens this app's own switch; older versions show the list.
+    Function("openUsageAccessSettings") {
+      openSettings(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, packageUri())) ||
+        openSettings(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) ||
+        openSettings(appDetailsIntent())
+    }
+
+    Function("openOverlaySettings") {
+      openSettings(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, packageUri())) ||
+        openSettings(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)) ||
+        openSettings(appDetailsIntent())
     }
 
     // The list of apps under battery optimisation. Asking to be exempted
@@ -109,10 +135,14 @@ class AppBlockerModule : Module() {
 
   private fun state(bundle: Bundle?): Map<String, Any?> = mapOf(
     "reachable" to (bundle != null),
-    "serviceEnabled" to isServiceEnabled(),
+    "serviceEnabled" to Access.accessibilityEnabled(context),
     "serviceRunning" to (bundle?.getBoolean("serviceRunning") ?: false),
     "serviceConnectedAt" to (bundle?.getLong("serviceConnectedAt") ?: 0L).toDouble(),
+    "usageAccess" to Access.usageAccess(context),
+    "overlayAllowed" to Access.overlay(context),
+    "watcherRunning" to (bundle?.getBoolean("watcherRunning") ?: false),
     "batteryOptimized" to isBatteryOptimized(),
+    "developerOptions" to Access.developerOptions(context),
     "enabled" to (bundle?.getBoolean("enabled") ?: false),
     "blocked" to (bundle?.getStringArrayList("blocked") ?: arrayListOf<String>()).toList(),
     "sites" to (bundle?.getStringArrayList("sites") ?: arrayListOf<String>()).toList(),
@@ -121,24 +151,15 @@ class AppBlockerModule : Module() {
     "earnRequestedAt" to (bundle?.getLong("earnRequestedAt") ?: 0L).toDouble(),
   )
 
-  /** Whether the user has switched the service on in the system's accessibility settings. */
-  private fun isServiceEnabled(): Boolean {
-    val expected = ComponentName(context, BlockerService::class.java)
-    val enabled = Settings.Secure.getString(
-      context.contentResolver,
-      Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-    ) ?: return false
-    return enabled.split(':').any { ComponentName.unflattenFromString(it) == expected }
-  }
-
   /** Battery optimisation lets aggressive OEM builds stop the service in the background. */
   private fun isBatteryOptimized(): Boolean {
     val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
     return !power.isIgnoringBatteryOptimizations(context.packageName)
   }
 
-  private fun appDetailsIntent() =
-    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+  private fun packageUri() = Uri.fromParts("package", context.packageName, null)
+
+  private fun appDetailsIntent() = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri())
 
   /**
    * The accessibility settings list. The extras highlight our entry on

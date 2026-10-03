@@ -87,11 +87,14 @@ function seedProgram() {
   };
 }
 
-/** The web build's stand-in blocker (src/blocker/demoBlocker.js), already set up. */
+/**
+ * The web build's stand-in blocker (src/blocker/demoBlocker.js), already set
+ * up the recommended way: usage access and the overlay, no Accessibility.
+ */
 function seedBlocker() {
   return {
-    serviceEnabled: true,
-    serviceRunning: true,
+    usageAccess: true,
+    overlayAllowed: true,
     enabled: true,
     blocked: ['com.ss.android.ugc.trill', 'com.facebook.katana', 'com.google.android.youtube'],
     balanceSeconds: 23 * 60,

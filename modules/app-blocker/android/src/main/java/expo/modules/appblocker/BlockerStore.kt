@@ -3,16 +3,17 @@ package expo.modules.appblocker
 import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONObject
+import java.util.concurrent.CopyOnWriteArraySet
 
 /**
- * Everything the blocker remembers, shared by the JS bridge and the
- * accessibility service.
+ * Everything the blocker remembers, shared by the JS bridge (through
+ * [BlockerProvider]) and the two watchers, [BlockerService] and [WatchService].
  *
- * Both run in the app's own process, so this one in-memory copy is the source
- * of truth and SharedPreferences only has to carry it across restarts. The
- * balance is spent in one-second steps while a blocked app is open; those
- * steps are written out every few seconds and whenever a session ends, so a
- * killed process loses at most a few seconds of accounting.
+ * All of them run in the ":blocker" process, so this one in-memory copy is the
+ * source of truth and SharedPreferences only has to carry it across restarts.
+ * The balance is spent in small steps while a blocked app is open; those steps
+ * are written out every few seconds and whenever a session ends, so a killed
+ * process loses at most a few seconds of accounting.
  */
 internal object BlockerStore {
   private const val PREFS = "expo.modules.appblocker"
@@ -51,9 +52,16 @@ internal object BlockerStore {
   private var earnRequestedAt = 0L
   private var serviceConnectedAt = 0L
 
-  /** Set by the running service, so it re-checks the app in front after any change. */
-  @Volatile
-  var onChange: (() -> Unit)? = null
+  /** The running watchers, so they re-check the app in front after any change. */
+  private val listeners = CopyOnWriteArraySet<() -> Unit>()
+
+  fun addListener(listener: () -> Unit) {
+    listeners.add(listener)
+  }
+
+  fun removeListener(listener: () -> Unit) {
+    listeners.remove(listener)
+  }
 
   @Synchronized
   fun init(context: Context) {
@@ -129,11 +137,13 @@ internal object BlockerStore {
     prefs?.edit()?.putLong(KEY_BALANCE, balanceMs)?.apply()
   }
 
-  /** Copy for the native screens, translated by the app so they match its language setting. */
-  @Synchronized
+  /** Copy for the native screens and the notification, translated by the app to match its language setting. */
   fun setLabels(values: Map<String, String>) {
-    labels = values.toMap()
-    prefs?.edit()?.putString(KEY_LABELS, JSONObject(values).toString())?.apply()
+    synchronized(this) {
+      labels = values.toMap()
+      prefs?.edit()?.putString(KEY_LABELS, JSONObject(values).toString())?.apply()
+    }
+    listeners.forEach { it() }
   }
 
   @Synchronized
@@ -163,7 +173,7 @@ internal object BlockerStore {
       block(editor)
       editor.apply()
     }
-    onChange?.invoke()
+    listeners.forEach { it() }
   }
 
   private fun parseLabels(raw: String?): Map<String, String> {

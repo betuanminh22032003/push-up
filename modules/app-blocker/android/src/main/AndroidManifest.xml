@@ -1,4 +1,20 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:tools="http://schemas.android.com/tools">
+
+  <!--
+    For the way of blocking that banking apps accept (WatchService): usage
+    access to see which app is in front, which the user grants in settings;
+    "display over other apps" to open the block screen from the background
+    and draw the countdown; a foreground service to keep watching, restarted
+    after a reboot or an update.
+  -->
+  <uses-permission
+    android:name="android.permission.PACKAGE_USAGE_STATS"
+    tools:ignore="ProtectedPermissions" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
   <!--
     Package visibility on Android 11+, without the QUERY_ALL_PACKAGES
@@ -52,6 +68,30 @@
         android:name="android.accessibilityservice"
         android:resource="@xml/app_blocker_service" />
     </service>
+
+    <!--
+      Blocks apps without the accessibility service, which many banking apps
+      refuse to run next to. It waits while that service is on.
+    -->
+    <service
+      android:name="expo.modules.appblocker.WatchService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse"
+      android:process=":blocker">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="App blocker: watches which app is in front to block the apps the user chose until they earn time with push-ups" />
+    </service>
+
+    <receiver
+      android:name="expo.modules.appblocker.BootReceiver"
+      android:exported="false"
+      android:process=":blocker">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
 
     <!-- The one copy of the blocker's state, which the JS module reaches from the main process. -->
     <provider

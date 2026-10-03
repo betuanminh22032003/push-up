@@ -35,8 +35,10 @@ Hands-free push-up counter. AI camera, 6-week program, goals and streaks.
 Put the phone down and just do push-ups. Hít Đất AI counts every rep for you — with the camera, the sensor, or a tap of your nose — and turns them into a habit.
 
 COUNTS HANDS-FREE
+• Four exercises: push-ups, squats, sit-ups and jumping jacks. Pick one before you start, and it shows you where to put the phone.
 • AI camera: prop the phone up, get into position, and the camera counts your reps and coaches your form ("go lower", "keep your body straight").
-• Sensor mode: phone on the floor, cover the sensor at the bottom of each rep.
+• Sensor mode for push-ups: phone on the floor, cover the sensor at the bottom of each rep.
+• Motion mode: squats with the phone in your pocket, sit-ups with it on your chest, jumping jacks with it in your hand.
 • Tap mode: works on every phone, no camera needed.
 • Voice count says each number out loud so you never look at the screen.
 
@@ -53,12 +55,12 @@ REAL WORKOUTS
 STAY MOTIVATED
 • Daily goal with a progress bar.
 • Streak of consecutive days with reps.
-• Weekly chart, personal records, 17 achievements.
+• Weekly chart and personal records, for all exercises or one at a time, and 21 achievements.
 • Share your result after every workout.
 
 EARN YOUR SCREEN TIME
 • Pick the apps and websites that eat your time (social media, videos, games) and Hít Đất AI locks them, in the browser too.
-• Every push-up earns a minute of use; you choose the rate. A small timer counts it down while you scroll.
+• Every push-up earns a minute of use; you choose the rate. Squats and sit-ups earn half of that, jumping jacks a quarter. A small timer counts it down while you scroll.
 • Out of time? The app stays covered until you do more push-ups. Switch it off whenever you like.
 
 PRIVATE BY DESIGN
@@ -90,8 +92,10 @@ Hít Đất AI: Đếm bằng camera
 Đặt điện thoại xuống và chỉ việc hít đất. Hít Đất AI đếm từng cái cho bạn — bằng camera, cảm biến, hoặc chạm mũi — và biến nó thành thói quen.
 
 ĐẾM RẢNH TAY
+• Bốn bài tập: hít đất, squat, gập bụng và bật nhảy. Chọn bài trước khi tập, bài nào cũng hướng dẫn cách đặt máy.
 • Camera AI: dựng điện thoại lên, vào tư thế, camera đếm số cái và nhắc tư thế ("xuống thấp hơn", "giữ thẳng người").
-• Chế độ cảm biến: đặt máy trên sàn, che cảm biến ở điểm thấp nhất mỗi cái.
+• Chế độ cảm biến cho hít đất: đặt máy trên sàn, che cảm biến ở điểm thấp nhất mỗi cái.
+• Chế độ chuyển động: squat với máy trong túi quần, gập bụng với máy áp trên ngực, bật nhảy với máy cầm trong tay.
 • Chế độ chạm: chạy trên mọi máy, không cần camera.
 • Đọc số bằng giọng nói, không cần nhìn màn hình.
 
@@ -108,12 +112,12 @@ CHƯƠNG TRÌNH 6 TUẦN
 GIỮ ĐỘNG LỰC
 • Mục tiêu mỗi ngày với thanh tiến độ.
 • Chuỗi ngày tập liên tiếp.
-• Biểu đồ tuần, kỷ lục cá nhân, 17 thành tích.
+• Biểu đồ tuần và kỷ lục cá nhân, xem chung hoặc theo từng bài, cùng 21 thành tích.
 • Chia sẻ kết quả sau mỗi buổi tập.
 
 ĐỔI HÍT ĐẤT LẤY GIỜ GIẢI TRÍ
 • Chọn những ứng dụng và trang web hay ngốn thời gian (mạng xã hội, video, game), Hít Đất AI sẽ khoá chúng, cả trong trình duyệt.
-• Mỗi cái hít đất đổi được 1 phút sử dụng, tuỳ chỉnh được. Đồng hồ nhỏ đếm ngược khi bạn lướt.
+• Mỗi cái hít đất đổi được 1 phút sử dụng, tuỳ chỉnh được. Squat và gập bụng được một nửa, bật nhảy một phần tư. Đồng hồ nhỏ đếm ngược khi bạn lướt.
 • Hết giờ? Ứng dụng bị che lại cho tới khi bạn hít đất tiếp. Tắt bất cứ lúc nào.
 
 RIÊNG TƯ TỪ THIẾT KẾ
@@ -162,13 +166,31 @@ Camera: the camera is used only on device for live pose estimation; frames are n
 The manifest requests only:
 
 - `CAMERA` — AI camera mode (runtime permission, requested on first use)
-- `POST_NOTIFICATIONS` — daily reminder (runtime, requested when enabled)
-- `RECEIVE_BOOT_COMPLETED` — expo-notifications re-schedules the reminder after a reboot
+- `POST_NOTIFICATIONS` — daily reminder (runtime, requested when enabled); it also shows the app blocker's notification
+- `RECEIVE_BOOT_COMPLETED` — expo-notifications re-schedules the reminder after a reboot, and the app blocker restarts its watcher
+- `PACKAGE_USAGE_STATS` — app blocker: which app is in front. Special access the user grants in Settings → Usage access, after an in-app explanation
+- `SYSTEM_ALERT_WINDOW` — app blocker: opens the block screen from the background and draws the countdown. Special access the user grants
+- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` — the app blocker's watcher (declaration below)
 - `VIBRATE`, `INTERNET`, `MODIFY_AUDIO_SETTINGS` — normal permissions, no prompt
+- `HIGH_SAMPLING_RATE_SENSORS` — motion mode reads the phone's orientation fast enough to count a brisk jumping jack; normal permission, no prompt, no data leaves the device
 
-`RECORD_AUDIO`, `ACTIVITY_RECOGNITION` and the foreground-service permissions that the Expo modules add by default are blocked in `app.json`.
+`RECORD_AUDIO`, `ACTIVITY_RECOGNITION` and the media-playback foreground-service permission that the Expo modules add by default are blocked in `app.json`.
 
-The app blocker adds no permission, but it does declare an **accessibility service** (`modules/app-blocker`), which needs its own declaration. It finds installed apps and browsers through targeted `<queries>` intents, so `QUERY_ALL_PACKAGES` is not requested.
+The app blocker (`modules/app-blocker`) works either way the user chooses: usage access plus "display over other apps", run by a **special-use foreground service**, or an **accessibility service**. Many Vietnamese banking apps refuse to open while any accessibility service is on, which is why the first way exists. Each needs its own declaration, below. It finds installed apps and browsers through targeted `<queries>` intents, so `QUERY_ALL_PACKAGES` is not requested.
+
+## Foreground service declaration
+
+Play Console → App content → Foreground service permissions → **Special use** (`FOREGROUND_SERVICE_SPECIAL_USE`, subtype in the manifest: "App blocker").
+
+```
+Hít Đất AI is a push-up counter with an optional app blocker for digital wellbeing: the user picks apps they want to limit, and those stay blocked until the user earns time by doing push-ups.
+
+The special-use foreground service runs only while the user has switched blocking on, chosen at least one app and granted usage access and "display over other apps". While the screen is on, it reads the usage events (UsageStatsManager) twice a second to know which app is in the foreground, so it can count the user's earned time down while a blocked app is open and cover the app with a block screen once that time is used up. It has to keep running while the user is in other apps, which is the whole point, and no other foreground service type describes this: it is not media, location, a data sync, a connected device or a user-initiated transfer.
+
+Its ongoing notification says that blocking is on. Turning blocking off in the app, or withdrawing either permission, stops the service. Nothing is recorded or sent off the device.
+```
+
+Attach a short screen recording: the Blocker tab → the disclosure → granting usage access and "display over other apps" → the notification → opening a blocked app → the block screen.
 
 ## Accessibility API declaration
 
