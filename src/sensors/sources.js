@@ -17,6 +17,7 @@ import { createMotionTracker } from './tilt';
  *   motion  squats, sit-ups, jumping jacks: how far the phone, carried by the
  *           moving limb, has turned since the set began
  *   ai      the camera; reports finished reps itself instead of near/far
+ *   timer   holds without a camera: a stopwatch, one "rep" a second
  *
  * Which sources suit which exercise is src/exercises/exercises.js's call; the
  * motion source takes its angles from there through `subscribe`'s config.
@@ -262,6 +263,26 @@ const tapSource = {
 };
 
 /**
+ * Timer source, for holds (plank, wall sit...) without the camera: a plain
+ * stopwatch. The workout screen adds one "rep" — one second — for every
+ * second the set is active, on the honour system. It emits no near/far
+ * stream; `isTimerDriven` tells the screen to run the clock.
+ */
+const timerSource = {
+  id: 'timer',
+  labelKey: 'source.timer',
+  hintKey: 'source.timer.hint',
+  isTapDriven: false,
+  isTimerDriven: true,
+  async isAvailableAsync() {
+    return true;
+  },
+  subscribe() {
+    return () => {};
+  },
+};
+
+/**
  * Camera pose detection. Unlike the others this emits no near/far stream at
  * all — PoseStage owns the camera loop and reports finished reps directly,
  * because the analyser needs the whole skeleton, not a single boolean.
@@ -288,7 +309,7 @@ const aiSource = {
   },
 };
 
-export const SOURCES = [aiSource, lightSource, motionSource, tapSource];
+export const SOURCES = [aiSource, lightSource, motionSource, tapSource, timerSource];
 
 export function getSourceById(id) {
   return SOURCES.find((s) => s.id === id) || tapSource;

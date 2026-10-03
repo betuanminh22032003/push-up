@@ -19,10 +19,15 @@ const POSE_MODULES = [
   'geometry',
   'landmarks',
   'repEngine',
+  'readings',
   'pushupAnalyzer',
   'squatAnalyzer',
   'situpAnalyzer',
   'jumpingJackAnalyzer',
+  'upperBodyAnalyzers',
+  'lowerBodyAnalyzers',
+  'coreAnalyzers',
+  'holdAnalyzers',
   'analyzers',
 ];
 const unwrap = (source) =>
@@ -38,6 +43,7 @@ const {
   createAnalyzer,
   POSE_EXERCISE_IDS,
   POSE_DEFAULTS,
+  POSE_HOLD_IDS,
   measureSquatFrame,
   measureSitupFrame,
   measureJumpingJackFrame,
@@ -756,15 +762,30 @@ await check('issues are one shared vocabulary', () => {
     NOT_HORIZONTAL: 'notHorizontal',
     NOT_UPRIGHT: 'notUpright',
     NOT_LYING: 'notLying',
+    NOT_IN_POSITION: 'notInPosition',
+    BENT_KNEES: 'bentKnees',
   });
 });
 
-await check('every analyser\'s thresholds leave room for hysteresis', () => {
+await check('holds are exactly the app\'s hold exercises', () => {
+  assert.deepEqual(
+    POSE_HOLD_IDS,
+    exercises.EXERCISES.filter((e) => e.kind === 'hold').map((e) => e.id),
+  );
   for (const id of POSE_EXERCISE_IDS) {
+    assert.equal(!!createAnalyzer(id).hold, POSE_HOLD_IDS.includes(id), id);
+  }
+});
+
+await check('every analyser\'s thresholds leave room for hysteresis', () => {
+  for (const id of POSE_EXERCISE_IDS.filter((x) => !POSE_HOLD_IDS.includes(x))) {
     const d = POSE_DEFAULTS[id];
     assert.ok(d.downAngle < d.partialAngle && d.partialAngle < d.upAngle, `${id} fallbacks ordered`);
     assert.ok(d.downAngle <= d.downAngleCeiling && d.upAngle >= d.upAngleFloor, `${id} fallbacks inside the limits`);
-    assert.ok(d.upAngleFloor - d.downAngleCeiling >= 20, `${id} limits leave a band`);
+    // A crunch only lifts the shoulders 25-30 degrees in all, so its band is
+    // narrower; noise there is caught by minPhaseMs and the lying gate.
+    const band = id === 'crunch' ? 8 : 20;
+    assert.ok(d.upAngleFloor - d.downAngleCeiling >= band, `${id} limits leave a band`);
   }
   // A rest the thresholds accept must also pass the lying check.
   const s = POSE_DEFAULTS.situp;
@@ -1101,6 +1122,486 @@ await check('arms flapping inside the hysteresis band count nothing', () => {
   assert.equal(play(a, jackPose, frames).reps, 0);
 });
 
+// ===========================================================================
+// The exercise library: every other exercise the camera counts
+// ===========================================================================
+//
+// Each one gets a body built in 3-D from the movement it is (the same body3d
+// and cameras as above), a check that a clean set counts exactly, and checks
+// that its look-alikes and noise count nothing.
+
+/** An arm bent to `elbow` degrees, the upper arm `upper` degrees from hanging (sag). */
+const bentArm = (upper, elbow) => ({ upperArm: sag(upper), forearm: sag(upper - (180 - elbow)) });
+
+/** The amount (0..1) a side is moved, `alt` rising 0..1 for left then 1..2 for right. */
+const sideAmount = (alt, side) => {
+  const k = side === 1 ? alt : alt - 1;
+  return k > 0 && k < 1 ? Math.sin(Math.PI * k) : 0;
+};
+/** One side, then the other, each `ms` long with a short stop between: `n` reps in all. */
+const alternating = (n, ms = 500, settle = 200) => [
+  ...hold(settle, { alt: 0 }),
+  ...Array.from({ length: n }, (_, i) => [...sweep('alt', i % 2, (i % 2) + 1, ms), ...hold(settle, { alt: 0 })]).flat(),
+  ...hold(settle, { alt: 0 }),
+];
+/** Scissoring legs: as one comes up the other goes down, crossing at rest. */
+const scissoring = (n, msPerSide = 400) => {
+  const frames = [];
+  const steps = Math.round(msPerSide / STEP);
+  for (let i = 0; i <= n * steps; i++) frames.push({ phi: Math.PI / 2 + (Math.PI * i) / steps });
+  return [...hold(200, { phi: Math.PI / 2 }), ...frames, ...hold(200, { phi: Math.PI / 2 })];
+};
+const scissorAmounts = ({ phi, alt }) =>
+  phi !== undefined
+    ? { left: Math.max(0, Math.cos(phi)) ** 2, right: Math.max(0, -Math.cos(phi)) ** 2 }
+    : { left: sideAmount(alt, 1), right: sideAmount(alt, -1) };
+const perLeg = (left, right) => (s) => (s === 1 ? left : right);
+
+// --- builders, one per movement ------------------------------------------------
+
+/** Pike push-up side-on: hips high, elbows bending to `elbow`. */
+const pikePose = ({ elbow = 170, body = 100, ...view }) =>
+  project(
+    body3d({ torso: sag(90 - (180 - body) / 2), thigh: sag(-90 + (180 - body) / 2), ...bentArm(20, elbow) }),
+    { yaw: 90, ...view },
+  );
+/** Chair dip side-on: seated on the edge, legs forward; `d` 0 arms straight .. 1 at the bottom. */
+const dipPose = ({ d = 0, standing = false, ...view }) =>
+  project(
+    body3d({
+      torso: sag(170),
+      thigh: standing ? sag(0) : sag(85),
+      shin: standing ? sag(0) : sag(10),
+      upperArm: sag(-(5 + 90 * d)),
+      forearm: sag(-5),
+    }),
+    { yaw: 90, ...view },
+  );
+/** Standing curls side-on; `left`/`right` 0 hanging .. 1 curled to 40 degrees. */
+const curlPose = ({ left = 0, right = left, raise = 0, ...view }) =>
+  project(
+    body3d({
+      upperArm: sag(raise),
+      forearm: (s) => sag(raise + 140 * (s === 1 ? left : right)),
+    }),
+    { yaw: 90, ...view },
+  );
+/** Overhead press front-on; `d` 0 hands at the shoulders .. 1 locked out overhead. */
+const pressPose = ({ d = 0, straight = false, ...view }) => {
+  const r = 90 + 80 * d;
+  const f = straight ? r : 180 * (1 - d) + r * d;
+  return project(body3d({ upperArm: out(r), forearm: out(f) }), view);
+};
+/** Arms raised `raise` degrees, straight: out to the sides (front-on), or forward (side-on). */
+const raisePose = ({ raise = 5, forward = false, ...view }) =>
+  forward
+    ? project(body3d({ upperArm: sag(raise) }), { yaw: 90, ...view })
+    : project(body3d({ upperArm: out(raise), forearm: out(raise) }), view);
+/** Lunge side-on, alternating legs: the front thigh drops to level, the back knee toward the floor. */
+const lungePose = (f) => {
+  const { left, right } = scissorAmounts(f);
+  const front = (a) => sag(90 * a * (f.depth ?? 1));
+  return project(
+    body3d({
+      thigh: (s) => (left > right ? (s === 1 ? front(left) : sag(-15 * left)) : s === -1 ? front(right) : sag(-15 * right)),
+      shin: (s) => (left > right ? (s === 1 ? sag(0) : sag(-80 * left)) : s === -1 ? sag(0) : sag(-80 * right)),
+    }),
+    { yaw: 90, ...f.view },
+  );
+};
+/** Lying on the back, knees bent; `d` 0 hips down .. 1 bridged. `single` holds the left leg out straight. */
+const bridgePose = ({ d = 0, single = false, ...view }) =>
+  project(
+    body3d({
+      torso: sag(-90 + 30 * d),
+      thigh: sag(135 - 15 * d),
+      shin: (s) => (single && s === 1 ? sag(135 - 15 * d) : sag(-20)),
+      upperArm: sag(-90),
+    }),
+    { yaw: 90, ...view },
+  );
+/** On all fours; the left leg kicks back (`kick`) or out to the side (`hydrant`), 0..1. */
+const allFoursPose = ({ kick = 0, hydrant = 0, ...view }) =>
+  project(
+    body3d({
+      torso: sag(90),
+      thigh: (s) =>
+        s === 1 && kick ? sag(-90 * kick) : s === 1 && hydrant ? [Math.sin(rad(70 * hydrant)), -Math.cos(rad(70 * hydrant)), 0] : sag(0),
+      shin: (s) => (s === 1 && kick ? sag(-90 - 90 * kick) : sag(-90)),
+      upperArm: sag(0),
+    }),
+    { yaw: 90, ...view },
+  );
+/** Lying on the back, straight legs raised `legs` degrees off the floor. */
+const legRaisePose = ({ legs = 0, rise = 0, ...view }) =>
+  project(body3d({ torso: sag(-90 - rise), thigh: sag(90 + legs), shin: sag(90 + legs), upperArm: sag(-90) }), {
+    yaw: 90,
+    ...view,
+  });
+/** Bicycle crunch side-on: shoulders curled up, knees driving in alternately. */
+const bicyclePose = (f) => {
+  const { left, right } = scissorAmounts(f);
+  return project(
+    body3d({ torso: sag(-115), thigh: perLeg(sag(100 + 70 * left), sag(100 + 70 * right)), upperArm: sag(-150) }),
+    { yaw: 90, ...f.view },
+  );
+};
+/** Mountain climbers: a plank, knees driving toward the chest alternately. */
+const climberPose = (f) => {
+  const { left, right } = scissorAmounts(f);
+  return project(
+    body3d({
+      torso: sag(90 + (f.raise || 0)),
+      thigh: perLeg(sag(-90 + 135 * left), sag(-90 + 135 * right)),
+      shin: perLeg(sag(-90 + 45 * left), sag(-90 + 45 * right)),
+      upperArm: sag(0),
+    }),
+    { yaw: 90, ...f.view },
+  );
+};
+/** High knees: thighs lifted to level alternately; any view. */
+const kneesPose = (f) => {
+  const { left, right } = scissorAmounts(f);
+  return project(body3d({ thigh: perLeg(sag(90 * left), sag(90 * right)), shin: sag(5) }), { yaw: 0, ...f.view });
+};
+/** Butt kicks: heels kicked up behind alternately; any view. */
+const kicksPose = (f) => {
+  const { left, right } = scissorAmounts(f);
+  return project(body3d({ shin: perLeg(sag(-140 * left), sag(-140 * right)) }), { yaw: 0, ...f.view });
+};
+/** Seated, leaning back, knees up, hands together swinging `tw` degrees to a side. Front-on. */
+const twistPose = ({ tw = 0, standing = false, ...view }) => {
+  const v = [Math.sin(rad(tw)), -0.35, 0.9 * Math.cos(rad(tw))];
+  const n = Math.hypot(...v);
+  const arm = (s) => [v[0] / n - s * 0.3, v[1] / n, v[2] / n];
+  return project(
+    body3d(
+      standing
+        ? { upperArm: arm, forearm: arm }
+        : { torso: sag(-135), thigh: sag(120), shin: sag(30), upperArm: arm, forearm: arm },
+    ),
+    view,
+  );
+};
+const twisting = (n, ms = 700) => {
+  const frames = [];
+  const steps = Math.round(ms / STEP);
+  for (let i = 0; i <= n * steps; i++) frames.push({ tw: 50 * Math.sin((Math.PI * i) / steps) });
+  return [...hold(200, { tw: 0 }), ...frames, ...hold(200, { tw: 0 })];
+};
+/**
+ * Burpee keyframes side-on: standing (0), squat (1), plank (2). `stage` moves
+ * between them; each joint direction is interpolated.
+ */
+const BURPEE_KEYS = [
+  { torso: 180, thigh: 0, shin: 0 },
+  { torso: 140, thigh: 100, shin: -40 },
+  { torso: 90, thigh: -90, shin: -90 },
+];
+const burpeePose = ({ stage = 0, ...view }) => {
+  const i = Math.min(1, Math.floor(stage));
+  const k = stage - i;
+  const at = (key) => BURPEE_KEYS[i][key] + (BURPEE_KEYS[i + 1][key] - BURPEE_KEYS[i][key]) * k;
+  return project(body3d({ torso: sag(at('torso')), thigh: sag(at('thigh')), shin: sag(at('shin')), upperArm: sag(at('thigh') / 2) }), {
+    yaw: 90,
+    ...view,
+  });
+};
+const burpee = () => [
+  ...hold(300, { stage: 0 }),
+  ...sweep('stage', 0, 2, 900),
+  ...hold(300, { stage: 2 }),
+  ...sweep('stage', 2, 0, 900),
+  ...hold(300, { stage: 0 }),
+];
+/** A plank side-on; `sag` drops the hips, `flat` lies down with the arms along the floor. */
+const plankPose = ({ sagDeg = 0, flat = false, ...view }) =>
+  project(
+    body3d({
+      torso: sag(90 - sagDeg),
+      thigh: sag(-90 + sagDeg),
+      upperArm: flat ? sag(-90) : sag(0),
+      forearm: flat ? sag(-90) : sag(90),
+    }),
+    { yaw: 90, ...view },
+  );
+/** A side plank facing the camera: the body rolled onto its right side, `tilt` off level, on the right arm. */
+const sidePlankPose = ({ tilt = 20, ...view }) =>
+  project(
+    body3d({ upperArm: (s) => (s === -1 ? out(90)(s) : sag(0)), forearm: (s) => (s === -1 ? out(90)(s) : sag(0)) }),
+    { yaw: 0, roll: 90 - tilt, ...view },
+  );
+/** Lying on the back, shoulders and legs each lifted `lift` degrees: a hollow hold. */
+const archPose = ({ lift = 25, torsoLift = lift, ...view }) =>
+  project(body3d({ torso: sag(-90 - torsoLift), thigh: sag(90 + lift), upperArm: sag(-90 - torsoLift) }), {
+    yaw: 90,
+    ...view,
+  });
+/** Front-on, arms straight out at `raise` degrees from the sides. */
+const circlesPose = ({ raise = 90, elbow = 180, ...view }) =>
+  project(body3d({ upperArm: out(raise), forearm: out(raise + (180 - elbow)) }), view);
+
+/** Seconds counted by a hold analyser for frames at `step` ms apart. */
+const timeHeld = (id, poseOf, frames, step = STEP, startAt = 0) => play(createAnalyzer(id), poseOf, frames, startAt, step).reps;
+
+group('library: push-up variants');
+
+await check('knee, wide, diamond and decline push-ups count like a push-up, under their own id', () => {
+  for (const id of ['kneepushup', 'widepushup', 'diamondpushup', 'declinepushup']) {
+    const a = createAnalyzer(id);
+    assert.equal(a.exercise, id);
+    assert.equal(run(a, [...cycle(), ...cycle(), ...cycle({ tilt: 20 })]).reps, 3, id);
+    assert.equal(run(createAnalyzer(id), cycle({ tilt: 85 })).reps, 0, `${id}: standing counts nothing`);
+  }
+});
+
+await check('an incline push-up, hands on a chair, counts; a push-up gate would refuse it', () => {
+  assert.equal(run(createAnalyzer('inclinepushup'), repeat(3, cycle({ tilt: 60 }))).reps, 3);
+  assert.equal(run(createAnalyzer('pushup'), repeat(3, cycle({ tilt: 60 }))).reps, 0);
+  assert.equal(run(createAnalyzer('inclinepushup'), cycle({ tilt: 85 })).reps, 0, 'standing');
+});
+
+await check('pike push-ups count with the hips piked, not from a flat plank', () => {
+  const pike = repOf('elbow', { rest: 170, effort: 85 });
+  assert.equal(play(createAnalyzer('pikepushup'), pikePose, repeat(4, pike)).reps, 4);
+  const flat = repOf('elbow', { rest: 170, effort: 85, body: 178 });
+  const { reps, events } = play(createAnalyzer('pikepushup'), pikePose, repeat(2, flat));
+  assert.equal(reps, 0);
+  assert.ok(issuesIn(events).includes(ISSUES.NOT_IN_POSITION));
+});
+
+await check('chair dips count seated; bending the arms standing does not', () => {
+  assert.equal(play(createAnalyzer('dip'), dipPose, repeat(5, repOf('d', { rest: 0, effort: 1 }))).reps, 5);
+  const standing = repeat(3, repOf('d', { rest: 0, effort: 1, standing: true }));
+  assert.equal(play(createAnalyzer('dip'), dipPose, standing).reps, 0);
+  assert.equal(play(createAnalyzer('dip'), dipPose, repeat(3, repOf('d', { rest: 0, effort: 0.3 }))).reps, 0, 'a shallow dip');
+});
+
+group('library: shoulders and arms');
+
+await check('bicep curls count each arm, and both arms together once', () => {
+  const alt = [...hold(200, {}), ...repOf('left', { rest: 0, effort: 1, right: 0 }), ...repOf('right', { rest: 0, effort: 1, left: 0 })];
+  assert.equal(play(createAnalyzer('bicepcurl'), curlPose, repeat(3, alt)).reps, 6, 'alternating');
+  assert.equal(play(createAnalyzer('bicepcurl'), curlPose, repeat(4, repOf('left', { rest: 0, effort: 1 }))).reps, 4);
+});
+
+await check('curling with the arm raised (a press, a wave) counts nothing', () => {
+  const raised = repeat(3, repOf('left', { rest: 0, effort: 1, raise: 90 }));
+  const { reps, events } = play(createAnalyzer('bicepcurl'), curlPose, raised);
+  assert.equal(reps, 0);
+  assert.ok(issuesIn(events).includes(ISSUES.NOT_IN_POSITION));
+});
+
+await check('overhead presses count from the shoulders; jumping jacks do not', () => {
+  assert.equal(play(createAnalyzer('shoulderpress'), pressPose, repeat(5, repOf('d', { rest: 0, effort: 1 }))).reps, 5);
+  const a = createAnalyzer('shoulderpress');
+  const { reps, events } = play(a, jackPose, repeat(4, withLegs(jack())));
+  assert.equal(reps, 0, 'straight arms from the sides');
+  assert.ok(issuesIn(events).includes(ISSUES.NOT_IN_POSITION));
+});
+
+await check('lateral raises count both arms to shoulder height, front-on', () => {
+  const raise = repOf('raise', { rest: 5, effort: 90, downMs: 600, upMs: 600 });
+  assert.equal(play(createAnalyzer('lateralraise'), raisePose, repeat(5, raise)).reps, 5);
+  assert.equal(play(createAnalyzer('lateralraise'), raisePose, repeat(3, repOf('raise', { rest: 5, effort: 45 }))).reps, 0, 'half way');
+  // One arm only: a wave.
+  const one = (f) => project(body3d({ upperArm: (s) => (s === 1 ? out(f.raise)(s) : sag(0)) }), {});
+  assert.equal(play(createAnalyzer('lateralraise'), one, repeat(3, raise)).reps, 0, 'one arm');
+});
+
+await check('front raises count side-on, even with the far arm hidden', () => {
+  const raise = repOf('raise', { rest: 5, effort: 90, forward: true, downMs: 600, upMs: 600 });
+  assert.equal(play(createAnalyzer('frontraise'), raisePose, repeat(4, raise)).reps, 4);
+  const hidden = (f) => raisePose({ ...f, hide: ['rightElbow', 'rightWrist'] });
+  assert.equal(play(createAnalyzer('frontraise'), hidden, repeat(4, raise)).reps, 4);
+  const lying = (f) => raisePose({ ...f, roll: 90 });
+  assert.equal(play(createAnalyzer('frontraise'), lying, repeat(3, raise)).reps, 0, 'lying down');
+});
+
+await check('arm circles: time counts only with both arms out straight at shoulder height', () => {
+  assert.ok(timeHeld('armcircles', circlesPose, hold(10000, { raise: 90 })) >= 9);
+  assert.equal(timeHeld('armcircles', circlesPose, hold(5000, { raise: 10 })), 0, 'arms down');
+  assert.equal(timeHeld('armcircles', circlesPose, hold(5000, { raise: 90, elbow: 90 })), 0, 'elbows bent');
+  assert.equal(timeHeld('armcircles', (f) => circlesPose({ ...f, roll: 90 }), hold(5000, { raise: 90 })), 0, 'lying');
+});
+
+group('library: legs and glutes');
+
+await check('sumo squats, split squats and side lunges count by the hips dropping', () => {
+  for (const id of ['sumosquat', 'splitsquat', 'sidelunge']) {
+    for (const yaw of [0, 90]) {
+      const a = createAnalyzer(id);
+      assert.equal(a.exercise, id);
+      assert.equal(play(a, squatPose, repeat(4, squat({ yaw }))).reps, 4, `${id} yaw ${yaw}`);
+    }
+  }
+});
+
+await check('lunges count every leg, alternating', () => {
+  assert.equal(play(createAnalyzer('lunge'), lungePose, alternating(6, 1200)).reps, 6);
+  const shallow = (f) => lungePose({ ...f, depth: 0.35 });
+  assert.equal(play(createAnalyzer('lunge'), shallow, alternating(4, 1200)).reps, 0, 'a step, not a lunge');
+});
+
+await check('wall sit: time counts with the thighs level, not standing or half way', () => {
+  const sit = (f) => squatPose({ ...f, shin: 0, lean: 0 });
+  assert.ok(timeHeld('wallsit', sit, hold(10000, { thigh: 90 })) >= 9);
+  assert.equal(timeHeld('wallsit', sit, hold(5000, { thigh: 30 })), 0, 'half way');
+  assert.equal(timeHeld('wallsit', sit, hold(5000, { thigh: 0 })), 0, 'standing');
+  const a = createAnalyzer('wallsit');
+  const { events } = play(a, sit, hold(2000, { thigh: 30 }));
+  assert.ok(issuesIn(events).includes(ISSUES.SHALLOW), 'asks for depth');
+});
+
+await check('glute bridges count; a bow from standing does not', () => {
+  assert.equal(play(createAnalyzer('glutebridge'), bridgePose, repeat(5, repOf('d', { rest: 0, effort: 1 }))).reps, 5);
+  const bow = repeat(3, repOf('bow', { rest: 0, effort: 80 }));
+  assert.equal(play(createAnalyzer('glutebridge'), (f) => standPose({ ...f, yaw: 90 }), bow).reps, 0);
+  assert.equal(play(createAnalyzer('glutebridge'), bridgePose, repeat(3, repOf('d', { rest: 0, effort: 0.3 }))).reps, 0, 'a lift, not a bridge');
+});
+
+await check('single-leg bridges read the working leg, with the other held out straight', () => {
+  const single = repeat(4, repOf('d', { rest: 0, effort: 1, single: true }));
+  assert.equal(play(createAnalyzer('singlelegbridge'), bridgePose, single).reps, 4);
+});
+
+await check('donkey kicks count side-on from all fours', () => {
+  assert.equal(play(createAnalyzer('donkeykick'), allFoursPose, repeat(5, repOf('kick', { rest: 0, effort: 1 }))).reps, 5);
+  const standing = (f) => project(body3d({ thigh: perLeg(sag(90 * f.kick), sag(0)) }), { yaw: 90 });
+  const { reps } = play(createAnalyzer('donkeykick'), standing, repeat(3, repOf('kick', { rest: 0, effort: 1 })));
+  assert.equal(reps, 0, 'a standing knee raise is not a donkey kick');
+});
+
+await check('fire hydrants count from the front (or behind), from all fours', () => {
+  for (const yaw of [0, 180]) {
+    const frames = repeat(4, repOf('hydrant', { rest: 0, effort: 1, yaw }));
+    assert.equal(play(createAnalyzer('firehydrant'), allFoursPose, frames).reps, 4, `yaw ${yaw}`);
+  }
+});
+
+await check('good mornings count a flat-back hinge; squats and sit-ups do not', () => {
+  const hinge = repOf('bow', { rest: 0, effort: 75, downMs: 700, upMs: 700 });
+  assert.equal(play(createAnalyzer('goodmorning'), (f) => standPose({ ...f, yaw: 90 }), repeat(4, hinge)).reps, 4);
+  const sq = play(createAnalyzer('goodmorning'), (f) => squatPose({ ...f, lean: 0.8 * f.thigh }), repeat(3, squat()));
+  assert.equal(sq.reps, 0, 'a squat');
+  assert.ok(issuesIn(sq.events).includes(ISSUES.BENT_KNEES));
+  assert.equal(play(createAnalyzer('goodmorning'), situpPose, repeat(3, situp())).reps, 0, 'a sit-up');
+});
+
+group('library: core');
+
+await check('crunches count a shoulder lift; sit-ups count as crunches too', () => {
+  assert.equal(play(createAnalyzer('crunch'), situpPose, repeat(5, situp({ effort: 30 }))).reps, 5);
+  assert.equal(play(createAnalyzer('crunch'), situpPose, repeat(3, situp())).reps, 3);
+  assert.equal(play(createAnalyzer('crunch'), situpPose, repeat(3, situp({ effort: 8 }))).reps, 0, 'a twitch');
+  const bow = repeat(3, repOf('bow', { rest: 0, effort: 40 }));
+  assert.equal(play(createAnalyzer('crunch'), (f) => standPose({ ...f, yaw: 90 }), bow).reps, 0, 'standing');
+});
+
+await check('leg raises count with the back on the floor; a sit-up folds the same angle but does not', () => {
+  assert.equal(play(createAnalyzer('legraise'), legRaisePose, repeat(5, repOf('legs', { rest: 0, effort: 85, downMs: 700, upMs: 700 }))).reps, 5);
+  const { reps, events } = play(createAnalyzer('legraise'), situpPose, repeat(3, situp({ knees: 'straight' })));
+  assert.equal(reps, 0);
+  assert.ok(issuesIn(events).includes(ISSUES.NOT_LYING));
+});
+
+await check('bicycle crunches count each knee, alternating or scissoring', () => {
+  assert.equal(play(createAnalyzer('bicyclecrunch'), bicyclePose, alternating(8)).reps, 8);
+  assert.equal(play(createAnalyzer('bicyclecrunch'), bicyclePose, scissoring(8)).reps, 8);
+});
+
+await check('mountain climbers count each knee drive in a plank, not standing', () => {
+  assert.equal(play(createAnalyzer('mountainclimber'), climberPose, scissoring(10, 350)).reps, 10);
+  const { reps, events } = play(createAnalyzer('mountainclimber'), (f) => climberPose({ ...f, raise: 90 }), scissoring(6));
+  assert.equal(reps, 0, 'upright');
+  assert.ok(issuesIn(events).includes(ISSUES.NOT_HORIZONTAL));
+});
+
+await check('Russian twists count every side seated; standing twists do not', () => {
+  assert.equal(play(createAnalyzer('russiantwist'), twistPose, twisting(6)).reps, 6);
+  const standing = (f) => twistPose({ ...f, standing: true });
+  assert.equal(play(createAnalyzer('russiantwist'), standing, twisting(4)).reps, 0);
+  const small = (f) => twistPose({ tw: f.tw / 5 });
+  assert.equal(play(createAnalyzer('russiantwist'), small, twisting(4)).reps, 0, 'a wobble');
+});
+
+await check('plank: time counts in a straight plank only', () => {
+  for (const view of [{ yaw: 90 }, { yaw: -90 }, { yaw: 90, aspect: 16 / 9 }]) {
+    const t = timeHeld('plank', (f) => plankPose({ ...f, ...view }), hold(10000, {}));
+    assert.ok(t >= 9 && t <= 10, `${JSON.stringify(view)}: ${t}`);
+  }
+  assert.equal(timeHeld('plank', plankPose, hold(5000, { sagDeg: 30 })), 0, 'hips sagging');
+  assert.equal(timeHeld('plank', plankPose, hold(5000, { flat: true })), 0, 'lying flat');
+  assert.equal(timeHeld('plank', () => standPose({ yaw: 90 }), hold(5000, {})), 0, 'standing');
+});
+
+await check('side plank: time counts facing the camera on one arm', () => {
+  assert.ok(timeHeld('sideplank', sidePlankPose, hold(10000, {})) >= 9);
+  assert.equal(timeHeld('sideplank', sidePlankPose, hold(5000, { tilt: 70 })), 0, 'propped up, not a plank');
+});
+
+await check('hollow hold and superman: time counts with both ends lifted', () => {
+  assert.ok(timeHeld('hollowhold', archPose, hold(10000, {})) >= 9);
+  assert.ok(timeHeld('superman', archPose, hold(10000, { lift: 12 })) >= 9);
+  assert.equal(timeHeld('hollowhold', archPose, hold(5000, { lift: 0 })), 0, 'lying flat');
+  assert.equal(timeHeld('hollowhold', archPose, hold(5000, { lift: 0, torsoLift: 75 })), 0, 'sitting up');
+});
+
+group('library: holds keep honest time');
+
+await check('a hold is counted in whole seconds, one rep message a second', () => {
+  const a = createAnalyzer('plank');
+  const { events } = play(a, plankPose, hold(5000, {}));
+  assert.equal(events.filter((e) => e.repCompleted).length, a.reps);
+  assert.ok(a.reps >= 4 && a.reps <= 5);
+});
+
+await check('breaking form stops the clock; a one-frame blip does not', () => {
+  const broken = [...hold(5000, {}), ...hold(2000, { sagDeg: 35 }), ...hold(5000, {})];
+  const t = timeHeld('plank', plankPose, broken);
+  assert.ok(t >= 9 && t <= 10, `5 s + 5 s with a 2 s break: ${t}`);
+  const blips = hold(6000, {}).map((f, i) => (i % 40 === 20 ? { sagDeg: 40 } : f));
+  assert.ok(timeHeld('plank', plankPose, blips) >= 5, 'single bad frames');
+});
+
+await check('a gap in the frames (paused set, stalled camera) earns nothing', () => {
+  const a = createAnalyzer('plank');
+  const first = play(a, plankPose, hold(3000, {}));
+  play(a, plankPose, hold(3000, {}), first.endedAt + 60000);
+  assert.ok(a.reps >= 5 && a.reps <= 6, `${a.reps}`);
+  a.reset();
+  assert.equal(a.reps, 0);
+});
+
+group('library: cardio');
+
+await check('high knees count every knee, from the front or the side', () => {
+  for (const yaw of [0, 90, 45]) {
+    assert.equal(play(createAnalyzer('highknees'), (f) => kneesPose({ ...f, view: { yaw } }), scissoring(10, 350)).reps, 10, `yaw ${yaw}`);
+  }
+  const lowKnees = (f) => {
+    const { left, right } = scissorAmounts(f);
+    return project(body3d({ thigh: perLeg(sag(30 * left), sag(30 * right)) }), {});
+  };
+  assert.equal(play(createAnalyzer('highknees'), lowKnees, scissoring(6)).reps, 0, 'knees barely up: a jog');
+});
+
+await check('butt kicks count every heel, from the front or the side', () => {
+  for (const yaw of [0, 90]) {
+    assert.equal(play(createAnalyzer('buttkicks'), (f) => kicksPose({ ...f, view: { yaw } }), scissoring(10, 350)).reps, 10, `yaw ${yaw}`);
+  }
+});
+
+await check('burpees count through the plank; a squat or a bow does not', () => {
+  assert.equal(play(createAnalyzer('burpee'), burpeePose, repeat(4, burpee())).reps, 4);
+  const toSquat = repeat(3, repOf('stage', { rest: 0, effort: 1, downMs: 600, upMs: 600 }));
+  assert.equal(play(createAnalyzer('burpee'), burpeePose, toSquat).reps, 0, 'squat thrust without the kick back');
+  const bow = repeat(3, repOf('bow', { rest: 0, effort: 85, downMs: 700, upMs: 700 }));
+  const { reps, events } = play(createAnalyzer('burpee'), (f) => standPose({ ...f, yaw: 90 }), bow);
+  assert.equal(reps, 0, 'a bow');
+  assert.ok(issuesIn(events).includes(ISSUES.NOT_IN_POSITION));
+});
+
 // --- everyday movement ---------------------------------------------------------
 group('every exercise: robustness');
 
@@ -1111,10 +1612,61 @@ await check('every exercise survives noisy landmarks at 15fps', () => {
     ['squat', (f) => squatPose({ ...f, yaw: 90, jitter: 0.01 }), [...repeat(5, squat()), ...hold(300, { thigh: 0 })]],
     ['situp', (f) => situpPose({ ...f, jitter: 0.01 }), [...repeat(5, situp()), ...hold(300, { rise: 3 })]],
     ['jumpingjack', (f) => jackPose({ ...f, jitter: 0.01 }), [...repeat(5, withLegs(jack())), ...hold(300, { arms: 5 })]],
+    ['pikepushup', (f) => pikePose({ ...f, jitter: 0.01 }), repeat(5, repOf('elbow', { rest: 170, effort: 85 }))],
+    ['dip', (f) => dipPose({ ...f, jitter: 0.01 }), repeat(5, repOf('d', { rest: 0, effort: 1 }))],
+    ['bicepcurl', (f) => curlPose({ ...f, jitter: 0.01 }), repeat(5, repOf('left', { rest: 0, effort: 1 }))],
+    ['shoulderpress', (f) => pressPose({ ...f, jitter: 0.01 }), repeat(5, repOf('d', { rest: 0, effort: 1 }))],
+    ['lateralraise', (f) => raisePose({ ...f, jitter: 0.01 }), repeat(5, repOf('raise', { rest: 5, effort: 90, downMs: 600, upMs: 600 }))],
+    ['frontraise', (f) => raisePose({ ...f, forward: true, jitter: 0.01 }), repeat(5, repOf('raise', { rest: 5, effort: 90, downMs: 600, upMs: 600 }))],
+    ['lunge', (f) => lungePose({ ...f, view: { jitter: 0.01 } }), alternating(5, 1200)],
+    ['glutebridge', (f) => bridgePose({ ...f, jitter: 0.01 }), repeat(5, repOf('d', { rest: 0, effort: 1, downMs: 600, upMs: 600 }))],
+    ['donkeykick', (f) => allFoursPose({ ...f, jitter: 0.01 }), repeat(5, repOf('kick', { rest: 0, effort: 1 }))],
+    ['firehydrant', (f) => allFoursPose({ ...f, yaw: 0, jitter: 0.01 }), repeat(5, repOf('hydrant', { rest: 0, effort: 1 }))],
+    ['goodmorning', (f) => standPose({ ...f, yaw: 90, jitter: 0.01 }), repeat(5, repOf('bow', { rest: 0, effort: 75, downMs: 700, upMs: 700 }))],
+    ['crunch', (f) => situpPose({ ...f, jitter: 0.01 }), [...repeat(5, situp({ effort: 35 })), ...hold(300, { rise: 3 })]],
+    ['legraise', (f) => legRaisePose({ ...f, jitter: 0.01 }), repeat(5, repOf('legs', { rest: 0, effort: 85, downMs: 700, upMs: 700 }))],
+    ['bicyclecrunch', (f) => bicyclePose({ ...f, view: { jitter: 0.01 } }), scissoring(5, 500)],
+    ['mountainclimber', (f) => climberPose({ ...f, view: { jitter: 0.01 } }), scissoring(5, 500)],
+    ['russiantwist', (f) => twistPose({ ...f, jitter: 0.01 }), twisting(5)],
+    ['highknees', (f) => kneesPose({ ...f, view: { jitter: 0.01 } }), scissoring(5, 500)],
+    ['buttkicks', (f) => kicksPose({ ...f, view: { jitter: 0.01 } }), scissoring(5, 500)],
+    ['burpee', (f) => burpeePose({ ...f, jitter: 0.01 }), repeat(5, burpee())],
   ];
   for (const [id, poseOf, frames] of sets) {
     const sparse = frames.filter((_, i) => i % 2 === 0);
     assert.equal(play(createAnalyzer(id), poseOf, sparse, 0, STEP * 2).reps, 5, id);
+  }
+});
+
+await check('every hold keeps time through noisy landmarks at 15fps', () => {
+  const sets = [
+    ['plank', (f) => plankPose({ ...f, jitter: 0.01 })],
+    ['sideplank', (f) => sidePlankPose({ ...f, jitter: 0.01 })],
+    ['wallsit', (f) => squatPose({ thigh: 90, shin: 0, lean: 0, jitter: 0.01 })],
+    ['hollowhold', (f) => archPose({ ...f, jitter: 0.01 })],
+    ['superman', (f) => archPose({ ...f, lift: 15, jitter: 0.01 })],
+    ['armcircles', (f) => circlesPose({ ...f, jitter: 0.01 })],
+  ];
+  for (const [id, poseOf] of sets) {
+    const held = timeHeld(id, poseOf, hold(20000, {}).filter((_, i) => i % 2 === 0), STEP * 2);
+    assert.ok(held >= 17 && held <= 20, `${id}: ${held} of 20 s`);
+  }
+});
+
+await check('noise alone counts no reps and holds no time, lying, standing or on all fours', () => {
+  const still = [
+    (f) => standPose({ ...f, yaw: 0, jitter: 0.01 }),
+    (f) => standPose({ ...f, yaw: 90, jitter: 0.01 }),
+    (f) => situpPose({ ...f, rise: 0, jitter: 0.01 }),
+    (f) => allFoursPose({ ...f, jitter: 0.01 }),
+  ];
+  for (const id of POSE_EXERCISE_IDS) {
+    for (const [i, poseOf] of still.entries()) {
+      // A plank on the floor, a wall sit, arm circles: holds that a still body
+      // can be in are left out of the poses they are.
+      const reps = play(createAnalyzer(id), poseOf, hold(8000, {})).reps;
+      assert.equal(reps, 0, `${id} in still pose ${i}`);
+    }
   }
 });
 

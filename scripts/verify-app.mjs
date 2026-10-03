@@ -1,6 +1,6 @@
 /**
- * Assertions for the program generator, achievements, the extended stats and
- * storage shape, and the two translation tables.
+ * Assertions for the training schedule, the exercise library, achievements,
+ * the extended stats and storage shape, and the two translation tables.
  *
  *   npm run verify
  *
@@ -35,7 +35,10 @@ const achievements = await bundle(
   ),
 );
 const stats = await bundle(timeSrc, stripImport(read('src/utils/stats.js'), './time'));
-const strings = await bundle(read('src/i18n/strings.js'));
+const strings = await bundle(
+  read('src/i18n/exerciseStrings.js'),
+  stripImport(read('src/i18n/strings.js'), './exerciseStrings'),
+);
 const blocker = await bundle(read('src/blocker/blockerLogic.js'));
 const store = await asModule(
   read('src/storage/sessions.js').replace(
@@ -45,15 +48,24 @@ const store = await asModule(
 );
 
 const {
-  LEVELS,
-  PROGRAM_DAYS,
-  SETS_PER_DAY,
-  levelForTest,
+  PROGRAM_LEVELS,
+  PROGRAM_WEEKS,
+  PROGRAM_HOLD_IDS,
+  WEEK_FOCUS,
+  TRAINING_DAYS,
+  TRAINING_DAYS_TOTAL,
   dayPlan,
-  programFor,
-  nextDay,
+  weekPlan,
+  planSets,
+  planTotals,
+  programDayKey,
+  nextProgramDay,
   isProgramComplete,
-  totalTargetReps,
+  currentWeek,
+  weekProgress,
+  weeksCompleted,
+  countCompleted,
+  programExerciseIds,
 } = program;
 const {
   DEFAULT_EXERCISE_ID,
@@ -63,6 +75,11 @@ const {
   exerciseOf,
   filterByExercise,
   supportsSource,
+  BODY_PARTS,
+  CLASSIC_EXERCISE_IDS,
+  exercisesFor,
+  isHold,
+  isHoldSession,
 } = exercises;
 const { ACHIEVEMENTS, unlockedAchievements, newlyUnlocked, longestStreak, bestSetReps } =
   achievements;
@@ -111,90 +128,110 @@ const session = (daysAgo, totalReps, extra = {}) => ({
   ...extra,
 });
 
-// --- program ---------------------------------------------------------------
-group('program');
+// --- training schedule ----------------------------------------------------------
+group('training schedule');
 
-await check('levelForTest maps the test result onto the five levels', () => {
-  assert.equal(levelForTest(0), 1);
-  assert.equal(levelForTest(5), 1);
-  assert.equal(levelForTest(6), 2);
-  assert.equal(levelForTest(10), 2);
-  assert.equal(levelForTest(11), 3);
-  assert.equal(levelForTest(20), 3);
-  assert.equal(levelForTest(21), 4);
-  assert.equal(levelForTest(35), 4);
-  assert.equal(levelForTest(36), 5);
-  assert.equal(levelForTest(200), 5);
-  assert.equal(levelForTest(undefined), 1, 'garbage input is level 1, not a crash');
+/** Every training day of every week, done. */
+const allDone = () => {
+  const done = {};
+  for (let w = 1; w <= PROGRAM_WEEKS; w += 1) for (const d of TRAINING_DAYS) done[programDayKey(w, d)] = 1;
+  return done;
+};
+
+await check('a week is five training days and two rest days, every muscle group covered', () => {
+  assert.equal(WEEK_FOCUS.length, 7);
+  assert.equal(WEEK_FOCUS.filter((f) => f === 'rest').length, 2);
+  assert.deepEqual(TRAINING_DAYS, [1, 2, 3, 5, 6]);
+  assert.equal(TRAINING_DAYS_TOTAL, 5 * PROGRAM_WEEKS);
+  for (const level of PROGRAM_LEVELS) {
+    const parts = new Set();
+    for (const plan of weekPlan(level, 1)) {
+      assert.equal(plan.rest, plan.items.length === 0, `${level} day ${plan.day}`);
+      for (const item of plan.items) for (const p of getExercise(item.exerciseId).parts) parts.add(p);
+    }
+    assert.deepEqual([...parts].sort(), [...BODY_PARTS].sort(), `${level} trains every part`);
+  }
 });
 
-await check('a day has five sets and only the last is a max set', () => {
-  const plan = dayPlan(3, 1);
-  assert.equal(plan.sets.length, SETS_PER_DAY);
+await check('every exercise in the schedule is one the app counts, holds marked as holds', () => {
+  for (const id of programExerciseIds()) {
+    assert.ok(EXERCISE_IDS.includes(id), `${id} is not in the library`);
+    assert.ok(getExercise(id).sources.includes('ai'), `${id} has no camera counter`);
+  }
   assert.deepEqual(
-    plan.sets.map((s) => s.max),
-    [false, false, false, false, true],
+    [...PROGRAM_HOLD_IDS].sort(),
+    EXERCISES.filter((e) => e.kind === 'hold').map((e) => e.id).sort(),
   );
-  assert.equal(plan.day, 1);
-  assert.equal(plan.week, 1);
-  assert.equal(plan.level, 3);
-});
-
-await check('targets never decrease from one day to the next, at every level', () => {
-  for (const level of LEVELS) {
-    const days = programFor(level.id);
-    assert.equal(days.length, PROGRAM_DAYS);
-    for (let i = 1; i < days.length; i += 1) {
-      for (let s = 0; s < SETS_PER_DAY; s += 1) {
-        assert.ok(
-          days[i].sets[s].target >= days[i - 1].sets[s].target,
-          `level ${level.id} day ${i + 1} set ${s + 1} dropped`,
-        );
-      }
+  for (const level of PROGRAM_LEVELS) {
+    for (const plan of weekPlan(level, 1)) {
+      for (const item of plan.items) assert.equal(item.hold, isHold(item.exerciseId), item.exerciseId);
     }
   }
 });
 
-await check('the program roughly doubles to triples the first-day sets by week 6', () => {
-  for (const level of LEVELS) {
-    const first = dayPlan(level.id, 1).sets[0].target;
-    const last = dayPlan(level.id, PROGRAM_DAYS).sets[0].target;
-    const ratio = last / first;
-    assert.ok(ratio >= 1.9 && ratio <= 3.2, `level ${level.id}: x${ratio.toFixed(2)}`);
+await check('levels differ: more sets and bigger targets as the level rises', () => {
+  const volume = (level) =>
+    weekPlan(level, 1).reduce((sum, p) => {
+      const t = planTotals(p);
+      return sum + t.reps + t.seconds;
+    }, 0);
+  assert.ok(volume('beginner') < volume('intermediate'));
+  assert.ok(volume('intermediate') < volume('advanced'));
+  assert.equal(dayPlan('beginner', 1, 1).items[0].sets, 2);
+  assert.equal(dayPlan('advanced', 1, 1).items[0].sets, 3);
+});
+
+await check('targets grow week over week and never shrink', () => {
+  for (const level of PROGRAM_LEVELS) {
+    for (const day of TRAINING_DAYS) {
+      for (let w = 2; w <= PROGRAM_WEEKS; w += 1) {
+        const before = dayPlan(level, w - 1, day).items;
+        const now = dayPlan(level, w, day).items;
+        now.forEach((item, i) => assert.ok(item.target >= before[i].target, `${level} w${w} d${day} ${item.exerciseId}`));
+      }
+      const first = planTotals(dayPlan(level, 1, day));
+      const last = planTotals(dayPlan(level, PROGRAM_WEEKS, day));
+      assert.ok(last.reps + last.seconds > (first.reps + first.seconds) * 1.2, `${level} day ${day} grows`);
+    }
   }
-  // A beginner starts small and a strong starter starts strong.
-  assert.ok(dayPlan(1, 1).sets[0].target <= 5);
-  assert.ok(dayPlan(5, 1).sets[0].target >= 20);
+  // Holds move in whole 5-second steps.
+  assert.ok(weekPlan('intermediate', 3).flatMap((p) => p.items).filter((i) => i.hold).every((i) => i.target % 5 === 0));
 });
 
-await check('rest lengthens by week: 60, 60, 90, 90, 120, 120', () => {
-  const rests = [1, 4, 7, 10, 13, 16].map((day) => dayPlan(2, day).restSeconds);
-  assert.deepEqual(rests, [60, 60, 90, 90, 120, 120]);
-});
-
-await check('day numbers are clamped into the program', () => {
-  assert.equal(dayPlan(2, 0).day, 1);
-  assert.equal(dayPlan(2, 99).day, PROGRAM_DAYS);
-  assert.equal(dayPlan(2, 7).week, 3);
-});
-
-await check('totalTargetReps sums every set target', () => {
-  const plan = dayPlan(1, 1);
-  assert.equal(
-    totalTargetReps(plan),
-    plan.sets.reduce((sum, s) => sum + s.target, 0),
+await check('a day runs as every set of each exercise, in order', () => {
+  const plan = dayPlan('intermediate', 2, 1);
+  const sets = planSets(plan);
+  assert.equal(sets.length, planTotals(plan).sets);
+  assert.deepEqual(
+    sets.map((s) => s.exerciseId),
+    plan.items.flatMap((i) => Array(i.sets).fill(i.exerciseId)),
   );
+  assert.ok(sets.every((s) => s.target > 0 && s.max === false));
 });
 
-await check('nextDay is the first day not done; complete once all 18 are', () => {
-  assert.equal(nextDay({}), 1);
-  assert.equal(nextDay({ 1: 1, 2: 1 }), 3);
-  assert.equal(nextDay({ 1: 1, 3: 1 }), 2, 'a skipped day comes back around');
-  const all = {};
-  for (let d = 1; d <= PROGRAM_DAYS; d += 1) all[d] = 1;
-  assert.equal(nextDay(all), null);
-  assert.equal(isProgramComplete(all), true);
-  assert.equal(isProgramComplete({ 1: 1 }), false);
+await check('weeks and days are clamped; unknown levels are beginner', () => {
+  assert.equal(dayPlan('beginner', 0, 0).week, 1);
+  assert.equal(dayPlan('beginner', 99, 99).week, PROGRAM_WEEKS);
+  assert.equal(dayPlan('beginner', 1, 99).day, 7);
+  assert.equal(dayPlan('nonsense', 1, 1).level, 'beginner');
+  assert.equal(dayPlan(undefined, 1, 4).rest, true);
+});
+
+await check('the next day is the first not done; progress per week and overall', () => {
+  assert.deepEqual(nextProgramDay({}), { week: 1, day: 1 });
+  assert.deepEqual(nextProgramDay({ '1-1': 1, '1-2': 1 }), { week: 1, day: 3 });
+  assert.deepEqual(nextProgramDay({ '1-1': 1, '1-3': 1 }), { week: 1, day: 2 }, 'a skipped day comes back around');
+  const week1 = Object.fromEntries(TRAINING_DAYS.map((d) => [programDayKey(1, d), 1]));
+  assert.deepEqual(nextProgramDay(week1), { week: 2, day: 1 }, 'rest days are never next');
+  assert.equal(currentWeek(week1), 2);
+  assert.deepEqual(weekProgress(week1, 1), { done: 5, total: 5 });
+  assert.deepEqual(weekProgress(week1, 2), { done: 0, total: 5 });
+  assert.equal(weeksCompleted(week1), 1);
+  assert.equal(countCompleted({ ...week1, '1-4': 1, junk: 1 }), 5, 'rest days and junk are not counted');
+  assert.equal(nextProgramDay(allDone()), null);
+  assert.equal(isProgramComplete(allDone()), true);
+  assert.equal(isProgramComplete(week1), false);
+  assert.equal(currentWeek(allDone()), PROGRAM_WEEKS);
 });
 
 // --- exercises ---------------------------------------------------------------
@@ -202,10 +239,12 @@ group('exercises');
 
 // The ids in src/sensors/sources.js, which imports native modules and so
 // cannot load here.
-const SOURCE_IDS = ['ai', 'light', 'motion', 'tap'];
+const SOURCE_IDS = ['ai', 'light', 'motion', 'tap', 'timer'];
 
 await check('the registry is well-formed', () => {
-  assert.deepEqual([...EXERCISE_IDS].sort(), ['jumpingjack', 'pushup', 'situp', 'squat']);
+  assert.ok(EXERCISE_IDS.length >= 35, `${EXERCISE_IDS.length} exercises`);
+  assert.deepEqual(EXERCISE_IDS.slice(0, 4), CLASSIC_EXERCISE_IDS, 'the classics keep their place');
+  assert.equal(new Set(EXERCISE_IDS).size, EXERCISE_IDS.length, 'ids are unique');
   assert.deepEqual(EXERCISE_IDS, EXERCISES.map((e) => e.id));
   for (const e of EXERCISES) {
     assert.match(e.id, /^[a-z]+$/, `${e.id}: ids are translation keys and stored on sessions`);
@@ -213,10 +252,15 @@ await check('the registry is well-formed', () => {
     assert.ok(e.sources.length > 0, `${e.id} has no source`);
     assert.equal(new Set(e.sources).size, e.sources.length, `${e.id} lists a source twice`);
     for (const id of e.sources) assert.ok(SOURCE_IDS.includes(id), `${e.id}: unknown source ${id}`);
-    assert.ok(e.sources.includes('tap'), `${e.id}: tap is the one source every platform has`);
+    assert.ok(['reps', 'hold'].includes(e.kind), `${e.id} kind`);
+    assert.ok(e.sources.includes('ai'), `${e.id}: every exercise has a camera counter`);
+    // A fallback every platform has: tapping for reps, the stopwatch for holds.
+    assert.ok(e.sources.includes(e.kind === 'hold' ? 'timer' : 'tap'), `${e.id}: no fallback source`);
+    assert.ok(!(e.kind === 'hold' && e.sources.includes('tap')), `${e.id}: a hold cannot be tapped`);
+    assert.ok(e.parts.length > 0 && e.parts.every((p) => BODY_PARTS.includes(p)), `${e.id} parts`);
+    assert.ok(['side', 'front'].includes(e.view), `${e.id} view`);
     assert.ok(e.creditWeight > 0 && e.creditWeight <= 1, `${e.id} creditWeight ${e.creditWeight}`);
     assert.ok(Number.isFinite(e.minRepMs) && e.minRepMs > 0, `${e.id} minRepMs`);
-    assert.equal(typeof e.program, 'boolean', `${e.id} program`);
     if (e.sources.includes('motion')) {
       const { nearDeg, farDeg } = e.motion ?? {};
       assert.ok(nearDeg > farDeg && farDeg > 0, `${e.id}: near ${nearDeg} must exceed far ${farDeg} > 0`);
@@ -227,22 +271,37 @@ await check('the registry is well-formed', () => {
   }
 });
 
-await check('push-ups come first, are the default, and alone run the program', () => {
+await check('push-ups come first and are the default', () => {
   assert.equal(DEFAULT_EXERCISE_ID, 'pushup');
   assert.equal(EXERCISES[0].id, DEFAULT_EXERCISE_ID);
   assert.equal(EXERCISES[0].creditWeight, 1, 'credit is relative to a push-up');
-  assert.deepEqual(
-    EXERCISES.filter((e) => e.program).map((e) => e.id),
-    ['pushup'],
-    'the program and its max test are push-up levels',
-  );
+});
+
+await check('every body part has exercises, and the filter finds them', () => {
+  assert.equal(exercisesFor('all'), EXERCISES);
+  assert.equal(exercisesFor(null), EXERCISES);
+  for (const part of BODY_PARTS) {
+    const list = exercisesFor(part);
+    assert.ok(list.length >= 3, `${part}: ${list.length}`);
+    assert.ok(list.every((e) => e.parts.includes(part)));
+  }
+  assert.ok(exercisesFor('core').some((e) => e.kind === 'hold'), 'planks are core');
+});
+
+await check('holds are known by id and on stored sessions', () => {
+  assert.equal(isHold('plank'), true);
+  assert.equal(isHold('pushup'), false);
+  assert.equal(isHold(undefined), false, 'a legacy record is a push-up');
+  assert.equal(isHoldSession(session(0, 60, { exerciseId: 'wallsit' })), true);
+  assert.equal(isHoldSession(session(0, 60)), false);
 });
 
 await check('a missing or unknown exercise is a push-up', () => {
   assert.equal(getExercise('squat').id, 'squat');
   assert.equal(getExercise(undefined).id, 'pushup');
   assert.equal(getExercise(null).id, 'pushup');
-  assert.equal(getExercise('burpee').id, 'pushup');
+  assert.equal(getExercise('burpee').id, 'burpee');
+  assert.equal(getExercise('nonsense').id, 'pushup');
   assert.equal(exerciseOf(session(0, 5)), 'pushup', 'a record from before exercises');
   assert.equal(exerciseOf(session(0, 5, { exerciseId: 'situp' })), 'situp');
   assert.equal(exerciseOf(session(0, 5, { exerciseId: 42 })), 'pushup');
@@ -270,7 +329,9 @@ await check("supportsSource follows each exercise's list", () => {
   assert.equal(supportsSource('squat', 'light'), false, 'covering the earpiece says nothing about a squat');
   assert.equal(supportsSource('jumpingjack', 'ai'), true);
   assert.equal(supportsSource('squat', 'nope'), false);
-  assert.equal(supportsSource('burpee', 'light'), true, 'an unknown exercise is a push-up');
+  assert.equal(supportsSource('nonsense', 'light'), true, 'an unknown exercise is a push-up');
+  assert.equal(supportsSource('plank', 'timer'), true);
+  assert.equal(supportsSource('plank', 'tap'), false);
 });
 
 // --- achievements ----------------------------------------------------------
@@ -327,12 +388,29 @@ await check('early bird and night owl read the local hour', () => {
   assert.ok(!unlockedAchievements([session(0, 5)]).includes('early_bird'));
 });
 
-await check('program badges come from completed days', () => {
-  assert.ok(unlockedAchievements([session(0, 5)], { 1: 1 }).includes('program_day'));
-  const all = {};
-  for (let d = 1; d <= PROGRAM_DAYS; d += 1) all[d] = 1;
-  assert.ok(unlockedAchievements([session(0, 5)], all).includes('program_done'));
+await check('program badges come from the old program or the schedule', () => {
+  assert.ok(unlockedAchievements([session(0, 5)], { 1: 1 }).includes('program_day'), 'old program');
+  const old = {};
+  for (let d = 1; d <= 18; d += 1) old[d] = 1;
+  assert.ok(unlockedAchievements([session(0, 5)], old).includes('program_done'), 'the old 18 days still count');
   assert.ok(!unlockedAchievements([session(0, 5)], { 1: 1 }).includes('program_done'));
+  assert.ok(unlockedAchievements([session(0, 5)], {}, { '1-1': 1 }).includes('program_day'), 'schedule');
+  assert.ok(!unlockedAchievements([session(0, 5)], {}, { '1-1': 1 }).includes('program_week'));
+  const week1 = Object.fromEntries(TRAINING_DAYS.map((d) => [programDayKey(1, d), 1]));
+  assert.ok(unlockedAchievements([session(0, 5)], {}, week1).includes('program_week'));
+  assert.ok(!unlockedAchievements([session(0, 5)], {}, week1).includes('program_done'));
+  assert.ok(unlockedAchievements([session(0, 5)], {}, allDone()).includes('program_done'));
+});
+
+await check('library badges: exercises tried, and time held', () => {
+  const tried = (n) => EXERCISE_IDS.slice(0, n).map((exerciseId, i) => session(i % 3, 5, { exerciseId }));
+  assert.ok(!unlockedAchievements(tried(9)).includes('explorer_10'));
+  assert.ok(unlockedAchievements(tried(10)).includes('explorer_10'));
+  assert.ok(unlockedAchievements(tried(25)).includes('explorer_25'));
+  const planks = [session(0, 200, { exerciseId: 'plank' }), session(1, 99, { exerciseId: 'wallsit' })];
+  assert.ok(!unlockedAchievements(planks).includes('hold_300'));
+  assert.ok(unlockedAchievements([...planks, session(2, 1, { exerciseId: 'superman' })]).includes('hold_300'));
+  assert.ok(!unlockedAchievements(planks).includes('reps_100'), 'seconds held are not push-ups');
 });
 
 await check('squats, sit-ups and jumping jacks are not push-ups', () => {
@@ -375,7 +453,7 @@ await check('each other exercise has its own total badge', () => {
   for (const id of ['squats_100', 'situps_100', 'jacks_200']) assert.ok(!pushups.includes(id), id);
 });
 
-await check('all-rounder needs every exercise, each with a rep', () => {
+await check('all-rounder needs the four classic exercises, each with a rep', () => {
   const three = [
     session(0, 5),
     session(0, 5, { exerciseId: 'squat' }),
@@ -399,7 +477,7 @@ await check('all-rounder needs every exercise, each with a rep', () => {
 await check('new badges are appended, so the grid keeps its order', () => {
   const ids = ACHIEVEMENTS.map((a) => a.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
-  assert.deepEqual(ids.slice(0, 21), [
+  assert.deepEqual(ids.slice(0, 25), [
     'first_workout',
     'reps_100',
     'reps_500',
@@ -421,6 +499,10 @@ await check('new badges are appended, so the grid keeps its order', () => {
     'situps_100',
     'jacks_200',
     'all_rounder',
+    'explorer_10',
+    'explorer_25',
+    'hold_300',
+    'program_week',
   ]);
   const icon = (id) => ACHIEVEMENTS.find((a) => a.id === id).icon;
   assert.equal(icon('squats_100'), getExercise('squat').icon);
@@ -474,6 +556,22 @@ await check('stats count every exercise; filterByExercise narrows them first', (
   assert.equal(dailyTotals(filterByExercise(list, 'jumpingjack'), 7)[5].reps, 40);
 });
 
+await check('holds stay out of the rep stats, but keep the streak and count in seconds', () => {
+  const opts = { isHold: isHoldSession };
+  const list = [session(0, 20), session(0, 90, { exerciseId: 'plank' }), session(1, 60, { exerciseId: 'plank' })];
+  const reps = computeStats(list, Date.now(), opts);
+  assert.equal(reps.totalReps, 20);
+  assert.equal(reps.todayReps, 20, 'the daily goal is reps');
+  assert.equal(reps.streak, 2, 'a day of planks is a day trained');
+  assert.equal(reps.sessionCount, 3);
+  const secs = computeStats(filterByExercise(list, 'plank'), Date.now(), { ...opts, unit: 'seconds' });
+  assert.equal(secs.totalReps, 150);
+  assert.equal(secs.bestSet, 90);
+  assert.equal(dailyTotals(list, 7, Date.now(), opts)[6].reps, 20);
+  assert.equal(dailyTotals(list, 7, Date.now(), { ...opts, unit: 'seconds' })[5].reps, 60);
+  assert.equal(computeStats(list).totalReps, 170, 'without the option, as before holds existed');
+});
+
 await check('dailyTotals is a full week ending today, zeros included', () => {
   const week = dailyTotals([session(0, 10), session(2, 5), session(2, 7), session(9, 99)], 7);
   assert.equal(week.length, 7);
@@ -504,21 +602,44 @@ await check('placeholders match between languages', () => {
   }
 });
 
-await check('every exercise has its name, noun and set-up hints in both languages', () => {
-  const others = EXERCISE_IDS.filter((id) => id !== 'pushup');
+await check('every exercise has its name, noun, cue and set-up hints in both languages', () => {
+  const others = EXERCISES.filter((e) => e.id !== 'pushup' && e.kind === 'reps').map((e) => e.id);
   for (const lang of LANGUAGES) {
     for (const e of EXERCISES) {
       const noun = STRINGS[lang][`exercise.${e.id}.noun`];
       assert.ok(STRINGS[lang][`exercise.${e.id}`], `${lang} exercise.${e.id}`);
       assert.ok(noun, `${lang} exercise.${e.id}.noun`);
       assert.equal(noun, noun.toLocaleLowerCase(lang), `${lang} exercise.${e.id}.noun is lower-case`);
+      assert.ok(STRINGS[lang][`exercise.${e.id}.cue`], `${lang} exercise.${e.id}.cue`);
+      for (const part of e.parts) assert.ok(STRINGS[lang][`part.${part}`], `${lang} part.${part}`);
+      assert.ok(STRINGS[lang][`view.${e.view}`], `${lang} view.${e.view}`);
       for (const source of e.sources) {
         assert.ok(STRINGS[lang][`exercise.${e.id}.hint.${source}`], `${lang} exercise.${e.id}.hint.${source}`);
       }
     }
-    const shared = ['source.motion', 'source.motion.hint', 'pose.outdated', 'coach.notUpright', 'coach.notLying'];
+    const shared = [
+      'source.motion',
+      'source.motion.hint',
+      'source.timer',
+      'source.timer.hint',
+      'pose.outdated',
+      'coach.notUpright',
+      'coach.notLying',
+      'coach.notInPosition',
+      'coach.bentKnees',
+    ];
     for (const key of [...shared, ...others.map((id) => `coach.${id}.shallow`)]) {
       assert.ok(STRINGS[lang][key], `${lang} ${key}`);
+    }
+  }
+});
+
+await check('every schedule focus and level has its words', () => {
+  for (const lang of LANGUAGES) {
+    for (const focus of new Set(WEEK_FOCUS)) assert.ok(STRINGS[lang][`program.focus.${focus}`], `${lang} ${focus}`);
+    for (const level of PROGRAM_LEVELS) {
+      assert.ok(STRINGS[lang][`program.level.${level}`], `${lang} ${level}`);
+      assert.ok(STRINGS[lang][`program.levelBody.${level}`], `${lang} ${level} body`);
     }
   }
 });
@@ -827,6 +948,28 @@ await check('program progress round-trips and tolerates junk', async () => {
   assert.equal(await store.loadProgram(), null);
 });
 
+await check('schedule progress round-trips and tolerates junk', async () => {
+  assert.equal(await store.loadSchedule(), null);
+  await store.saveSchedule({ level: 'advanced', startedAt: 5, completed: { '1-1': 9, '2-3': 'x', nope: 4 } });
+  const loaded = await store.loadSchedule();
+  assert.equal(loaded.level, 'advanced');
+  assert.equal(loaded.startedAt, 5);
+  assert.deepEqual(loaded.completed, { '1-1': 9 });
+  await store.saveSchedule(null);
+  assert.equal(await store.loadSchedule(), null);
+});
+
+await check('a schedule session stores its week and day', async () => {
+  const { session: saved } = await store.saveSession({
+    totalReps: 30,
+    durationSeconds: 60,
+    exerciseId: 'plank',
+    program: { level: 'beginner', week: 2, day: 3 },
+  });
+  assert.deepEqual(saved.program, { level: 'beginner', week: 2, day: 3 });
+  assert.equal(saved.exerciseId, 'plank');
+});
+
 await check('new settings have defaults and clearAllData wipes everything', async () => {
   const settings = await store.loadSettings();
   assert.equal(settings.dailyGoal, 50);
@@ -836,8 +979,10 @@ await check('new settings have defaults and clearAllData wipes everything', asyn
   assert.equal(settings.blockerSecondsPerRep, DEFAULT_RATE_SECONDS);
   assert.deepEqual(settings.blockerSites, []);
   await store.saveProgram({ level: 1, completedDays: {} });
+  await store.saveSchedule({ level: 'beginner', completed: {} });
   await store.clearAllData();
   assert.equal(await store.loadProgram(), null);
+  assert.equal(await store.loadSchedule(), null);
   assert.deepEqual(await store.loadSessions(), []);
 });
 

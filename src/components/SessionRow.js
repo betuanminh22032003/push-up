@@ -10,18 +10,26 @@ export function SessionRow({ session, onDelete }) {
   const { totalReps, durationSeconds, timestamp, sets, program } = session;
   // Sessions from before there was a choice carry no exerciseId: push-ups.
   const exercise = getExercise(session.exerciseId);
+  // A hold's total is seconds held, which has no pace.
+  const hold = exercise.kind === 'hold';
   const pace = durationSeconds > 0 ? (totalReps / (durationSeconds / 60)).toFixed(1) : '0.0';
 
-  const details = [formatDuration(durationSeconds), `${pace} ${t('session.repsPerMin')}`];
+  const details = [formatDuration(durationSeconds)];
+  if (!hold) details.push(`${pace} ${t('session.repsPerMin')}`);
   if (Array.isArray(sets) && sets.length > 1) details.push(t('session.sets', { n: sets.length }));
 
-  const tag = program ? t('session.programDay', { day: program.day }) : null;
+  // Schedule days carry their week; the old push-up program's did not.
+  const tag = !program
+    ? null
+    : Number.isFinite(program.week)
+      ? t('session.scheduleDay', { week: program.week, day: program.day })
+      : t('session.programDay', { day: program.day });
 
   return (
     <View style={styles.row}>
       <View style={styles.repsBadge}>
         <Text style={styles.repsValue}>{totalReps}</Text>
-        <Text style={styles.repsLabel}>{t('common.reps')}</Text>
+        <Text style={styles.repsLabel}>{hold ? t('common.secs') : t('common.reps')}</Text>
       </View>
 
       <View style={styles.meta}>
@@ -44,7 +52,7 @@ export function SessionRow({ session, onDelete }) {
         onPress={() => onDelete(session)}
         hitSlop={12}
         accessibilityRole="button"
-        accessibilityLabel={t('session.delete', { reps: totalReps })}
+        accessibilityLabel={t(hold ? 'session.deleteHold' : 'session.delete', { reps: totalReps })}
         style={({ pressed }) => [styles.delete, pressed && { opacity: 0.5 }]}
       >
         <Text style={styles.deleteGlyph}>×</Text>

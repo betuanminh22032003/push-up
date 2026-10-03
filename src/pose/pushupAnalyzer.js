@@ -134,7 +134,14 @@ export function measureFrame(pose, options = {}) {
   return { tracking: elbow !== null, elbow, body, torsoTilt };
 }
 
-export function createPushupAnalyzer(options = {}) {
+/**
+ * @param {object} [options]   overrides for DEFAULTS
+ * @param {string} [exercise]  the id this analyser reports: the push-up
+ *   variants (knee, wide, diamond, incline, decline) bend the elbows exactly as
+ *   a push-up does and are counted by this same analyser under their own id,
+ *   with their own options (an incline push-up is further from horizontal).
+ */
+export function createPushupAnalyzer(options = {}, exercise = 'pushup') {
   const opts = { ...DEFAULTS, ...options };
 
   const engine = createRepEngine(opts, [
@@ -159,5 +166,5 @@ export function createPushupAnalyzer(options = {}) {
     },
   ]);
 
-  return poseAnalyzer('pushup', engine, (pose) => measureFrame(pose, opts), 'elbow');
+  return poseAnalyzer(exercise, engine, (pose) => measureFrame(pose, opts), 'elbow');
 }

@@ -1,12 +1,32 @@
 import { dayKey, shiftDayKey } from './time';
 
 /**
+ * Which sessions a tally adds up. A hold's "reps" are seconds (a 60-second
+ * plank stores 60), which must not be added to anyone's push-up count, so
+ * the rep tallies skip holds and the seconds tallies count only holds.
+ *
+ *   isHold  (session) -> boolean; left out, nothing is a hold, as before there
+ *           were any. Passed in rather than imported so this module stays
+ *           loadable on its own (src/exercises/exercises.js has isHoldSession).
+ *   unit    'reps' (the default) or 'seconds'
+ */
+function counts({ isHold = () => false, unit = 'reps' } = {}) {
+  return unit === 'seconds' ? (s) => isHold(s) : (s) => !isHold(s);
+}
+
+/**
  * Derive all displayed stats from the raw session list in one pass.
  * Pure + synchronous so it can be memoised and unit-tested without RN.
+ *
+ * Totals, today, best set/session/day are in the chosen unit (see `counts`).
+ * Streaks, active days, the workout count and the time trained count every
+ * session: a day of planks is a day trained.
  */
-export function computeStats(sessions, now = Date.now()) {
+export function computeStats(sessions, now = Date.now(), options) {
+  const counted = counts(options);
   const todayKey = dayKey(now);
   const repsByDay = new Map();
+  const activeDays = new Set();
   let totalReps = 0;
   let totalSeconds = 0;
   let bestSession = 0;
@@ -14,14 +34,16 @@ export function computeStats(sessions, now = Date.now()) {
 
   for (const s of sessions) {
     const reps = s.totalReps || 0;
-    totalReps += reps;
     totalSeconds += s.durationSeconds || 0;
+    // Days are only "done" if at least one rep landed — a 0-rep session must not
+    // keep a streak alive.
+    if (reps > 0) activeDays.add(dayKey(s.timestamp));
+    if (!counted(s)) continue;
+    totalReps += reps;
     if (reps > bestSession) bestSession = reps;
     // Records written before sets existed are one set each.
     const sets = Array.isArray(s.sets) && s.sets.length ? s.sets : [{ reps }];
     for (const set of sets) if ((set.reps || 0) > bestSet) bestSet = set.reps;
-    // Days are only "done" if at least one rep landed — a 0-rep session must not
-    // keep a streak alive.
     if (reps > 0) {
       const key = dayKey(s.timestamp);
       repsByDay.set(key, (repsByDay.get(key) || 0) + reps);
@@ -32,9 +54,9 @@ export function computeStats(sessions, now = Date.now()) {
 
   // Streak counts back from today; if today is still empty we start from
   // yesterday so an unfinished day doesn't read as a broken streak.
-  let cursor = repsByDay.has(todayKey) ? 0 : -1;
+  let cursor = activeDays.has(todayKey) ? 0 : -1;
   let streak = 0;
-  while (repsByDay.has(shiftDayKey(now, cursor))) {
+  while (activeDays.has(shiftDayKey(now, cursor))) {
     streak += 1;
     cursor -= 1;
   }
@@ -51,20 +73,22 @@ export function computeStats(sessions, now = Date.now()) {
     bestSession,
     bestSet,
     bestDay,
-    activeDays: repsByDay.size,
+    activeDays: activeDays.size,
   };
 }
 
 /**
- * Reps per local day for the last `days` days, oldest first, ending today.
- * Empty days are present as zeros so a chart always has a full row of bars.
+ * Reps (or, with unit 'seconds', seconds held) per local day for the last
+ * `days` days, oldest first, ending today. Empty days are present as zeros so
+ * a chart always has a full row of bars.
  * @returns {Array<{ key: string, reps: number, offset: number }>}  offset 0 = today
  */
-export function dailyTotals(sessions, days = 7, now = Date.now()) {
+export function dailyTotals(sessions, days = 7, now = Date.now(), options) {
+  const counted = counts(options);
   const repsByDay = new Map();
   for (const s of sessions) {
     const reps = s.totalReps || 0;
-    if (reps <= 0) continue;
+    if (reps <= 0 || !counted(s)) continue;
     const key = dayKey(s.timestamp);
     repsByDay.set(key, (repsByDay.get(key) || 0) + reps);
   }

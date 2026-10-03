@@ -397,6 +397,9 @@ const SKELETON_BONES = [
  *   notHorizontal  push-up: not in a push-up position
  *   notUpright     squat, jumping jack: not standing
  *   notLying       sit-up: did not start from lying on the back
+ *   notInPosition  not in the exercise's own starting position (all fours,
+ *                  seated, elbows bent, a plank...); each exercise words it
+ *   bentKnees      good morning: the knees bent, so it became a squat
  */
 const ISSUES = {
   LOST_TRACKING: 'lostTracking',
@@ -405,6 +408,8 @@ const ISSUES = {
   NOT_HORIZONTAL: 'notHorizontal',
   NOT_UPRIGHT: 'notUpright',
   NOT_LYING: 'notLying',
+  NOT_IN_POSITION: 'notInPosition',
+  BENT_KNEES: 'bentKnees',
 };
 
 /**
@@ -696,6 +701,120 @@ function poseAnalyzer(exercise, engine, measure, signalKey, onReset) {
 }
 
 
+/**
+ * Body readings the newer analysers share, so each of them is a few lines of
+ * "which reading is the signal, and which gates apply" rather than another
+ * copy of the same trigonometry.
+ *
+ * Everything is measured on the flat image, aspect-corrected (./geometry), and
+ * is null when a joint it needs is not confident enough to trust. Side-on
+ * readings (joint angles in the body's own plane) are only true from the side;
+ * front-on exercises use heights and the arms' spread, which survive the
+ * projection. Each exercise's hint says which way to face the phone.
+ */
+
+/** The rep engine's options every newer rep analyser starts from. */
+const REP_BASE_DEFAULTS = {
+  autoCalibrate: true,
+  calibrationWindowMs: 20000,
+  minRangeDeg: 25,
+  rangeFraction: 0.3,
+  minVisibility: 0.4,
+  minPhaseMs: 150,
+  minRepMs: 500,
+  aspect: 1,
+};
+
+/**
+ * Interior angle at the middle of three joints on one side, e.g.
+ * sideAngle(pose, 'left', ['Hip', 'Knee', 'Ankle'], opts) is the left knee.
+ */
+function sideAngle(pose, side, parts, opts) {
+  const joints = parts.map((part) => side + part);
+  if (!allVisible(pose, joints, opts.minVisibility)) return null;
+  const [a, b, c] = joints.map((j) => pose[j]);
+  return angleAt(a, b, c, opts.aspect);
+}
+
+/** A reading taken on each side: { left, right }. */
+function perSide(read) {
+  return { left: read('left'), right: read('right') };
+}
+
+/** Combine a left/right pair when both are known; null otherwise. */
+function bothSides(pair, pick) {
+  return Number.isFinite(pair.left) && Number.isFinite(pair.right) ? pick(pair.left, pair.right) : null;
+}
+
+/**
+ * Combine a left/right pair from whichever sides are known: side-on, the far
+ * limb is often hidden behind the body, and the near one alone is enough.
+ */
+function eitherSide(pair, pick) {
+  const l = Number.isFinite(pair.left);
+  const r = Number.isFinite(pair.right);
+  if (l && r) return pick(pair.left, pair.right);
+  if (l) return pair.left;
+  if (r) return pair.right;
+  return null;
+}
+
+/**
+ * Angle of the segment a->b away from straight down, in degrees (0..180):
+ * 0 hanging, 90 level, 180 straight up. Null when an end is missing.
+ */
+function angleFromDown(a, b, aspect = 1) {
+  if (!a || !b) return null;
+  const dx = (b.x - a.x) * aspect;
+  const dy = b.y - a.y; // image y grows downward
+  if (dx === 0 && dy === 0) return null;
+  return (Math.atan2(Math.abs(dx), dy) * 180) / Math.PI;
+}
+
+/** Mid-shoulder, mid-hip, mid-knee and mid-ankle, from confident joints only. */
+function midlineOf(pose, opts) {
+  const mid = (joint) => seenMidpoint(pose, 'left' + joint, 'right' + joint, opts.minVisibility);
+  return { shoulder: mid('Shoulder'), hip: mid('Hip'), knee: mid('Knee'), ankle: mid('Ankle'), wrist: mid('Wrist') };
+}
+
+/** Torso against the horizontal (0 lying or in a plank, 90 standing). */
+function torsoTiltOf(line, opts) {
+  return tiltFromHorizontal(line.shoulder, line.hip, opts.aspect);
+}
+
+/** Hip-to-ankle against the horizontal (0 legs along the floor, 90 standing on them). */
+function legTiltOf(line, opts) {
+  return tiltFromHorizontal(line.hip, line.ankle || line.knee, opts.aspect);
+}
+
+/** Shoulder-hip-ankle angle: 180 a straight body, smaller as it folds at the hips. */
+function bodyLineOf(line, opts) {
+  return angleAt(line.shoulder, line.hip, line.ankle || line.knee, opts.aspect);
+}
+
+/** Shoulder-to-hip length on the image; the scale for distances on the body. */
+function torsoLengthOf(line, opts) {
+  const length = distance(line.shoulder, line.hip, opts.aspect);
+  return length > 0 ? length : null;
+}
+
+/**
+ * How far below the shoulders the lower of the elbows and wrists sits, in
+ * torso lengths: about 0.6 with the weight on the arms (plank, all fours),
+ * near 0 with the arms lying along the floor.
+ */
+function armSupportOf(pose, line, opts) {
+  const torso = torsoLengthOf(line, opts);
+  if (!torso || !line.shoulder) return null;
+  let lowest = null;
+  for (const joint of ['leftElbow', 'rightElbow', 'leftWrist', 'rightWrist']) {
+    const p = pose[joint];
+    if (p && p.score >= opts.minVisibility && (lowest === null || p.y > lowest)) lowest = p.y;
+  }
+  return lowest === null ? null : (lowest - line.shoulder.y) / torso;
+}
+
+
 
 /**
  * Counts push-ups from a stream of pose frames.
@@ -829,7 +948,14 @@ function measureFrame(pose, options = {}) {
   return { tracking: elbow !== null, elbow, body, torsoTilt };
 }
 
-function createPushupAnalyzer(options = {}) {
+/**
+ * @param {object} [options]   overrides for DEFAULTS
+ * @param {string} [exercise]  the id this analyser reports: the push-up
+ *   variants (knee, wide, diamond, incline, decline) bend the elbows exactly as
+ *   a push-up does and are counted by this same analyser under their own id,
+ *   with their own options (an incline push-up is further from horizontal).
+ */
+function createPushupAnalyzer(options = {}, exercise = 'pushup') {
   const opts = { ...DEFAULTS, ...options };
 
   const engine = createRepEngine(opts, [
@@ -854,7 +980,7 @@ function createPushupAnalyzer(options = {}) {
     },
   ]);
 
-  return poseAnalyzer('pushup', engine, (pose) => measureFrame(pose, opts), 'elbow');
+  return poseAnalyzer(exercise, engine, (pose) => measureFrame(pose, opts), 'elbow');
 }
 
 
@@ -1045,7 +1171,15 @@ function windowMax(windowMs) {
   };
 }
 
-function createSquatAnalyzer(options = {}) {
+/**
+ * @param {object} [options]   overrides for SQUAT_DEFAULTS
+ * @param {string} [exercise]  the id this analyser reports. Sumo squats,
+ *   lunges, side lunges and split squats all lower the hips the same way and
+ *   are counted by the hip's height under their own id: in a lunge the front
+ *   leg's hip-over-ankle height halves just as it does in a squat, and the back
+ *   leg's falls further.
+ */
+function createSquatAnalyzer(options = {}, exercise = 'squat') {
   const opts = { ...SQUAT_DEFAULTS, ...options };
 
   const engine = createRepEngine(opts, [
@@ -1079,7 +1213,7 @@ function createSquatAnalyzer(options = {}) {
     standing.right.reset();
   };
 
-  return poseAnalyzer('squat', engine, measure, 'knee', reset);
+  return poseAnalyzer(exercise, engine, measure, 'knee', reset);
 }
 
 
@@ -1164,7 +1298,13 @@ function measureSitupFrame(pose, options = {}) {
   return { tracking: trunk !== null, trunk, torsoTilt, legTilt };
 }
 
-function createSitupAnalyzer(options = {}) {
+/**
+ * @param {object} [options]   overrides for SITUP_DEFAULTS
+ * @param {string} [exercise]  the id this analyser reports: a crunch is the
+ *   same movement cut short, counted here with thresholds that ask for the
+ *   shoulders to come off the floor rather than the whole torso.
+ */
+function createSitupAnalyzer(options = {}, exercise = 'situp') {
   const opts = { ...SITUP_DEFAULTS, ...options };
 
   const engine = createRepEngine(opts, [
@@ -1183,7 +1323,7 @@ function createSitupAnalyzer(options = {}) {
     },
   ]);
 
-  return poseAnalyzer('situp', engine, (pose) => measureSitupFrame(pose, opts), 'trunk');
+  return poseAnalyzer(exercise, engine, (pose) => measureSitupFrame(pose, opts), 'trunk');
 }
 
 
@@ -1323,6 +1463,1053 @@ function createJumpingJackAnalyzer(options = {}) {
 
 
 
+/**
+ * Upper-body exercises: pike push-ups, chair dips, bicep curls, the overhead
+ * press, and lateral and front raises.
+ *
+ * Each is a rep-engine signal (high at rest, low at the effort, as the
+ * push-up's elbow) plus the gates that tell it from its look-alikes: a curl
+ * and a dip both bend the elbow, but a dip is seated with the hips folded and
+ * a curl keeps the upper arm hanging; a press and a jumping jack both raise
+ * the arms overhead, but a press starts from bent elbows.
+ */
+
+const ELBOW = ['Shoulder', 'Elbow', 'Wrist'];
+const RAISE = ['Hip', 'Shoulder', 'Elbow'];
+const HIP = ['Shoulder', 'Hip', 'Knee'];
+
+/** The rep's most upright frame must be standing, as for the squat. */
+function uprightGate(opts) {
+  return {
+    read: (frame) => frame.torsoTilt,
+    keep: 'max',
+    fails: (tilt) => tilt < opts.minUprightTilt,
+    issue: ISSUES.NOT_UPRIGHT,
+    veto: true,
+  };
+}
+
+/* --- pike push-up --------------------------------------------------------- */
+
+/**
+ * Side-on, hips high in an upside-down V. The elbow is the signal, as in a
+ * push-up; the gate is the pike itself: the hips must fold (shoulder-hip-knee
+ * well short of straight) at some point in the rep, and the torso must not be
+ * standing, so neither a straight push-up nor arm-bending on the feet counts.
+ */
+const PIKE_DEFAULTS = {
+  ...DEFAULTS,
+  /** Shoulder-hip-knee must get at least this folded during the rep. */
+  maxPikeBody: 135,
+  /** The torso's flattest frame of the rep must be at most this far off horizontal. */
+  maxPikeTilt: 70,
+};
+
+function createPikePushupAnalyzer(options = {}) {
+  const opts = { ...PIKE_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => frame.body,
+      keep: 'min',
+      fails: (body) => body > opts.maxPikeBody,
+      issue: ISSUES.NOT_IN_POSITION,
+      veto: true,
+    },
+    {
+      read: (frame) => frame.torsoTilt,
+      keep: 'min',
+      fails: (tilt) => tilt > opts.maxPikeTilt,
+      issue: ISSUES.NOT_HORIZONTAL,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('pikepushup', engine, (pose) => measureFrame(pose, opts), 'elbow');
+}
+
+/* --- chair / bench dip ---------------------------------------------------- */
+
+/**
+ * Side-on, hands on a chair behind, legs out in front. Signal: the elbow, 170
+ * arms straight and about 90 at the bottom. Gates: the torso stays upright,
+ * and the hips are folded (seated, legs forward) at some point in the rep, so
+ * bending the arms while standing counts nothing.
+ */
+const DIP_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  downAngleCeiling: 120,
+  upAngleFloor: 140,
+  downAngle: 105,
+  upAngle: 150,
+  partialAngle: 130,
+  minUprightTilt: 50,
+  /** Shoulder-hip-knee must get this folded in the rep: sitting, not standing. */
+  maxSeatedHip: 150,
+};
+
+function measureDipFrame(pose, options = {}) {
+  const opts = { ...DIP_DEFAULTS, ...options };
+  if (!pose) return { tracking: false, elbow: null, hip: null, torsoTilt: null };
+  const elbow = eitherSide(perSide((s) => sideAngle(pose, s, ELBOW, opts)), (l, r) => (l + r) / 2);
+  const hip = eitherSide(perSide((s) => sideAngle(pose, s, HIP, opts)), (l, r) => (l + r) / 2);
+  const torsoTilt = torsoTiltOf(midlineOf(pose, opts), opts);
+  return { tracking: elbow !== null, elbow, hip, torsoTilt };
+}
+
+function createDipAnalyzer(options = {}) {
+  const opts = { ...DIP_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    uprightGate(opts),
+    {
+      read: (frame) => frame.hip,
+      keep: 'min',
+      fails: (hip) => hip > opts.maxSeatedHip,
+      issue: ISSUES.NOT_IN_POSITION,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('dip', engine, (pose) => measureDipFrame(pose, opts), 'elbow');
+}
+
+/* --- bicep curl ----------------------------------------------------------- */
+
+/**
+ * Standing side-on with a bottle or dumbbell. Signal: the more bent elbow, so
+ * alternating curls count every arm and curling both counts once. Gates:
+ * standing, and the upper arm hanging by the side at some point in the rep
+ * (hip-shoulder-elbow small), so a press or a wave, which bend the elbow with
+ * the arm raised, counts nothing.
+ */
+const CURL_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  minRangeDeg: 40,
+  downAngleCeiling: 80,
+  upAngleFloor: 135,
+  downAngle: 70,
+  upAngle: 145,
+  partialAngle: 110,
+  minUprightTilt: 55,
+  /** The upper arm must come within this many degrees of hanging straight down. */
+  maxUpperArmRaise: 50,
+};
+
+function measureCurlFrame(pose, options = {}) {
+  const opts = { ...CURL_DEFAULTS, ...options };
+  if (!pose) return { tracking: false, elbow: null, upperArm: null, torsoTilt: null };
+  const elbows = perSide((s) => sideAngle(pose, s, ELBOW, opts));
+  const raises = perSide((s) => sideAngle(pose, s, RAISE, opts));
+  const elbow = eitherSide(elbows, Math.min);
+  const upperArm = eitherSide(raises, Math.max);
+  const torsoTilt = torsoTiltOf(midlineOf(pose, opts), opts);
+  return { tracking: elbow !== null, elbow, upperArm, torsoTilt };
+}
+
+function createCurlAnalyzer(options = {}) {
+  const opts = { ...CURL_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    uprightGate(opts),
+    {
+      read: (frame) => frame.upperArm,
+      keep: 'min',
+      fails: (raise) => raise > opts.maxUpperArmRaise,
+      issue: ISSUES.NOT_IN_POSITION,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('bicepcurl', engine, (pose) => measureCurlFrame(pose, opts), 'elbow');
+}
+
+/* --- lateral and front raises --------------------------------------------- */
+
+/**
+ * Signal: the arm gap, 180 minus the raise at the shoulder (hip-shoulder-
+ * elbow), as the jumping jack's: about 170 with the arms at the sides and 90
+ * at shoulder height.
+ *
+ * Lateral raises are filmed from the front, where the arms swing out in the
+ * picture's plane, and both must rise (the lower one is the signal), so a wave
+ * counts nothing. Front raises are filmed side-on, where the far arm is often
+ * hidden behind the body, so whichever arms are seen decide.
+ */
+const RAISE_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  minRangeDeg: 30,
+  /** The arms must get within 25 degrees of shoulder height... */
+  downAngleCeiling: 115,
+  /** ...and come back down to within 40 degrees of the sides. */
+  upAngleFloor: 140,
+  downAngle: 110,
+  upAngle: 150,
+  partialAngle: 130,
+  minUprightTilt: 55,
+  /** Both arms must be seen and both must rise (lateral), or any seen arm (front). */
+  bothArms: true,
+};
+
+function measureRaiseFrame(pose, options = {}) {
+  const opts = { ...RAISE_DEFAULTS, ...options };
+  if (!pose) return { tracking: false, armGap: null, torsoTilt: null };
+  const gaps = perSide((s) => {
+    const raise = sideAngle(pose, s, RAISE, opts);
+    return raise === null ? null : 180 - raise;
+  });
+  const armGap = opts.bothArms ? bothSides(gaps, Math.max) : eitherSide(gaps, Math.max);
+  const torsoTilt = torsoTiltOf(midlineOf(pose, opts), opts);
+  return { tracking: armGap !== null, armGap, torsoTilt };
+}
+
+function createRaiseAnalyzer(options = {}, exercise = 'lateralraise') {
+  const opts = { ...RAISE_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [uprightGate(opts)]);
+  return poseAnalyzer(exercise, engine, (pose) => measureRaiseFrame(pose, opts), 'armGap');
+}
+
+/* --- overhead press ------------------------------------------------------- */
+
+/**
+ * Filmed from the front. Signal: the arm gap as above, about 90 with the
+ * elbows at shoulder height and 10-20 pressed overhead. Gate: the press starts
+ * from bent elbows (hands by the shoulders) — judged on the rest before each
+ * rep — which is what tells it from a jumping jack's straight arms.
+ */
+const PRESS_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  minRangeDeg: 30,
+  downAngleCeiling: 45,
+  upAngleFloor: 65,
+  downAngle: 40,
+  upAngle: 75,
+  partialAngle: 60,
+  minUprightTilt: 55,
+  /** In the rest before a rep the elbows must be bent at least this much. */
+  maxStartElbow: 120,
+  bothArms: true,
+};
+
+function measurePressFrame(pose, options = {}) {
+  const opts = { ...PRESS_DEFAULTS, ...options };
+  const frame = measureRaiseFrame(pose, opts);
+  if (!pose) return { ...frame, elbow: null };
+  // The straighter of the two: both hands must start by the shoulders.
+  const elbow = bothSides(perSide((s) => sideAngle(pose, s, ELBOW, opts)), Math.max);
+  return { ...frame, elbow };
+}
+
+function createPressAnalyzer(options = {}) {
+  const opts = { ...PRESS_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    uprightGate(opts),
+    {
+      read: (frame) => frame.elbow,
+      keep: 'min',
+      fails: (elbow) => elbow > opts.maxStartElbow,
+      issue: ISSUES.NOT_IN_POSITION,
+      veto: true,
+      window: 'leadIn',
+    },
+  ]);
+  return poseAnalyzer('shoulderpress', engine, (pose) => measurePressFrame(pose, opts), 'armGap');
+}
+
+
+
+
+/**
+ * Glutes and the back of the legs: glute bridges (two legs or one), donkey
+ * kicks, fire hydrants and good mornings. The squat family — squats, sumo
+ * squats, lunges, side lunges, split squats — is ./squatAnalyzer.
+ */
+
+/* --- glute bridge (and single-leg bridge) --------------------------------- */
+
+/**
+ * Side-on, lying on the back with the knees bent. Signal: how far the hip is
+ * folded, 180 minus shoulder-hip-knee: about 45 lying with the knees up, near
+ * 0 with the hips lifted into a straight line from shoulders to knees.
+ *
+ * Read on the more bent leg. With both feet down that is either; on a
+ * single-leg bridge it is the working leg, while the free one is held out
+ * straight — so the same analyser counts both, each side as the user does it.
+ *
+ * Gate: lying, judged on the rest before the rep: torso near the floor and the
+ * knees above the hips. A bow from standing folds the hips too, but its knees
+ * are below them.
+ */
+const BRIDGE_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  minRangeDeg: 18,
+  /** Hips up to within 18 degrees of a straight line... */
+  downAngleCeiling: 18,
+  /** ...and back down with the thighs 38 off it (feet near the seat: 45-60). */
+  upAngleFloor: 38,
+  downAngle: 15,
+  upAngle: 40,
+  partialAngle: 28,
+  /** At rest the torso must lie within this many degrees of the floor. */
+  maxLyingTilt: 35,
+  /** At rest the knee must sit above the hip by this share of the thigh. */
+  minKneeLift: 0.25,
+};
+
+function bridgeSide(pose, side, opts) {
+  const joints = ['Shoulder', 'Hip', 'Knee', 'Ankle'].map((j) => side + j);
+  if (!allVisible(pose, joints, opts.minVisibility)) return null;
+  const [shoulder, hip, knee, ankle] = joints.map((j) => pose[j]);
+  const thigh = distance(hip, knee, opts.aspect);
+  return {
+    knee: angleAt(hip, knee, ankle, opts.aspect),
+    fold: 180 - angleAt(shoulder, hip, knee, opts.aspect),
+    kneeLift: thigh > 0 ? (hip.y - knee.y) / thigh : null,
+  };
+}
+
+function measureBridgeFrame(pose, options = {}) {
+  const opts = { ...BRIDGE_DEFAULTS, ...options };
+  const none = { tracking: false, fold: null, kneeLift: null, torsoTilt: null };
+  if (!pose) return none;
+  const sides = [bridgeSide(pose, 'left', opts), bridgeSide(pose, 'right', opts)].filter(Boolean);
+  if (!sides.length) return none;
+  const working = sides.reduce((a, b) => (b.knee < a.knee ? b : a));
+  const torsoTilt = torsoTiltOf(midlineOf(pose, opts), opts);
+  return { tracking: true, fold: working.fold, kneeLift: working.kneeLift, torsoTilt };
+}
+
+function createBridgeAnalyzer(options = {}, exercise = 'glutebridge') {
+  const opts = { ...BRIDGE_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => frame.torsoTilt,
+      keep: 'min',
+      fails: (tilt) => tilt > opts.maxLyingTilt,
+      issue: ISSUES.NOT_LYING,
+      veto: true,
+      window: 'leadIn',
+    },
+    {
+      read: (frame) => frame.kneeLift,
+      keep: 'max',
+      fails: (lift) => lift < opts.minKneeLift,
+      issue: ISSUES.NOT_LYING,
+      veto: true,
+      window: 'leadIn',
+    },
+  ]);
+  return poseAnalyzer(exercise, engine, (pose) => measureBridgeFrame(pose, opts), 'fold');
+}
+
+/* --- donkey kick, fire hydrant -------------------------------------------- */
+
+/**
+ * On all fours, one leg lifts: back and up for a donkey kick (filmed side-on),
+ * out to the side for a fire hydrant (filmed from the front or behind, where
+ * the leg swings in the picture's plane). Signal: 180 minus how far the more
+ * lifted thigh has swung from hanging straight down — 180 kneeling, 90 with
+ * the thigh level — so each leg's rep counts as it comes back down.
+ *
+ * Gate: on all fours, judged on the rest before the rep: the shoulders at
+ * about the hips' height (the torso level, seen from any side) rather than a
+ * torso-length above them, as standing.
+ */
+const THIGH_LIFT_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  downAngleCeiling: 125,
+  upAngleFloor: 145,
+  downAngle: 115,
+  upAngle: 155,
+  partialAngle: 135,
+  /** At rest, shoulders within this many thigh lengths of the hips' height. */
+  maxShoulderDrop: 0.5,
+};
+
+function measureThighLiftFrame(pose, options = {}) {
+  const opts = { ...THIGH_LIFT_DEFAULTS, ...options };
+  const none = { tracking: false, thigh: null, level: null };
+  if (!pose) return none;
+  const seen = (j) => pose[j] && pose[j].score >= opts.minVisibility;
+  const lifts = perSide((s) =>
+    seen(s + 'Hip') && seen(s + 'Knee') ? angleFromDown(pose[s + 'Hip'], pose[s + 'Knee'], opts.aspect) : null,
+  );
+  const lift = eitherSide(lifts, Math.max);
+  if (lift === null) return none;
+
+  const line = midlineOf(pose, opts);
+  const thighs = perSide((s) =>
+    seen(s + 'Hip') && seen(s + 'Knee') ? distance(pose[s + 'Hip'], pose[s + 'Knee'], opts.aspect) : null,
+  );
+  const thighLength = eitherSide(thighs, Math.max);
+  const level =
+    line.shoulder && line.hip && thighLength > 0 ? Math.abs(line.shoulder.y - line.hip.y) / thighLength : null;
+  return { tracking: true, thigh: 180 - lift, level };
+}
+
+function createThighLiftAnalyzer(options = {}, exercise = 'donkeykick') {
+  const opts = { ...THIGH_LIFT_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => frame.level,
+      keep: 'min',
+      fails: (level) => level > opts.maxShoulderDrop,
+      issue: ISSUES.NOT_IN_POSITION,
+      veto: true,
+      window: 'leadIn',
+    },
+  ]);
+  return poseAnalyzer(exercise, engine, (pose) => measureThighLiftFrame(pose, opts), 'thigh');
+}
+
+/* --- good morning --------------------------------------------------------- */
+
+/**
+ * Side-on, standing, hinging forward at the hips with the back flat. Signal:
+ * the torso's tilt from horizontal, 90 standing and 10-30 at the bottom.
+ * Gates: the knees stay nearly straight through the rep (bent, it is a squat)
+ * and the legs stay upright (lying down and sitting up is a sit-up).
+ */
+const GOOD_MORNING_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  downAngleCeiling: 45,
+  upAngleFloor: 65,
+  downAngle: 40,
+  upAngle: 75,
+  partialAngle: 60,
+  /** The knees' most bent frame in the rep must still be this straight. */
+  minKnee: 140,
+  /** The legs' most upright frame in the rep must be at least this steep. */
+  minLegTilt: 60,
+};
+
+function measureGoodMorningFrame(pose, options = {}) {
+  const opts = { ...GOOD_MORNING_DEFAULTS, ...options };
+  if (!pose) return { tracking: false, torsoTilt: null, knee: null, legTilt: null };
+  const line = midlineOf(pose, opts);
+  const torsoTilt = torsoTiltOf(line, opts);
+  const knee = eitherSide(perSide((s) => sideAngle(pose, s, ['Hip', 'Knee', 'Ankle'], opts)), Math.min);
+  return { tracking: torsoTilt !== null, torsoTilt, knee, legTilt: legTiltOf(line, opts) };
+}
+
+function createGoodMorningAnalyzer(options = {}) {
+  const opts = { ...GOOD_MORNING_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => frame.knee,
+      keep: 'min',
+      fails: (knee) => knee < opts.minKnee,
+      issue: ISSUES.BENT_KNEES,
+      veto: true,
+    },
+    {
+      read: (frame) => frame.legTilt,
+      keep: 'max',
+      fails: (tilt) => tilt < opts.minLegTilt,
+      issue: ISSUES.NOT_UPRIGHT,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('goodmorning', engine, (pose) => measureGoodMorningFrame(pose, opts), 'torsoTilt');
+}
+
+
+
+
+
+/**
+ * Core and cardio: crunches, leg raises, the alternating "scissor" family
+ * (bicycle crunches, mountain climbers, high knees, butt kicks), Russian
+ * twists and burpees.
+ */
+
+/* --- crunch ---------------------------------------------------------------- */
+
+/**
+ * A sit-up cut short: ./situpAnalyzer's trunk angle and its lying gate, with
+ * thresholds that ask for the shoulder blades off the floor (25-30 degrees)
+ * instead of the torso upright. A full sit-up counts as a crunch too.
+ */
+const CRUNCH_DEFAULTS = {
+  ...SITUP_DEFAULTS,
+  minRangeDeg: 12,
+  downAngleCeiling: 160,
+  upAngleFloor: 168,
+  downAngle: 157,
+  upAngle: 172,
+  partialAngle: 165,
+};
+
+/* --- leg raise ------------------------------------------------------------- */
+
+/**
+ * Side-on, lying on the back, straight legs lifted toward vertical. Signal:
+ * shoulder-hip-ankle, 180 flat and 90 with the legs straight up. Gates: the
+ * rest before starts lying flat, and the torso stays on the floor through the
+ * rep — a sit-up folds the same angle by lifting the other end.
+ */
+const LEG_RAISE_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  downAngleCeiling: 125,
+  upAngleFloor: 150,
+  downAngle: 120,
+  upAngle: 160,
+  partialAngle: 140,
+  /** Torso and legs within this many degrees of the floor in the rest before. */
+  maxLyingTilt: 40,
+  /** The torso's highest frame in the rep must stay this close to the floor. */
+  maxTorsoLift: 35,
+};
+
+function measureLegRaiseFrame(pose, options = {}) {
+  const opts = { ...LEG_RAISE_DEFAULTS, ...options };
+  if (!pose) return { tracking: false, legs: null, torsoTilt: null, legTilt: null };
+  const line = midlineOf(pose, opts);
+  const legs = line.ankle ? bodyLineOf(line, opts) : null;
+  return { tracking: legs !== null, legs, torsoTilt: torsoTiltOf(line, opts), legTilt: legTiltOf(line, opts) };
+}
+
+function createLegRaiseAnalyzer(options = {}) {
+  const opts = { ...LEG_RAISE_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) =>
+        Number.isFinite(frame.torsoTilt) && Number.isFinite(frame.legTilt)
+          ? Math.max(frame.torsoTilt, frame.legTilt)
+          : null,
+      keep: 'min',
+      fails: (tilt) => tilt > opts.maxLyingTilt,
+      issue: ISSUES.NOT_LYING,
+      veto: true,
+      window: 'leadIn',
+    },
+    {
+      read: (frame) => frame.torsoTilt,
+      keep: 'max',
+      fails: (tilt) => tilt > opts.maxTorsoLift,
+      issue: ISSUES.NOT_LYING,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('legraise', engine, (pose) => measureLegRaiseFrame(pose, opts), 'legs');
+}
+
+/* --- the scissor family ---------------------------------------------------- */
+
+/**
+ * Exercises that alternate the legs: one knee (or heel) comes up while the
+ * other goes down. Taking either leg alone would count both legs' work as one
+ * side; taking the more lifted would never see a rest, since one leg is always
+ * up. The signal is the gap between them instead: 180 minus the difference of
+ * the two legs' readings. The legs pass each other between sides, which is the
+ * rest, so every knee drive (or heel kick) is a rep of its own — "count each
+ * side". Moving both legs together (a squat, a jump) leaves the gap at rest.
+ *
+ * What each leg reads, by `legs`:
+ *   hip    shoulder-hip-knee on the image: side-on only, for bicycle crunches
+ *          (lying) and mountain climbers (in a plank)
+ *   thigh  how far the knee has risen toward hip height, from the knee's
+ *          height under the hip against its height standing: works from the
+ *          front and the side alike, for high knees
+ *   shin   the same for the heel against the knee, for butt kicks
+ * The height readings follow the squat's reasoning (./squatAnalyzer): turning
+ * toward or away from the camera moves joints sideways, never up or down.
+ *
+ * Gate by `posture`: 'upright' (high knees, butt kicks), 'lying' (bicycle) or
+ * 'plank' (mountain climbers), each judged on the rep's best frame.
+ */
+const SCISSOR_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  minRangeDeg: 30,
+  /** The legs must get at least 55 degrees apart... */
+  downAngleCeiling: 125,
+  /** ...and pass within 30 of each other in between. */
+  upAngleFloor: 150,
+  downAngle: 120,
+  upAngle: 160,
+  partialAngle: 140,
+  /** Alternating legs run at two or three a second; see the jumping jack. */
+  minPhaseMs: 60,
+  minRepMs: 250,
+  legs: 'thigh',
+  posture: 'upright',
+  minUprightTilt: 55,
+  maxLyingTilt: 50,
+  maxPlankTilt: 40,
+};
+
+/** Degrees a segment has swung up from hanging, from its drop against the longest drop seen. */
+function liftFromDrop(drop, longest) {
+  if (!Number.isFinite(drop) || !(longest > 0)) return null;
+  const share = Math.max(-1, Math.min(1, drop / Math.max(longest, drop)));
+  return (Math.acos(share) * 180) / Math.PI;
+}
+
+const SCISSOR_SEGMENTS = { thigh: ['Hip', 'Knee'], shin: ['Knee', 'Ankle'] };
+
+function createScissorAnalyzer(options = {}, exercise = 'highknees') {
+  const opts = { ...SCISSOR_DEFAULTS, ...options };
+
+  const gate = {
+    upright: { read: (f) => f.torsoTilt, keep: 'max', fails: (t) => t < opts.minUprightTilt, issue: ISSUES.NOT_UPRIGHT },
+    lying: { read: (f) => f.torsoTilt, keep: 'min', fails: (t) => t > opts.maxLyingTilt, issue: ISSUES.NOT_LYING },
+    plank: { read: (f) => f.torsoTilt, keep: 'min', fails: (t) => t > opts.maxPlankTilt, issue: ISSUES.NOT_HORIZONTAL },
+  }[opts.posture];
+  const engine = createRepEngine(opts, [{ ...gate, veto: true }]);
+
+  // Each leg's longest drop over the calibration window: its length hanging.
+  const longest = { left: windowMax(opts.calibrationWindowMs), right: windowMax(opts.calibrationWindowMs) };
+
+  const measure = (pose, timestamp) => {
+    if (!pose) return { tracking: false, gap: null, torsoTilt: null };
+    let legs;
+    if (opts.legs === 'hip') {
+      legs = perSide((s) => sideAngle(pose, s, ['Shoulder', 'Hip', 'Knee'], opts));
+    } else {
+      const [top, bottom] = SCISSOR_SEGMENTS[opts.legs];
+      legs = perSide((s) => {
+        const a = pose[s + top];
+        const b = pose[s + bottom];
+        if (!a || !b || a.score < opts.minVisibility || b.score < opts.minVisibility) return null;
+        const drop = b.y - a.y;
+        longest[s].push(drop, timestamp);
+        return liftFromDrop(drop, longest[s].max(timestamp));
+      });
+    }
+    const gap = bothSides(legs, (l, r) => 180 - Math.abs(l - r));
+    return {
+      tracking: gap !== null,
+      gap,
+      legLeft: legs.left,
+      legRight: legs.right,
+      torsoTilt: torsoTiltOf(midlineOf(pose, opts), opts),
+    };
+  };
+  const reset = () => {
+    longest.left.reset();
+    longest.right.reset();
+  };
+  return poseAnalyzer(exercise, engine, measure, 'gap', reset);
+}
+
+/* --- Russian twist --------------------------------------------------------- */
+
+/**
+ * Filmed from the front, seated with the knees up and leaning back, hands
+ * together, turning from side to side. Signal: how far the hands sit to one
+ * side of the hips, as an angle over the torso's length; 180 minus twice it,
+ * so centred is the rest (180) and a hand-to-the-floor twist to either side
+ * (40-50 degrees) is an effort near 90. Every side counts, as in the scissors.
+ *
+ * Gate: seated with the knees above the hips at some point in the rep;
+ * twisting while standing counts nothing.
+ */
+const TWIST_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  minRangeDeg: 30,
+  /**
+   * Half the range, not 30%: the hands only pass through the middle, never
+   * stop there, and at 15fps a narrow rest band is a single frame. The limits
+   * below decide instead.
+   */
+  rangeFraction: 0.5,
+  /** The hands must swing at least 35 degrees to a side... */
+  downAngleCeiling: 110,
+  /** ...and pass within 25 of the middle. */
+  upAngleFloor: 130,
+  downAngle: 105,
+  upAngle: 140,
+  partialAngle: 120,
+  minPhaseMs: 40,
+  minRepMs: 350,
+  /** The knees must sit this many torso lengths above the hips. */
+  minKneeLift: 0.1,
+};
+
+function measureTwistFrame(pose, options = {}) {
+  const opts = { ...TWIST_DEFAULTS, ...options };
+  const none = { tracking: false, twist: null, kneeLift: null };
+  if (!pose) return none;
+  const line = midlineOf(pose, opts);
+  const torso = torsoLengthOf(line, opts);
+  if (!torso || !line.wrist) return none;
+  const offset = Math.abs(line.wrist.x - line.hip.x) * opts.aspect;
+  const angle = (Math.atan2(offset, torso) * 180) / Math.PI;
+  return {
+    tracking: true,
+    twist: Math.max(0, 180 - 2 * angle),
+    kneeLift: line.knee ? (line.hip.y - line.knee.y) / torso : null,
+  };
+}
+
+function createTwistAnalyzer(options = {}) {
+  const opts = { ...TWIST_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => frame.kneeLift,
+      keep: 'max',
+      fails: (lift) => lift < opts.minKneeLift,
+      issue: ISSUES.NOT_IN_POSITION,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('russiantwist', engine, (pose) => measureTwistFrame(pose, opts), 'twist');
+}
+
+/* --- burpee ---------------------------------------------------------------- */
+
+/**
+ * Side-on: stand, drop to a squat, kick back to a plank, come back and stand
+ * (and jump). Signal: the torso's tilt from horizontal, 90 standing and near 0
+ * in the plank, so a rep counts on standing back up.
+ *
+ * Gates: the rep must reach a real plank — a straight body (shoulder-hip-ankle)
+ * while the torso is low — so a bow or a squat counts nothing; and the rest
+ * before it must be on the feet, so rolling over on the floor counts nothing.
+ */
+const BURPEE_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  minRangeDeg: 30,
+  downAngleCeiling: 40,
+  upAngleFloor: 60,
+  downAngle: 30,
+  upAngle: 70,
+  partialAngle: 50,
+  minRepMs: 1000,
+  /** The body must be this straight in the plank... */
+  minPlankLine: 150,
+  /** ...judged on frames with the torso at most this far off horizontal. */
+  plankTilt: 45,
+  /** The legs' steepest frame in the rest before must be standing. */
+  minStandLegTilt: 60,
+};
+
+function measureBurpeeFrame(pose, options = {}) {
+  const opts = { ...BURPEE_DEFAULTS, ...options };
+  if (!pose) return { tracking: false, torsoTilt: null, bodyLine: null, legTilt: null };
+  const line = midlineOf(pose, opts);
+  const torsoTilt = torsoTiltOf(line, opts);
+  return {
+    tracking: torsoTilt !== null,
+    torsoTilt,
+    bodyLine: line.ankle ? bodyLineOf(line, opts) : null,
+    legTilt: line.ankle ? legTiltOf(line, opts) : null,
+  };
+}
+
+function createBurpeeAnalyzer(options = {}) {
+  const opts = { ...BURPEE_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => (Number.isFinite(frame.torsoTilt) && frame.torsoTilt <= opts.plankTilt ? frame.bodyLine : null),
+      keep: 'max',
+      fails: (line) => line < opts.minPlankLine,
+      issue: ISSUES.NOT_IN_POSITION,
+      veto: true,
+    },
+    {
+      read: (frame) => frame.legTilt,
+      keep: 'max',
+      fails: (tilt) => tilt < opts.minStandLegTilt,
+      issue: ISSUES.NOT_UPRIGHT,
+      veto: true,
+      window: 'leadIn',
+    },
+  ]);
+  return poseAnalyzer('burpee', engine, (pose) => measureBurpeeFrame(pose, opts), 'torsoTilt');
+}
+
+
+
+/**
+ * Isometric holds: planks, side planks, wall sits, hollow holds, supermans and
+ * arm circles. Nothing goes up and down, so there is nothing for the rep
+ * engine to count; what counts is time spent in the position, and only while
+ * the form is right.
+ *
+ * Each hold measures a frame and lists what is wrong with it (the same issue
+ * vocabulary as the reps, ./repEngine). The hold engine below turns that into
+ * seconds held, and the analyser reports them as reps — one per whole second
+ * — with the same contract as every rep analyser (`reps`, `phase`, `reset()`,
+ * `push()` returning { reps, phase, repCompleted, issues, tracking, ... }).
+ * So the page, the stages and the workout screen count a plank exactly as they
+ * count push-ups: the counter shows seconds, a target of 30 is 30 seconds, and
+ * the history stores them as the session's total.
+ *
+ * Honest timing:
+ *   startMs   the form must hold this long before the clock starts (then the
+ *             wait is credited), so passing through a plank on the way to the
+ *             floor is not a hold
+ *   graceMs   a break shorter than this — one bad inference, a wobble — does
+ *             not stop the hold, but its frames earn nothing
+ *   maxGapMs  no single frame earns more than this, so a stalled camera or a
+ *             paused set cannot credit the time it was away
+ */
+
+const HOLD_BASE_DEFAULTS = {
+  minVisibility: 0.4,
+  startMs: 400,
+  graceMs: 500,
+  maxGapMs: 250,
+  /** One "rep" is a second held; also the app's fastest believable rep. */
+  minRepMs: 1000,
+  aspect: 1,
+};
+
+/**
+ * @param {object} opts  startMs, graceMs, maxGapMs
+ */
+function createHoldEngine(opts) {
+  let holding = false;
+  let heldMs = 0;
+  let goodSince = null;
+  let badSince = null;
+  let lastAt = null;
+
+  return {
+    get reps() {
+      return Math.floor(heldMs / 1000);
+    },
+    get phase() {
+      return holding ? 'down' : 'up';
+    },
+    get heldMs() {
+      return heldMs;
+    },
+    reset() {
+      holding = false;
+      heldMs = 0;
+      goodSince = null;
+      badSince = null;
+      lastAt = null;
+    },
+    /**
+     * @param {string[]|null} issues  what is wrong with this frame; null when
+     *                                the body is not tracked at all
+     * @param {number} timestamp      milliseconds, monotonic
+     */
+    push(issues, timestamp) {
+      const before = Math.floor(heldMs / 1000);
+      const tracked = Array.isArray(issues);
+      const good = tracked && issues.length === 0;
+      const dt = lastAt === null ? 0 : Math.max(0, Math.min(timestamp - lastAt, opts.maxGapMs));
+      lastAt = timestamp;
+
+      if (good) {
+        badSince = null;
+        if (holding) {
+          heldMs += dt;
+        } else {
+          if (goodSince === null) goodSince = timestamp;
+          if (timestamp - goodSince >= opts.startMs) {
+            holding = true;
+            heldMs += timestamp - goodSince;
+          }
+        }
+      } else {
+        goodSince = null;
+        if (holding) {
+          if (badSince === null) badSince = timestamp;
+          if (timestamp - badSince >= opts.graceMs) holding = false;
+        }
+      }
+
+      const reps = Math.floor(heldMs / 1000);
+      return {
+        reps,
+        phase: holding ? 'down' : 'up',
+        repCompleted: reps > before,
+        partialRep: false,
+        issues: tracked ? issues : [ISSUES.LOST_TRACKING],
+        tracking: tracked,
+        holding,
+        held: heldMs / 1000,
+        thresholds: null,
+      };
+    },
+  };
+}
+
+/**
+ * The analyser around a hold engine: `measure(pose)` returns
+ * { tracking, signal, issues, ...readings }.
+ */
+function holdAnalyzer(exercise, opts, measure) {
+  const engine = createHoldEngine(opts);
+  return {
+    exercise,
+    hold: true,
+    get reps() {
+      return engine.reps;
+    },
+    get phase() {
+      return engine.phase;
+    },
+    reset() {
+      engine.reset();
+    },
+    push(pose, timestamp) {
+      const frame = measure(pose);
+      const result = engine.push(frame.tracking ? frame.issues : null, timestamp);
+      return { ...frame, ...result, signal: Number.isFinite(frame.signal) ? frame.signal : null };
+    },
+  };
+}
+
+/* --- plank, side plank ----------------------------------------------------- */
+
+/**
+ * A plank side-on, a side plank facing the camera: either way the picture is
+ * a straight body near horizontal with the weight on an arm. Checks: torso
+ * within maxTilt of level, shoulder-hip-ankle straight (no sag, no pike), and
+ * an elbow or wrist well below the shoulders, so lying flat on the floor is
+ * not a plank.
+ */
+const PLANK_DEFAULTS = {
+  ...HOLD_BASE_DEFAULTS,
+  maxTilt: 35,
+  minBodyLine: 150,
+  /** The lowest elbow or wrist, in torso lengths below the shoulders. */
+  minArmSupport: 0.35,
+};
+
+const SIDE_PLANK_DEFAULTS = { ...PLANK_DEFAULTS, maxTilt: 45 };
+
+function measurePlankFrame(pose, options = {}) {
+  const opts = { ...PLANK_DEFAULTS, ...options };
+  const none = { tracking: false, signal: null, issues: [], torsoTilt: null, bodyLine: null, support: null };
+  if (!pose) return none;
+  const line = midlineOf(pose, opts);
+  const torsoTilt = torsoTiltOf(line, opts);
+  const bodyLine = bodyLineOf(line, opts);
+  if (torsoTilt === null || bodyLine === null) return none;
+  const support = armSupportOf(pose, line, opts);
+  const issues = [];
+  if (torsoTilt > opts.maxTilt || !(support >= opts.minArmSupport)) issues.push(ISSUES.NOT_HORIZONTAL);
+  if (bodyLine < opts.minBodyLine) issues.push(ISSUES.BODY_SAG);
+  return { tracking: true, signal: bodyLine, issues, torsoTilt, bodyLine, support };
+}
+
+function createPlankAnalyzer(options = {}, exercise = 'plank') {
+  const base = exercise === 'sideplank' ? SIDE_PLANK_DEFAULTS : PLANK_DEFAULTS;
+  const opts = { ...base, ...options };
+  return holdAnalyzer(exercise, opts, (pose) => measurePlankFrame(pose, opts));
+}
+
+/* --- wall sit -------------------------------------------------------------- */
+
+/**
+ * Side-on, back against a wall, thighs level. Checks: the knee (hip-knee-ankle)
+ * between minKnee and maxKnee — about 90 — and the torso upright.
+ */
+const WALL_SIT_DEFAULTS = {
+  ...HOLD_BASE_DEFAULTS,
+  minKnee: 60,
+  maxKnee: 120,
+  minUprightTilt: 55,
+};
+
+function measureWallSitFrame(pose, options = {}) {
+  const opts = { ...WALL_SIT_DEFAULTS, ...options };
+  const none = { tracking: false, signal: null, issues: [], knee: null, torsoTilt: null };
+  if (!pose) return none;
+  const knee = eitherSide(perSide((s) => sideAngle(pose, s, ['Hip', 'Knee', 'Ankle'], opts)), (l, r) => (l + r) / 2);
+  if (knee === null) return none;
+  const torsoTilt = torsoTiltOf(midlineOf(pose, opts), opts);
+  const issues = [];
+  if (knee > opts.maxKnee) issues.push(ISSUES.SHALLOW);
+  else if (knee < opts.minKnee) issues.push(ISSUES.NOT_IN_POSITION);
+  if (Number.isFinite(torsoTilt) && torsoTilt < opts.minUprightTilt) issues.push(ISSUES.NOT_UPRIGHT);
+  return { tracking: true, signal: knee, issues, knee, torsoTilt };
+}
+
+function createWallSitAnalyzer(options = {}) {
+  const opts = { ...WALL_SIT_DEFAULTS, ...options };
+  return holdAnalyzer('wallsit', opts, (pose) => measureWallSitFrame(pose, opts));
+}
+
+/* --- hollow hold, superman --------------------------------------------------- */
+
+/**
+ * Side-on, lying, with the shoulders and the legs both lifted off the floor and
+ * the hips the low point: a banana shape on the back (hollow hold) or an arch
+ * on the front (superman). The camera sees the same curve either way, so both
+ * are this one check: torso and legs each lifted between minLift and maxLift
+ * degrees, with the hips below both ends. Lying flat, either tilt is near 0;
+ * sitting up, the torso is far past maxLift.
+ */
+const ARCH_DEFAULTS = {
+  ...HOLD_BASE_DEFAULTS,
+  minLift: 8,
+  maxLift: 50,
+};
+
+const SUPERMAN_DEFAULTS = { ...ARCH_DEFAULTS, minLift: 5, maxLift: 40 };
+
+function measureArchFrame(pose, options = {}) {
+  const opts = { ...ARCH_DEFAULTS, ...options };
+  const none = { tracking: false, signal: null, issues: [], torsoTilt: null, legTilt: null };
+  if (!pose) return none;
+  const line = midlineOf(pose, opts);
+  if (!line.shoulder || !line.hip || !line.ankle) return none;
+  const torsoTilt = torsoTiltOf(line, opts);
+  const legTilt = legTiltOf(line, opts);
+  const lifted = (tilt) => tilt >= opts.minLift && tilt <= opts.maxLift;
+  // Image y grows downward: the hips must be the lowest of the three.
+  const hipsLowest = line.hip.y > line.shoulder.y && line.hip.y > line.ankle.y;
+  const issues = lifted(torsoTilt) && lifted(legTilt) && hipsLowest ? [] : [ISSUES.NOT_IN_POSITION];
+  return { tracking: true, signal: bodyLineOf(line, opts), issues, torsoTilt, legTilt };
+}
+
+function createArchAnalyzer(options = {}, exercise = 'hollowhold') {
+  const base = exercise === 'superman' ? SUPERMAN_DEFAULTS : ARCH_DEFAULTS;
+  const opts = { ...base, ...options };
+  return holdAnalyzer(exercise, opts, (pose) => measureArchFrame(pose, opts));
+}
+
+/* --- arm circles --------------------------------------------------------------- */
+
+/**
+ * Filmed from the front, standing, arms straight out to the sides at shoulder
+ * height, circling. The circles themselves are small and fast — too small to
+ * count one by one from a phone across the room — so the time with both arms
+ * up and straight is what counts. Checks: both upper arms between minRaise and
+ * maxRaise from the sides, both elbows straight, standing.
+ */
+const ARM_CIRCLE_DEFAULTS = {
+  ...HOLD_BASE_DEFAULTS,
+  minRaise: 60,
+  maxRaise: 125,
+  minElbow: 140,
+  minUprightTilt: 55,
+};
+
+function measureArmCircleFrame(pose, options = {}) {
+  const opts = { ...ARM_CIRCLE_DEFAULTS, ...options };
+  const none = { tracking: false, signal: null, issues: [], raise: null, torsoTilt: null };
+  if (!pose) return none;
+  const raises = perSide((s) => sideAngle(pose, s, ['Hip', 'Shoulder', 'Elbow'], opts));
+  const elbows = perSide((s) => sideAngle(pose, s, ['Shoulder', 'Elbow', 'Wrist'], opts));
+  const low = bothSides(raises, Math.min);
+  const high = bothSides(raises, Math.max);
+  if (low === null) return none;
+  const elbow = eitherSide(elbows, Math.min);
+  const torsoTilt = torsoTiltOf(midlineOf(pose, opts), opts);
+  const issues = [];
+  if (low < opts.minRaise) issues.push(ISSUES.SHALLOW);
+  else if (high > opts.maxRaise || (Number.isFinite(elbow) && elbow < opts.minElbow)) {
+    issues.push(ISSUES.NOT_IN_POSITION);
+  }
+  if (Number.isFinite(torsoTilt) && torsoTilt < opts.minUprightTilt) issues.push(ISSUES.NOT_UPRIGHT);
+  return { tracking: true, signal: low, issues, raise: low, torsoTilt };
+}
+
+function createArmCircleAnalyzer(options = {}) {
+  const opts = { ...ARM_CIRCLE_DEFAULTS, ...options };
+  return holdAnalyzer('armcircles', opts, (pose) => measureArmCircleFrame(pose, opts));
+}
+
+
+
+
+
+
+
+
 
 
 /**
@@ -1336,27 +2523,94 @@ function createJumpingJackAnalyzer(options = {}) {
  * Every analyser has the same contract — `reps` and `phase` getters, `reset()`,
  * `push(pose, timestamp)` returning { reps, phase, repCompleted, partialRep,
  * issues, tracking, thresholds, signal, ...its own readings } — so the stages
- * and the page never branch on the exercise to count it.
+ * and the page never branch on the exercise to count it. A hold (plank, wall
+ * sit...) reports seconds held as its reps; see ./holdAnalyzers.
+ *
+ * Several exercises share an analyser under their own id: the push-up
+ * variants bend the elbows as a push-up does, the squat family lowers the hips
+ * as a squat does, and so on. Each entry below is [defaults, factory]; the
+ * defaults are the analyser's merged options, for the page's debug HUD.
  */
 
 /** Issue ids every analyser reports in (see ./repEngine for what each means). */
 
-const POSE_EXERCISE_IDS = ['pushup', 'squat', 'situp', 'jumpingjack'];
+const variant = (base, overrides) => ({ ...base, ...overrides });
 
-const POSE_FACTORIES = {
-  pushup: createPushupAnalyzer,
-  squat: createSquatAnalyzer,
-  situp: createSitupAnalyzer,
-  jumpingjack: createJumpingJackAnalyzer,
+const POSE_TABLE = {
+  // --- the original four
+  pushup: [DEFAULTS, (o) => createPushupAnalyzer(o)],
+  squat: [SQUAT_DEFAULTS, (o) => createSquatAnalyzer(o)],
+  situp: [SITUP_DEFAULTS, (o) => createSitupAnalyzer(o)],
+  jumpingjack: [JUMPING_JACK_DEFAULTS, (o) => createJumpingJackAnalyzer(o)],
+
+  // --- chest and triceps: the push-up's elbow, under each variant's own id.
+  // An incline push-up (hands on a chair) sits further from horizontal.
+  kneepushup: [DEFAULTS, (o) => createPushupAnalyzer(o, 'kneepushup')],
+  widepushup: [DEFAULTS, (o) => createPushupAnalyzer(o, 'widepushup')],
+  diamondpushup: [DEFAULTS, (o) => createPushupAnalyzer(o, 'diamondpushup')],
+  inclinepushup: [
+    variant(DEFAULTS, { maxTorsoTilt: 65 }),
+    (o) => createPushupAnalyzer({ maxTorsoTilt: 65, ...o }, 'inclinepushup'),
+  ],
+  declinepushup: [DEFAULTS, (o) => createPushupAnalyzer(o, 'declinepushup')],
+  dip: [DIP_DEFAULTS, (o) => createDipAnalyzer(o)],
+
+  // --- shoulders and arms
+  pikepushup: [PIKE_DEFAULTS, (o) => createPikePushupAnalyzer(o)],
+  shoulderpress: [PRESS_DEFAULTS, (o) => createPressAnalyzer(o)],
+  lateralraise: [RAISE_DEFAULTS, (o) => createRaiseAnalyzer(o, 'lateralraise')],
+  frontraise: [
+    variant(RAISE_DEFAULTS, { bothArms: false }),
+    (o) => createRaiseAnalyzer({ bothArms: false, ...o }, 'frontraise'),
+  ],
+  bicepcurl: [CURL_DEFAULTS, (o) => createCurlAnalyzer(o)],
+  armcircles: [ARM_CIRCLE_DEFAULTS, (o) => createArmCircleAnalyzer(o)],
+
+  // --- legs and glutes: the squat's hip height, under each variant's own id
+  sumosquat: [SQUAT_DEFAULTS, (o) => createSquatAnalyzer(o, 'sumosquat')],
+  lunge: [SQUAT_DEFAULTS, (o) => createSquatAnalyzer(o, 'lunge')],
+  sidelunge: [SQUAT_DEFAULTS, (o) => createSquatAnalyzer(o, 'sidelunge')],
+  splitsquat: [SQUAT_DEFAULTS, (o) => createSquatAnalyzer(o, 'splitsquat')],
+  wallsit: [WALL_SIT_DEFAULTS, (o) => createWallSitAnalyzer(o)],
+  glutebridge: [BRIDGE_DEFAULTS, (o) => createBridgeAnalyzer(o, 'glutebridge')],
+  singlelegbridge: [BRIDGE_DEFAULTS, (o) => createBridgeAnalyzer(o, 'singlelegbridge')],
+  donkeykick: [THIGH_LIFT_DEFAULTS, (o) => createThighLiftAnalyzer(o, 'donkeykick')],
+  firehydrant: [THIGH_LIFT_DEFAULTS, (o) => createThighLiftAnalyzer(o, 'firehydrant')],
+  goodmorning: [GOOD_MORNING_DEFAULTS, (o) => createGoodMorningAnalyzer(o)],
+
+  // --- core
+  crunch: [CRUNCH_DEFAULTS, (o) => createSitupAnalyzer({ ...CRUNCH_DEFAULTS, ...o }, 'crunch')],
+  legraise: [LEG_RAISE_DEFAULTS, (o) => createLegRaiseAnalyzer(o)],
+  bicyclecrunch: [
+    variant(SCISSOR_DEFAULTS, { legs: 'hip', posture: 'lying' }),
+    (o) => createScissorAnalyzer({ legs: 'hip', posture: 'lying', ...o }, 'bicyclecrunch'),
+  ],
+  mountainclimber: [
+    variant(SCISSOR_DEFAULTS, { legs: 'hip', posture: 'plank' }),
+    (o) => createScissorAnalyzer({ legs: 'hip', posture: 'plank', ...o }, 'mountainclimber'),
+  ],
+  russiantwist: [TWIST_DEFAULTS, (o) => createTwistAnalyzer(o)],
+  plank: [PLANK_DEFAULTS, (o) => createPlankAnalyzer(o, 'plank')],
+  sideplank: [SIDE_PLANK_DEFAULTS, (o) => createPlankAnalyzer(o, 'sideplank')],
+  hollowhold: [ARCH_DEFAULTS, (o) => createArchAnalyzer(o, 'hollowhold')],
+  superman: [SUPERMAN_DEFAULTS, (o) => createArchAnalyzer(o, 'superman')],
+
+  // --- cardio
+  highknees: [SCISSOR_DEFAULTS, (o) => createScissorAnalyzer(o, 'highknees')],
+  buttkicks: [
+    variant(SCISSOR_DEFAULTS, { legs: 'shin' }),
+    (o) => createScissorAnalyzer({ legs: 'shin', ...o }, 'buttkicks'),
+  ],
+  burpee: [BURPEE_DEFAULTS, (o) => createBurpeeAnalyzer(o)],
 };
+
+const POSE_EXERCISE_IDS = Object.keys(POSE_TABLE);
 
 /** Each analyser's default options, for showing its thresholds (the page's debug HUD). */
-const POSE_DEFAULTS = {
-  pushup: DEFAULTS,
-  squat: SQUAT_DEFAULTS,
-  situp: SITUP_DEFAULTS,
-  jumpingjack: JUMPING_JACK_DEFAULTS,
-};
+const POSE_DEFAULTS = Object.fromEntries(POSE_EXERCISE_IDS.map((id) => [id, POSE_TABLE[id][0]]));
+
+/** The exercises counted as time held rather than reps. */
+const POSE_HOLD_IDS = ['armcircles', 'wallsit', 'plank', 'sideplank', 'hollowhold', 'superman'];
 
 /** The exercise an analyser will actually count for this id: unknown or missing is a push-up. */
 function poseExerciseId(exerciseId) {
@@ -1370,7 +2624,7 @@ function poseExerciseId(exerciseId) {
  * @param {object} [options]  overrides for that analyser's defaults (aspect, ...)
  */
 function createAnalyzer(exerciseId, options) {
-  return POSE_FACTORIES[poseExerciseId(exerciseId)](options);
+  return POSE_TABLE[poseExerciseId(exerciseId)][1](options);
 }
 
 
@@ -1610,7 +2864,16 @@ const HUD_SPEC = {
       ['FEET', (r) => r.legSpread, null, (v) => (Number.isFinite(v) ? v.toFixed(1) + '×' : '—')],
     ],
   },
-}[PAGE_EXERCISE];
+}[PAGE_EXERCISE] || {
+  // Every other exercise: its signal, the torso's tilt, and for a hold the
+  // seconds held so far (a rep exercise has none, so it shows a dash).
+  signal: 'SIGNAL',
+  best: 'BEST',
+  cells: [
+    ['TILT', (r) => r.torsoTilt, null, fmtDeg],
+    ['HELD', (r) => r.held, null, (v) => (Number.isFinite(v) ? v.toFixed(1) + 's' : '—')],
+  ],
+};
 
 hudSignalK.textContent = HUD_SPEC.signal;
 HUD_SPEC.cells.forEach((cell, i) => { hudCellEls[i][0].textContent = cell[0]; });
@@ -1722,6 +2985,8 @@ const ISSUE_TEXT = Object.assign(
     shallow: 'Go lower',
     notUpright: 'Stand up straight',
     notLying: 'Lie on your back to start',
+    notInPosition: 'Get into the starting position',
+    bentKnees: 'Keep your legs straight',
   },
   {
     situp: { shallow: 'Come up higher' },
@@ -1770,7 +3035,12 @@ const SETUP_HELP = {
     calibrating: ['Learning your range',
       'Do one full jumping jack — arms all the way overhead, then back to your sides — and counting starts.'],
   },
-}[PAGE_EXERCISE];
+}[PAGE_EXERCISE] || {
+  outOfFrame: ['Body out of frame',
+    'Shoulders and hips have to be visible. Step back from the phone; the app says which side to face it.'],
+  calibrating: ['Learning your range',
+    'Do one full, slow rep and counting starts.'],
+};
 
 /**
  * What each exercise needs to see (`seen` tests one joint), and whether this
@@ -1799,7 +3069,12 @@ const SETUP_CHECKS = {
       seen(side + 'Hip') && seen(side + 'Shoulder') && seen(side + 'Elbow')),
     misplaced: (r) => Number.isFinite(r.torsoTilt) && r.torsoTilt < PAGE_OPTS.minUprightTilt,
   },
-}[PAGE_EXERCISE];
+}[PAGE_EXERCISE] || {
+  // The other exercises' positions are their analysers' gates, reported as
+  // issues; the page only checks that a body is there to judge.
+  inFrame: (seen) => ['Shoulder', 'Hip'].every((joint) => seen('left' + joint) || seen('right' + joint)),
+  misplaced: () => false,
+};
 
 let coachState = null;
 let coachSince = 0;
@@ -1881,7 +3156,8 @@ function updateHud(result) {
   const restAt = result.thresholds ? result.thresholds.up : PAGE_OPTS.upAngle;
   hudDeepest.textContent = fmtDeg(deepestSignal);
   hudDeepestK.textContent =
-    HUD_SPEC.best + ' / ' + Math.round(needed) + '°' +
+    // A hold has no effort threshold, only a position to keep.
+    HUD_SPEC.best + ' / ' + (Number.isFinite(needed) ? Math.round(needed) + '°' : '—') +
     (result.thresholds && result.thresholds.adapted ? ' AUTO' : '');
   hudDeepest.className =
     'v' + (Number.isFinite(deepestSignal) ? (deepestSignal <= needed ? ' ok' : ' bad') : '');

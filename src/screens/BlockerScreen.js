@@ -26,7 +26,7 @@ import { AppIcon } from '../components/AppIcon';
 import { AppPickerModal } from '../components/AppPickerModal';
 import { Button } from '../components/Button';
 import { Chips, Row, Section, Toggle } from '../components/SettingsRows';
-import { EXERCISES } from '../exercises/exercises';
+import { CLASSIC_EXERCISE_IDS, getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
 import { useBlocker } from '../state/BlockerContext';
 import { useSettings } from '../state/SettingsContext';
@@ -387,10 +387,13 @@ export function BlockerScreen({ onGoWorkout }) {
                 selected={rate}
                 onSelect={(blockerSecondsPerRep) => updateSettings({ blockerSecondsPerRep })}
               />
-              {/* The rate is per push-up; lighter exercises earn a share of it. */}
+              {/*
+                The rate is per push-up; lighter exercises earn a share of it.
+                The four classics stand for the rest: forty would bury the note.
+              */}
               <Text style={styles.sectionNote}>
                 {t('blocker.ratePerExercise', {
-                  list: EXERCISES.map(
+                  list: CLASSIC_EXERCISE_IDS.map(getExercise).map(
                     (e) =>
                       `${e.icon} ${t(`exercise.${e.id}`)} ${formatPerRep(rate * e.creditWeight, t)}`,
                   ).join(' · '),

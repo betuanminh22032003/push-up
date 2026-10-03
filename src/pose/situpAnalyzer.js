@@ -81,7 +81,13 @@ export function measureSitupFrame(pose, options = {}) {
   return { tracking: trunk !== null, trunk, torsoTilt, legTilt };
 }
 
-export function createSitupAnalyzer(options = {}) {
+/**
+ * @param {object} [options]   overrides for SITUP_DEFAULTS
+ * @param {string} [exercise]  the id this analyser reports: a crunch is the
+ *   same movement cut short, counted here with thresholds that ask for the
+ *   shoulders to come off the floor rather than the whole torso.
+ */
+export function createSitupAnalyzer(options = {}, exercise = 'situp') {
   const opts = { ...SITUP_DEFAULTS, ...options };
 
   const engine = createRepEngine(opts, [
@@ -100,5 +106,5 @@ export function createSitupAnalyzer(options = {}) {
     },
   ]);
 
-  return poseAnalyzer('situp', engine, (pose) => measureSitupFrame(pose, opts), 'trunk');
+  return poseAnalyzer(exercise, engine, (pose) => measureSitupFrame(pose, opts), 'trunk');
 }
