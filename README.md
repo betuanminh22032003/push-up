@@ -4,10 +4,27 @@ Hands-free workout counter for Android (Expo / React Native): push-ups, squats,
 sit-ups and jumping jacks. Dark, minimal, pure `StyleSheet`, no navigation library.
 
 Counts reps with the camera, the light sensor, the phone's own movement or a tap;
-runs sets with a countdown and a rest timer; speaks the count; follows a 6-week
-push-up program; tracks a daily goal, streaks, records and achievements; and locks
+runs sets with a countdown and a rest timer; speaks the count; follows a 4-week
+training schedule; tracks a daily goal, streaks, records and achievements; and locks
 the apps you choose until your reps earn you time on them. English and Vietnamese.
 Everything stays on the device.
+
+Release-readiness extras, all without a backend:
+
+- **Backup / restore** (Settings): every `pupg:*` key the app owns, as a versioned
+  JSON file (`src/backup/`), out through the share sheet and back in through the
+  document picker, with a preview and a merge-or-replace choice.
+- **Camera setup card and visibility gate**: each exercise declares the joints it
+  needs (`POSE_NEEDS` in `src/pose/analyzers.js`); counting waits until they have
+  been in view for a second (`src/pose/visibility.js`), and the app says which body
+  part is out of frame. Pose page protocol 3; older pages still count as before.
+- **Local crash log** (`src/diagnostics/`): an error boundary and a global handler
+  keep the last 20 errors on the device. They only leave it inside a feedback,
+  crash or "Miscounted?" report the user reads and shares.
+- **Challenge links** (`src/challenge/`): timed camera-only challenges encoded into
+  `https://betuanminh22032003.github.io/push-up/challenge.html#<token>` (fragment,
+  so Pages never sees it) and the `hitdat://challenge?c=<token>` deep link.
+  `npm run build:challenge` regenerates `docs/challenge.html` from the codec.
 
 Store material lives in [`store/`](store/): listing copy, icon, feature graphic,
 screenshots, and the [release checklist](store/RELEASE-CHECKLIST.md) (Vietnamese).
