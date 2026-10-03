@@ -35,8 +35,10 @@ Hands-free push-up counter. AI camera, 6-week program, goals and streaks.
 Put the phone down and just do push-ups. Hít Đất AI counts every rep for you — with the camera, the sensor, or a tap of your nose — and turns them into a habit.
 
 COUNTS HANDS-FREE
+• Four exercises: push-ups, squats, sit-ups and jumping jacks. Pick one before you start, and it shows you where to put the phone.
 • AI camera: prop the phone up, get into position, and the camera counts your reps and coaches your form ("go lower", "keep your body straight").
-• Sensor mode: phone on the floor, cover the sensor at the bottom of each rep.
+• Sensor mode for push-ups: phone on the floor, cover the sensor at the bottom of each rep.
+• Motion mode: squats with the phone in your pocket, sit-ups with it on your chest, jumping jacks with it in your hand.
 • Tap mode: works on every phone, no camera needed.
 • Voice count says each number out loud so you never look at the screen.
 
@@ -53,12 +55,12 @@ REAL WORKOUTS
 STAY MOTIVATED
 • Daily goal with a progress bar.
 • Streak of consecutive days with reps.
-• Weekly chart, personal records, 17 achievements.
+• Weekly chart and personal records, for all exercises or one at a time, and 21 achievements.
 • Share your result after every workout.
 
 EARN YOUR SCREEN TIME
 • Pick the apps and websites that eat your time (social media, videos, games) and Hít Đất AI locks them, in the browser too.
-• Every push-up earns a minute of use; you choose the rate. A small timer counts it down while you scroll.
+• Every push-up earns a minute of use; you choose the rate. Squats and sit-ups earn half of that, jumping jacks a quarter. A small timer counts it down while you scroll.
 • Out of time? The app stays covered until you do more push-ups. Switch it off whenever you like.
 
 PRIVATE BY DESIGN
@@ -90,8 +92,10 @@ Hít Đất AI: Đếm bằng camera
 Đặt điện thoại xuống và chỉ việc hít đất. Hít Đất AI đếm từng cái cho bạn — bằng camera, cảm biến, hoặc chạm mũi — và biến nó thành thói quen.
 
 ĐẾM RẢNH TAY
+• Bốn bài tập: hít đất, squat, gập bụng và bật nhảy. Chọn bài trước khi tập, bài nào cũng hướng dẫn cách đặt máy.
 • Camera AI: dựng điện thoại lên, vào tư thế, camera đếm số cái và nhắc tư thế ("xuống thấp hơn", "giữ thẳng người").
-• Chế độ cảm biến: đặt máy trên sàn, che cảm biến ở điểm thấp nhất mỗi cái.
+• Chế độ cảm biến cho hít đất: đặt máy trên sàn, che cảm biến ở điểm thấp nhất mỗi cái.
+• Chế độ chuyển động: squat với máy trong túi quần, gập bụng với máy áp trên ngực, bật nhảy với máy cầm trong tay.
 • Chế độ chạm: chạy trên mọi máy, không cần camera.
 • Đọc số bằng giọng nói, không cần nhìn màn hình.
 
@@ -108,12 +112,12 @@ CHƯƠNG TRÌNH 6 TUẦN
 GIỮ ĐỘNG LỰC
 • Mục tiêu mỗi ngày với thanh tiến độ.
 • Chuỗi ngày tập liên tiếp.
-• Biểu đồ tuần, kỷ lục cá nhân, 17 thành tích.
+• Biểu đồ tuần và kỷ lục cá nhân, xem chung hoặc theo từng bài, cùng 21 thành tích.
 • Chia sẻ kết quả sau mỗi buổi tập.
 
 ĐỔI HÍT ĐẤT LẤY GIỜ GIẢI TRÍ
 • Chọn những ứng dụng và trang web hay ngốn thời gian (mạng xã hội, video, game), Hít Đất AI sẽ khoá chúng, cả trong trình duyệt.
-• Mỗi cái hít đất đổi được 1 phút sử dụng, tuỳ chỉnh được. Đồng hồ nhỏ đếm ngược khi bạn lướt.
+• Mỗi cái hít đất đổi được 1 phút sử dụng, tuỳ chỉnh được. Squat và gập bụng được một nửa, bật nhảy một phần tư. Đồng hồ nhỏ đếm ngược khi bạn lướt.
 • Hết giờ? Ứng dụng bị che lại cho tới khi bạn hít đất tiếp. Tắt bất cứ lúc nào.
 
 RIÊNG TƯ TỪ THIẾT KẾ
@@ -168,6 +172,7 @@ The manifest requests only:
 - `SYSTEM_ALERT_WINDOW` — app blocker: opens the block screen from the background and draws the countdown. Special access the user grants
 - `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` — the app blocker's watcher (declaration below)
 - `VIBRATE`, `INTERNET`, `MODIFY_AUDIO_SETTINGS` — normal permissions, no prompt
+- `HIGH_SAMPLING_RATE_SENSORS` — motion mode reads the phone's orientation fast enough to count a brisk jumping jack; normal permission, no prompt, no data leaves the device
 
 `RECORD_AUDIO`, `ACTIVITY_RECOGNITION` and the media-playback foreground-service permission that the Expo modules add by default are blocked in `app.json`.
 

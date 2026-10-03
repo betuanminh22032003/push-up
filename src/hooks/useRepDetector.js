@@ -15,14 +15,16 @@ const MIN_NEAR_MS = 80;
  *
  * Two guards protect the count:
  *   MIN_NEAR_MS       rejects a graze that never really covered the sensor
- *   REP_DEBOUNCE_MS   rejects a second rep arriving impossibly soon after one
+ *   minRepMs          rejects a second rep arriving impossibly soon after one
+ *                     (REP_DEBOUNCE_MS unless the exercise is faster)
  *
  * @param {object}   source        a source from src/sensors/sources.js
  * @param {object}   sourceConfig  calibration values for that source
  * @param {boolean}  active        subscribe only while the workout is running
  * @param {Function} onRep         called once per counted rep
+ * @param {number}   [minRepMs]    fastest believable gap between two reps
  */
-export function useRepDetector({ source, sourceConfig, active, onRep }) {
+export function useRepDetector({ source, sourceConfig, active, onRep, minRepMs }) {
   const [isNear, setIsNear] = useState(false);
 
   const nearSinceRef = useRef(0);
@@ -35,6 +37,13 @@ export function useRepDetector({ source, sourceConfig, active, onRep }) {
   useEffect(() => {
     onRepRef.current = onRep;
   }, [onRep]);
+
+  // Same reason: switching exercise changes the floor, never the subscription.
+  const minRepMsRef = useRef(REP_DEBOUNCE_MS);
+  useEffect(() => {
+    minRepMsRef.current =
+      Number.isFinite(minRepMs) && minRepMs >= 0 ? minRepMs : REP_DEBOUNCE_MS;
+  }, [minRepMs]);
 
   const handleProximityChange = useCallback((near) => {
     const now = Date.now();
@@ -53,7 +62,7 @@ export function useRepDetector({ source, sourceConfig, active, onRep }) {
 
     const heldFor = now - nearSinceRef.current;
     if (heldFor < MIN_NEAR_MS) return;
-    if (now - lastRepAtRef.current < REP_DEBOUNCE_MS) return;
+    if (now - lastRepAtRef.current < minRepMsRef.current) return;
 
     lastRepAtRef.current = now;
     onRepRef.current?.();

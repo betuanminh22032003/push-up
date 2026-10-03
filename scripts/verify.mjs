@@ -153,6 +153,35 @@ await check('saveSession writes the documented shape', async () => {
   assert.equal(saved.durationSeconds, 63);
 });
 
+await check('a push-up session keeps that shape: no exerciseId', async () => {
+  const { session: saved } = await store.saveSession({
+    totalReps: 20,
+    durationSeconds: 63,
+    sourceId: 'light',
+    exerciseId: 'pushup',
+  });
+  assert.deepEqual(
+    Object.keys(saved).sort(),
+    ['durationSeconds', 'id', 'sourceId', 'timestamp', 'totalReps'],
+  );
+});
+
+await check('any other exercise is stored by id and reads back', async () => {
+  const { session: saved } = await store.saveSession({
+    totalReps: 15,
+    durationSeconds: 40,
+    sourceId: 'motion',
+    exerciseId: 'squat',
+  });
+  assert.equal(saved.exerciseId, 'squat');
+  const back = (await store.loadSessions()).find((s) => s.id === saved.id);
+  assert.equal(back.exerciseId, 'squat');
+  for (const junk of [null, '', 42, {}]) {
+    const { session: s } = await store.saveSession({ totalReps: 1, durationSeconds: 1, exerciseId: junk });
+    assert.equal(s.exerciseId, undefined, `exerciseId ${JSON.stringify(junk)} is not stored`);
+  }
+});
+
 await check('values are rounded and clamped at zero', async () => {
   const { session: saved } = await store.saveSession({ totalReps: 7.6, durationSeconds: -4 });
   assert.equal(saved.totalReps, 8);
@@ -208,6 +237,21 @@ await check('malformed records are dropped, valid ones kept', async () => {
   assert.equal(all[0].id, 'good');
 });
 
+await check('records from before exercises load beside tagged ones', async () => {
+  store.__mem.set(
+    'pupg:sessions:v1',
+    JSON.stringify([
+      { id: 'legacy', timestamp: 5, totalReps: 3, durationSeconds: 9, sourceId: null },
+      { id: 'squat', timestamp: 6, totalReps: 4, durationSeconds: 9, exerciseId: 'squat' },
+      { id: 'odd', timestamp: 7, totalReps: 4, durationSeconds: 9, exerciseId: 7 },
+    ]),
+  );
+  const all = await store.loadSessions();
+  assert.deepEqual(all.map((s) => s.id), ['odd', 'squat', 'legacy'], 'none is dropped');
+  assert.equal(all.find((s) => s.id === 'squat').exerciseId, 'squat');
+  assert.equal(all.find((s) => s.id === 'legacy').exerciseId, undefined);
+});
+
 await check('clearSessions empties the store', async () => {
   await store.saveSession({ totalReps: 1, durationSeconds: 1 });
   assert.deepEqual(await store.clearSessions(), []);
@@ -226,6 +270,48 @@ await check('settings round-trip and merge onto defaults', async () => {
   const merged = await store.loadSettings();
   assert.equal(merged.hapticsEnabled, true, 'absent keys fall back to defaults');
   assert.equal(merged.soundEnabled, false);
+});
+
+await check('exercise settings default to push-ups and round-trip', async () => {
+  store.__mem.delete('pupg:settings:v1');
+  const defaults = await store.loadSettings();
+  assert.equal(defaults.exerciseId, 'pushup');
+  assert.deepEqual(defaults.sourceIds, {});
+  assert.notEqual(defaults.sourceIds, store.DEFAULT_SETTINGS.sourceIds, 'never the shared default');
+  await store.saveSettings({ ...defaults, exerciseId: 'squat', sourceIds: { squat: 'motion', pushup: null } });
+  const back = await store.loadSettings();
+  assert.equal(back.exerciseId, 'squat');
+  assert.deepEqual(back.sourceIds, { squat: 'motion', pushup: null }, 'null is "auto"');
+
+  store.__mem.set('pupg:settings:v1', JSON.stringify({ sourceId: 'light' }));
+  const legacy = await store.loadSettings();
+  assert.equal(legacy.sourceId, 'light', 'a pre-exercise file keeps its source for push-ups');
+  assert.equal(legacy.exerciseId, 'pushup');
+  assert.deepEqual(legacy.sourceIds, {});
+});
+
+await check('corrupt exercise settings fall back without losing the rest', async () => {
+  for (const junk of [null, [], ['motion'], 'motion', 5, true]) {
+    store.__mem.set('pupg:settings:v1', JSON.stringify({ sourceIds: junk, soundEnabled: false }));
+    const s = await store.loadSettings();
+    assert.deepEqual(s.sourceIds, {}, `sourceIds ${JSON.stringify(junk)}`);
+    assert.equal(s.soundEnabled, false, 'the other settings still load');
+  }
+  store.__mem.set(
+    'pupg:settings:v1',
+    JSON.stringify({ sourceIds: { squat: 'motion', situp: 7, jumpingjack: {} } }),
+  );
+  assert.deepEqual((await store.loadSettings()).sourceIds, { squat: 'motion' });
+  for (const junk of [3, '', null, ['squat']]) {
+    store.__mem.set('pupg:settings:v1', JSON.stringify({ exerciseId: junk }));
+    assert.equal((await store.loadSettings()).exerciseId, 'pushup', JSON.stringify(junk));
+  }
+  for (const junk of ['"garbage"', '[1,2]', 'null', '7']) {
+    store.__mem.set('pupg:settings:v1', junk);
+    const s = await store.loadSettings();
+    assert.equal(s.dailyGoal, 50, junk);
+    assert.equal(s['0'], undefined, `${junk} is not spread into the settings`);
+  }
 });
 
 // --- result ----------------------------------------------------------------

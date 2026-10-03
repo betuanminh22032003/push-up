@@ -22,14 +22,24 @@ import { colors, radius, spacing, type } from '../theme/theme';
  *
  * expo-camera is still used, for its permission API: Android only grants the
  * WebView camera access if the host app already holds CAMERA at the OS level.
+ *
+ * Which exercise to count travels in the URL (?exercise=<id>), and the page's
+ * ready message says which one it actually counts. The published page lags the
+ * code — GitHub Pages only updates when master is pushed — and a page from
+ * before there were other exercises ignores the parameter and counts push-ups.
+ * So a page that answers with a different exercise is refused, with an
+ * explanation, rather than silently counting push-ups during a set of squats.
+ * A ready message with no exercise at all comes from that older page, which
+ * counts push-ups correctly, so for push-ups it is accepted.
  */
-export function PoseStage({ active, paused, onRep, onFrame }) {
+export function PoseStage({ active, paused, onRep, onFrame, exercise = 'pushup' }) {
   const t = useT();
   const webviewRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [ready, setReady] = useState(false);
   const [cameraUp, setCameraUp] = useState(false);
   const [failure, setFailure] = useState(null);
+  const [outdated, setOutdated] = useState(false);
 
   const onRepRef = useRef(onRep);
   const onFrameRef = useRef(onFrame);
@@ -37,6 +47,20 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
     onRepRef.current = onRep;
     onFrameRef.current = onFrame;
   }, [onRep, onFrame]);
+
+  // Reps and frames are passed on only once the page has said it counts the
+  // exercise asked for. A ref, so the message handler never goes stale.
+  const exerciseRef = useRef(exercise);
+  const countingRef = useRef(false);
+  useEffect(() => {
+    // A new exercise is a new page load (the URL changes): start over.
+    exerciseRef.current = exercise;
+    countingRef.current = false;
+    setReady(false);
+    setCameraUp(false);
+    setFailure(null);
+    setOutdated(false);
+  }, [exercise]);
 
   // Ask once, when the camera is first needed rather than at app launch.
   useEffect(() => {
@@ -61,9 +85,9 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
     }
 
     if (message.type === 'rep') {
-      onRepRef.current?.(message);
+      if (countingRef.current) onRepRef.current?.(message);
     } else if (message.type === 'frame') {
-      onFrameRef.current?.(message);
+      if (countingRef.current) onFrameRef.current?.(message);
     } else if (message.type === 'status') {
       if (message.phase === 'camera') {
         // Camera is live but the model is still downloading. Stop covering the
@@ -71,8 +95,18 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
         setCameraUp(true);
       } else if (message.phase === 'ready') {
         setCameraUp(true);
+        // No `exercise`: a page from before there was a choice, which counts
+        // push-ups whatever the URL asks for.
+        const counted = message.exercise || 'pushup';
+        if (counted !== exerciseRef.current) {
+          countingRef.current = false;
+          setOutdated(true);
+          return;
+        }
+        countingRef.current = true;
         setReady(true);
         setFailure(null);
+        setOutdated(false);
       } else if (message.phase === 'error') {
         setFailure(message.message || 'Pose detection failed.');
       }
@@ -100,11 +134,13 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
     );
   }
 
+  const problem = failure || (outdated ? t('pose.outdated') : null);
+
   return (
     <View style={styles.wrap}>
       <WebView
         ref={webviewRef}
-        source={{ uri: POSE_PAGE_URL }}
+        source={{ uri: `${POSE_PAGE_URL}?exercise=${encodeURIComponent(exercise)}` }}
         onMessage={handleMessage}
         onError={({ nativeEvent }) =>
           setFailure(t('pose.loadFailed', { reason: nativeEvent.description }))
@@ -126,8 +162,8 @@ export function PoseStage({ active, paused, onRep, onFrame }) {
         containerStyle={styles.webview}
       />
 
-      {failure ? (
-        <Overlay title={t('pose.problem')} body={failure} tone="error" />
+      {problem ? (
+        <Overlay title={t('pose.problem')} body={problem} tone="error" />
       ) : ready ? null : cameraUp ? (
         <Banner text={t('pose.loadingModel')} />
       ) : (

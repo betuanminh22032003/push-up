@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
 import { colors, radius, spacing } from '../theme/theme';
 import { formatDuration, formatSessionDate } from '../utils/time';
@@ -7,6 +8,8 @@ import { formatDuration, formatSessionDate } from '../utils/time';
 export function SessionRow({ session, onDelete }) {
   const t = useT();
   const { totalReps, durationSeconds, timestamp, sets, program } = session;
+  // Sessions from before there was a choice carry no exerciseId: push-ups.
+  const exercise = getExercise(session.exerciseId);
   const pace = durationSeconds > 0 ? (totalReps / (durationSeconds / 60)).toFixed(1) : '0.0';
 
   const details = [formatDuration(durationSeconds), `${pace} ${t('session.repsPerMin')}`];
@@ -31,6 +34,9 @@ export function SessionRow({ session, onDelete }) {
           </Text>
           {tag ? <Text style={styles.tag}>{tag}</Text> : null}
         </View>
+        <Text style={styles.exercise} numberOfLines={1}>
+          {`${exercise.icon} ${t(`exercise.${exercise.id}`)}`}
+        </Text>
         <Text style={styles.sub}>{details.join(' · ')}</Text>
       </View>
 
@@ -80,6 +86,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 1,
   },
+  exercise: { fontSize: 13, color: colors.text, marginTop: 2 },
   sub: { fontSize: 13, color: colors.textDim, marginTop: 2 },
   delete: { paddingHorizontal: spacing.sm },
   deleteGlyph: { fontSize: 26, color: colors.textFaint, lineHeight: 28 },

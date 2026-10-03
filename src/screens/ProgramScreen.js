@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '../components/Button';
 import { ProgressBar } from '../components/ProgressBar';
+import { EXERCISES, getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
 import {
   DAYS_PER_WEEK,
@@ -17,6 +18,9 @@ import {
 import { useSessions } from '../state/SessionsContext';
 import { colors, radius, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
+
+/** The program's exercise: its levels and targets are push-up numbers. */
+const PROGRAM_EXERCISE = EXERCISES.find((e) => e.program) ?? getExercise();
 
 /**
  * The 6-week program: take the test, then a day list with the next workout
@@ -56,6 +60,10 @@ export function ProgramScreen({ onStartPlan }) {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}
       showsVerticalScrollIndicator={false}
     >
+      {/* Whatever the workout tab is set to, the program and its test are push-ups. */}
+      <Text style={styles.kicker}>
+        {`${PROGRAM_EXERCISE.icon} ${t(`exercise.${PROGRAM_EXERCISE.id}`)}`}
+      </Text>
       <Text style={styles.title}>{t('program.title')}</Text>
       <Text style={styles.intro}>{t('program.intro')}</Text>
 
@@ -163,6 +171,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   grow: { flex: 1 },
   pressed: { opacity: 0.7 },
+  kicker: { ...type.label, color: colors.accent, textTransform: 'uppercase', marginBottom: 2 },
   title: { ...type.title, color: colors.text },
   intro: { ...type.body, color: colors.textDim, marginTop: spacing.xs, lineHeight: 21 },
 

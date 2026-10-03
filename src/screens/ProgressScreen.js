@@ -1,30 +1,54 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ACHIEVEMENTS, longestStreak } from '../achievements/achievements';
 import { AchievementGrid } from '../components/AchievementGrid';
+import { ExercisePicker } from '../components/ExercisePicker';
 import { SessionRow } from '../components/SessionRow';
 import { StatTile } from '../components/StatTile';
 import { WeeklyChart } from '../components/WeeklyChart';
+import { EXERCISES, exerciseOf, filterByExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
 import { colors, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
-import { dailyTotals } from '../utils/stats';
+import { computeStats, dailyTotals } from '../utils/stats';
 import { formatDuration } from '../utils/time';
 
-/** Chart, records, badges, and every workout — the "why keep going" tab. */
+/**
+ * Chart, records, badges, and every workout — the "why keep going" tab.
+ *
+ * Once the history holds more than one exercise, a filter narrows the tiles,
+ * the chart, the records and the list to one of them. The daily goal counts
+ * every exercise, so its bar and line only show under "All"; achievements
+ * are global and never filtered.
+ */
 export function ProgressScreen() {
   const t = useT();
   const insets = useSafeAreaInsets();
   const { sessions, stats, achievements, removeSession } = useSessions();
   const { settings } = useSettings();
+  const [filter, setFilter] = useState('all');
 
-  const week = useMemo(() => dailyTotals(sessions, 7), [sessions]);
+  // The exercises that appear in the history, in the app's order.
+  const inHistory = useMemo(() => {
+    const ids = new Set(sessions.map(exerciseOf));
+    return EXERCISES.filter((e) => ids.has(e.id));
+  }, [sessions]);
+  const showFilter = inHistory.length > 1;
+  // A filter whose last session was deleted falls back to everything.
+  const shown = showFilter && inHistory.some((e) => e.id === filter) ? filter : 'all';
+  const all = shown === 'all';
+
+  const filtered = useMemo(() => filterByExercise(sessions, shown), [sessions, shown]);
+  const shownStats = useMemo(() => (all ? stats : computeStats(filtered)), [all, stats, filtered]);
+  const goal = all ? settings.dailyGoal : 0;
+
+  const week = useMemo(() => dailyTotals(filtered, 7), [filtered]);
   const weekTotal = week.reduce((sum, d) => sum + d.reps, 0);
-  const streakRecord = useMemo(() => longestStreak(sessions), [sessions]);
+  const streakRecord = useMemo(() => longestStreak(filtered), [filtered]);
 
   const confirmDelete = (session) => {
     confirm({
@@ -41,24 +65,43 @@ export function ProgressScreen() {
     <View>
       <Text style={styles.title}>{t('progress.title')}</Text>
 
+      {showFilter ? (
+        <ExercisePicker
+          options={[
+            { id: 'all', label: t('progress.filterAll') },
+            ...inHistory.map((e) => ({ id: e.id, icon: e.icon, label: t(`exercise.${e.id}`) })),
+          ]}
+          selected={shown}
+          onSelect={setFilter}
+          label={t('progress.filter')}
+          align="start"
+          bleed={spacing.lg}
+          style={styles.filter}
+        />
+      ) : null}
+
       <View style={styles.statsRow}>
-        <StatTile label={t('stat.total')} value={stats.totalReps} />
+        <StatTile label={t('stat.total')} value={shownStats.totalReps} />
         <View style={styles.gap} />
         <StatTile
           label={t('stat.today')}
-          value={stats.todayReps}
+          value={shownStats.todayReps}
           highlight
-          progress={{
-            value: stats.todayReps,
-            max: settings.dailyGoal,
-            caption: t('stat.goal', { goal: settings.dailyGoal }),
-          }}
+          progress={
+            all
+              ? {
+                  value: stats.todayReps,
+                  max: settings.dailyGoal,
+                  caption: t('stat.goal', { goal: settings.dailyGoal }),
+                }
+              : undefined
+          }
         />
         <View style={styles.gap} />
         <StatTile
           label={t('stat.streak')}
-          value={stats.streak}
-          suffix={stats.streak === 1 ? t('common.day') : t('common.days')}
+          value={shownStats.streak}
+          suffix={shownStats.streak === 1 ? t('common.day') : t('common.days')}
         />
       </View>
 
@@ -66,13 +109,13 @@ export function ProgressScreen() {
         <Text style={styles.sectionLabel}>{t('progress.lastDays')}</Text>
         <Text style={styles.sectionMeta}>{t('progress.weekTotal', { reps: weekTotal })}</Text>
       </View>
-      <WeeklyChart days={week} goal={settings.dailyGoal} />
+      <WeeklyChart days={week} goal={goal} />
 
       <Text style={styles.sectionLabel}>{t('progress.records')}</Text>
       <View style={styles.statsRow}>
-        <StatTile label={t('progress.bestSet')} value={stats.bestSet} />
+        <StatTile label={t('progress.bestSet')} value={shownStats.bestSet} />
         <View style={styles.gap} />
-        <StatTile label={t('progress.bestDay')} value={stats.bestDay} />
+        <StatTile label={t('progress.bestDay')} value={shownStats.bestDay} />
         <View style={styles.gap} />
         <StatTile
           label={t('progress.longestStreak')}
@@ -81,9 +124,9 @@ export function ProgressScreen() {
         />
       </View>
       <View style={[styles.statsRow, styles.statsRowGap]}>
-        <StatTile label={t('progress.workouts')} value={stats.sessionCount} />
+        <StatTile label={t('progress.workouts')} value={shownStats.sessionCount} />
         <View style={styles.gap} />
-        <StatTile label={t('progress.totalTime')} value={formatDuration(stats.totalSeconds)} />
+        <StatTile label={t('progress.totalTime')} value={formatDuration(shownStats.totalSeconds)} />
       </View>
 
       <View style={styles.sectionRow}>
@@ -101,7 +144,7 @@ export function ProgressScreen() {
   return (
     <FlatList
       style={styles.screen}
-      data={sessions}
+      data={filtered}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => <SessionRow session={item} onDelete={confirmDelete} />}
       ListHeaderComponent={header}
@@ -121,6 +164,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   title: { ...type.title, color: colors.text, marginBottom: spacing.md },
+  filter: { marginBottom: spacing.md },
   statsRow: { flexDirection: 'row' },
   statsRowGap: { marginTop: spacing.sm },
   gap: { width: spacing.sm },

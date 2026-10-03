@@ -35,6 +35,7 @@ const en = {
   'time.sec': '{n} sec',
   'time.min': '{n} min',
   'time.minSec': '{m} min {s} sec',
+  'time.decimal': '.',
 
   // --- home stats ---------------------------------------------------------
   'stat.total': 'Total',
@@ -64,10 +65,13 @@ const en = {
   'workout.restHint': 'Take a breath. Next set when the timer ends or when you are ready.',
   'workout.tapHold': 'HOLD, THEN RELEASE',
   'workout.tapTouch': 'TOUCH TO COUNT',
+  'workout.holdToUnlock': 'HOLD TO UNLOCK',
+  'workout.lockHint': 'Locked while the phone is on you. Press and hold to pause.',
   'workout.summaryTitle': 'Workout saved',
   'workout.summaryTest': 'Test complete',
   'workout.summaryDay': 'Day {day} complete',
   'workout.earned': '+{time} fun time',
+  'workout.exercisePicker': 'Choose an exercise',
 
   // --- buttons ------------------------------------------------------------
   'btn.start': 'Start',
@@ -90,6 +94,47 @@ const en = {
   'coach.notHorizontal': 'Get into a push-up position',
   'coach.bodySag': 'Keep your body straight',
   'coach.shallow': 'Go lower',
+  'coach.notUpright': 'Stand up straight',
+  'coach.notLying': 'Start lying on your back',
+  // Per-exercise wording, used instead of `coach.<issue>` where it exists.
+  'coach.squat.shallow': 'Squat lower',
+  'coach.situp.shallow': 'Come up higher',
+  'coach.jumpingjack.shallow': 'Hands all the way up',
+
+  // --- exercises (src/exercises/exercises.js) -----------------------------
+  // hint.<source>: how to set the phone up for that exercise and source.
+  'exercise.pushup': 'Push-ups',
+  'exercise.pushup.noun': 'push-ups',
+  'exercise.pushup.hint.ai':
+    'Prop the phone up so your whole body is in frame from the side, then push up. Form is checked on every rep.',
+  'exercise.pushup.hint.light':
+    'Phone on the floor, screen up. Cover the sensor at the top of the phone at the bottom of each rep.',
+  'exercise.pushup.hint.tap':
+    'Phone on the floor, screen up. Touch the screen with your nose at the bottom of each rep, then release.',
+  'exercise.squat': 'Squats',
+  'exercise.squat.noun': 'squats',
+  'exercise.squat.hint.ai':
+    'Prop the phone up 2–3 m in front of you, facing you, whole body in frame. Hips down close to knee height.',
+  'exercise.squat.hint.motion':
+    'Phone in a front trouser pocket, screen toward your thigh. Start standing straight, then squat.',
+  'exercise.squat.hint.tap':
+    'Hold the phone in front of you. Touch the screen at the bottom of each squat, then release.',
+  'exercise.situp': 'Sit-ups',
+  'exercise.situp.noun': 'sit-ups',
+  'exercise.situp.hint.ai':
+    'Prop the phone on the floor about 2 m to your side, whole body in frame side-on. Start lying on your back.',
+  'exercise.situp.hint.motion':
+    'Lie on your back holding the phone flat on your chest. Each sit-up counts as you lie back down.',
+  'exercise.situp.hint.tap':
+    'Phone on the floor beside you. Touch the screen each time you come up, then release.',
+  'exercise.jumpingjack': 'Jumping jacks',
+  'exercise.jumpingjack.noun': 'jumping jacks',
+  'exercise.jumpingjack.hint.ai':
+    'Prop the phone up 2–3 m in front of you, facing you, whole body and raised arms in frame. Hands all the way up.',
+  'exercise.jumpingjack.hint.motion':
+    'Hold the phone firmly in one hand, arm at your side to start. Each swing overhead and back is one rep.',
+  'exercise.jumpingjack.hint.tap':
+    'Hold the phone in one hand. Press the screen with your thumb once per jumping jack, then release.',
 
   // --- detection sources --------------------------------------------------
   'source.ai': 'AI camera',
@@ -101,20 +146,25 @@ const en = {
   'source.tap': 'Tap',
   'source.tap.hint':
     'Phone on the floor, screen up. Touch the screen with your nose at the bottom of each rep, then release.',
+  'source.motion': 'Motion',
+  'source.motion.hint':
+    'Keep the phone on your body the way the exercise describes. Each time it tilts away and back is one rep.',
 
   // --- pose stage (camera) ------------------------------------------------
   'pose.starting': 'Starting camera',
   'pose.checkingPermission': 'Checking camera permission…',
   'pose.asking': 'Asking for the camera…',
   'pose.needCamera': 'Camera access needed',
-  'pose.allowCamera': 'Allow camera access to count push-ups with the camera.',
+  'pose.allowCamera': 'Allow camera access to count your reps with the camera.',
   'pose.denied':
-    'Camera access was denied. Enable it for this app in your device settings, or switch to Sensor or Tap mode.',
+    'Camera access was denied. Enable it for this app in your device settings, or switch to another mode, such as Tap.',
   'pose.loadingModel': 'Loading the model… you can frame yourself now',
   'pose.problem': 'Detector problem',
   'pose.loadFailed': 'Could not load the detector ({reason}). AI camera needs an internet connection the first time.',
   'pose.httpFailed': 'Detector page returned HTTP {code}. Try again in a moment.',
   'pose.viewCrashed': 'The camera view stopped unexpectedly. End the set and start again.',
+  'pose.outdated':
+    'The online detector is still an older version that only counts push-ups. Switch to another mode, such as Tap, for now; it updates by itself once the new version is published.',
 
   // --- notices ------------------------------------------------------------
   'notice.nothingSaved': 'No reps counted, nothing saved.',
@@ -144,7 +194,7 @@ const en = {
   'confirm.restart': 'Restart',
 
   // --- share --------------------------------------------------------------
-  'share.text': 'I just did {reps} push-ups in {time} with Hít Đất AI 💪',
+  'share.text': 'I just did {reps} {exercise} in {time} with Hít Đất AI 💪',
   'share.sets': ' ({sets} sets)',
 
   // --- program ------------------------------------------------------------
@@ -186,6 +236,8 @@ const en = {
   'progress.empty': 'No workouts yet',
   'progress.emptyBody': 'Finish a workout and it will show up here.',
   'progress.weekTotal': '{reps} reps this week',
+  'progress.filter': 'Show exercise',
+  'progress.filterAll': 'All',
 
   // --- session rows -------------------------------------------------------
   'session.today': 'Today',
@@ -240,6 +292,14 @@ const en = {
   'ach.program_day.body': 'Complete a program day',
   'ach.program_done.title': 'Graduate',
   'ach.program_done.body': 'Complete the 6-week program',
+  'ach.squats_100.title': 'Leg day',
+  'ach.squats_100.body': '100 squats in total',
+  'ach.situps_100.title': 'Six-pack',
+  'ach.situps_100.body': '100 sit-ups in total',
+  'ach.jacks_200.title': 'Star jumper',
+  'ach.jacks_200.body': '200 jumping jacks in total',
+  'ach.all_rounder.title': 'All-rounder',
+  'ach.all_rounder.body': 'Do every exercise at least once',
 
   // --- app blocker --------------------------------------------------------
   'blocker.title': 'App blocker',
@@ -278,7 +338,7 @@ const en = {
   'blocker.sectionBlocking': 'Blocking',
   'blocker.toggle': 'Block apps',
   'blocker.waysNote':
-    'The first two are enough to block apps, and banking apps keep working. Accessibility is only needed to block websites too.',
+    'The first two are enough to block apps. When you open a banking app the blocker steps aside, so most keep working; Accessibility is only needed to block websites too.',
   'blocker.usage': 'See which app is open',
   'blocker.usageOn': 'On (usage access).',
   'blocker.usageOff':
@@ -288,13 +348,18 @@ const en = {
   'blocker.overlayOff': 'To put the block screen and the countdown over a blocked app.',
   'blocker.permission': 'Accessibility (optional)',
   'blocker.permissionOn':
-    'On: websites are blocked too. If a banking app refuses to open, switch it off; apps stay blocked.',
+    'On: websites are blocked too. Banking apps refuse to open while it is on, and it cannot be set to leave them out. To use one, turn it off: apps stay blocked.',
   'blocker.permissionOnOnly':
-    'On. If a banking app refuses to open, allow the two permissions above first, then switch this off.',
+    'On. Banking apps refuse to open while it is on. To use one and keep apps blocked, allow the two permissions above, then turn this off.',
   'blocker.permissionOff':
     'Also blocks websites in browsers. Many banking apps will not open while any app has Accessibility on.',
   'blocker.permissionButton': 'Turn on',
   'blocker.permissionManage': 'Settings',
+  'blocker.permissionSwitchOff': 'Turn off',
+  'blocker.devOptions': 'Developer options',
+  'blocker.devOptionsOn':
+    'On. Since March 2026 many banking apps close while Developer options or USB debugging is on, even with Accessibility off. Switch it off at the top of that screen.',
+  'blocker.devOptionsButton': 'Open',
   'blocker.restrictedHint':
     'Greyed out, or Android says "Restricted setting"? Open app info, tap ⋮ in the top corner, choose "Allow restricted settings", then try again.',
   'blocker.openAppInfo': 'Open app info',
@@ -318,6 +383,7 @@ const en = {
   'blocker.removeSite': 'Unblock {site}',
   'blocker.sectionRate': 'Earning',
   'blocker.rate': 'Each push-up earns',
+  'blocker.ratePerExercise': 'By exercise, one rep earns: {list}',
   'blocker.timer': 'Countdown on screen',
   'blocker.timerBody': 'A small timer over a blocked app while your time runs.',
   'blocker.keepTitle': 'Keep blocking running',
@@ -398,7 +464,7 @@ const en = {
   'settings.data': 'Data',
   'settings.about': 'About',
   'settings.dailyGoal': 'Daily goal',
-  'settings.dailyGoalBody': 'Reps per day. Today counts toward it in every mode.',
+  'settings.dailyGoalBody': 'Reps per day. Every exercise and every counting mode counts toward it.',
   'settings.countdown': 'Countdown before a set',
   'settings.countdownBody': 'Time to get into position after pressing Start.',
   'settings.rest': 'Rest between sets',
@@ -433,7 +499,7 @@ const en = {
   'onboarding.title': 'Welcome to Hít Đất AI',
   'onboarding.s1.title': 'Hands-free counting',
   'onboarding.s1.body':
-    'Prop the phone up to your side so your whole body is in frame: the AI camera counts every rep and coaches your form. No camera? Put the phone on the floor and use the sensor, or tap the screen with your nose.',
+    'Push-ups, squats, sit-ups or jumping jacks: pick one on the Workout tab. Prop the phone up so your whole body is in frame, and the AI camera counts every rep and coaches your form. No camera? Use the sensor for push-ups, carry the phone for the others (pocket for squats, chest for sit-ups, hand for jumping jacks), or tap the screen. Each exercise shows where to put the phone.',
   'onboarding.s2.title': 'Sets, rest and voice',
   'onboarding.s2.body':
     'Every set starts with a countdown so you can get into position, and ends with a rest timer. Turn on voice count and hear the number instead of looking.',
@@ -470,6 +536,7 @@ const vi = {
   'time.sec': '{n} giây',
   'time.min': '{n} phút',
   'time.minSec': '{m} phút {s} giây',
+  'time.decimal': ',',
 
   'stat.total': 'Tổng',
   'stat.today': 'Hôm nay',
@@ -496,10 +563,13 @@ const vi = {
   'workout.restHint': 'Thở đều. Set tiếp theo khi hết giờ hoặc khi bạn sẵn sàng.',
   'workout.tapHold': 'GIỮ, RỒI THẢ',
   'workout.tapTouch': 'CHẠM ĐỂ ĐẾM',
+  'workout.holdToUnlock': 'GIỮ ĐỂ MỞ KHOÁ',
+  'workout.lockHint': 'Màn hình khoá khi điện thoại đang ở trên người. Nhấn giữ để tạm dừng.',
   'workout.summaryTitle': 'Đã lưu buổi tập',
   'workout.summaryTest': 'Kiểm tra xong',
   'workout.summaryDay': 'Hoàn thành ngày {day}',
   'workout.earned': '+{time} giải trí',
+  'workout.exercisePicker': 'Chọn bài tập',
 
   'btn.start': 'Bắt đầu',
   'btn.startDay': 'Bắt đầu ngày {day}',
@@ -520,6 +590,44 @@ const vi = {
   'coach.notHorizontal': 'Vào tư thế hít đất',
   'coach.bodySag': 'Giữ thẳng người',
   'coach.shallow': 'Xuống thấp hơn',
+  'coach.notUpright': 'Đứng thẳng người lên',
+  'coach.notLying': 'Bắt đầu từ tư thế nằm ngửa',
+  'coach.squat.shallow': 'Hạ hông thấp hơn',
+  'coach.situp.shallow': 'Gập người lên cao hơn',
+  'coach.jumpingjack.shallow': 'Đưa tay lên hết qua đầu',
+
+  'exercise.pushup': 'Hít đất',
+  'exercise.pushup.noun': 'hít đất',
+  'exercise.pushup.hint.ai':
+    'Dựng điện thoại để thấy toàn thân bạn từ bên hông, rồi hít đất. Tư thế được kiểm tra ở mỗi cái.',
+  'exercise.pushup.hint.light':
+    'Đặt điện thoại trên sàn, màn hình hướng lên. Che cảm biến ở đỉnh máy khi xuống thấp nhất mỗi cái.',
+  'exercise.pushup.hint.tap':
+    'Đặt điện thoại trên sàn, màn hình hướng lên. Chạm mũi vào màn hình khi xuống thấp nhất, rồi nhấc lên.',
+  'exercise.squat': 'Squat',
+  'exercise.squat.noun': 'squat',
+  'exercise.squat.hint.ai':
+    'Dựng điện thoại cách 2–3 m trước mặt, hướng về bạn, thấy toàn thân. Mỗi cái hạ hông gần ngang gối.',
+  'exercise.squat.hint.motion':
+    'Bỏ điện thoại vào túi quần trước, màn hình áp vào đùi. Bắt đầu ở tư thế đứng thẳng, rồi squat.',
+  'exercise.squat.hint.tap':
+    'Cầm điện thoại trước mặt. Chạm vào màn hình khi xuống thấp nhất mỗi cái, rồi thả ra.',
+  'exercise.situp': 'Gập bụng',
+  'exercise.situp.noun': 'gập bụng',
+  'exercise.situp.hint.ai':
+    'Dựng điện thoại trên sàn, cách bên hông bạn khoảng 2 m, thấy toàn thân. Bắt đầu từ tư thế nằm ngửa.',
+  'exercise.situp.hint.motion':
+    'Nằm ngửa, giữ điện thoại áp phẳng trên ngực. Mỗi cái được đếm khi bạn nằm xuống lại.',
+  'exercise.situp.hint.tap':
+    'Đặt điện thoại trên sàn cạnh bạn. Chạm vào màn hình mỗi lần gập người lên, rồi thả ra.',
+  'exercise.jumpingjack': 'Bật nhảy',
+  'exercise.jumpingjack.noun': 'bật nhảy',
+  'exercise.jumpingjack.hint.ai':
+    'Dựng điện thoại cách 2–3 m trước mặt, hướng về bạn, thấy toàn thân cả khi giơ tay. Đưa tay lên hết cỡ.',
+  'exercise.jumpingjack.hint.motion':
+    'Cầm chắc điện thoại trong một tay, bắt đầu với tay buông dọc người. Mỗi lần vung qua đầu rồi hạ là một cái.',
+  'exercise.jumpingjack.hint.tap':
+    'Cầm điện thoại trong một tay. Mỗi cái bật nhảy, ấn ngón cái vào màn hình rồi thả ra.',
 
   'source.ai': 'Camera AI',
   'source.ai.hint':
@@ -530,19 +638,24 @@ const vi = {
   'source.tap': 'Chạm',
   'source.tap.hint':
     'Đặt điện thoại trên sàn, màn hình hướng lên. Chạm mũi vào màn hình khi xuống thấp nhất, rồi nhấc lên.',
+  'source.motion': 'Chuyển động',
+  'source.motion.hint':
+    'Giữ điện thoại trên người theo hướng dẫn của bài tập. Mỗi lần máy nghiêng đi rồi trở lại là một cái.',
 
   'pose.starting': 'Đang bật camera',
   'pose.checkingPermission': 'Đang kiểm tra quyền camera…',
   'pose.asking': 'Đang xin quyền camera…',
   'pose.needCamera': 'Cần quyền camera',
-  'pose.allowCamera': 'Cho phép dùng camera để đếm hít đất bằng camera.',
+  'pose.allowCamera': 'Cho phép dùng camera để đếm số cái bằng camera.',
   'pose.denied':
-    'Quyền camera đã bị từ chối. Bật lại trong cài đặt của máy, hoặc chuyển sang chế độ Cảm biến hoặc Chạm.',
+    'Quyền camera đã bị từ chối. Bật lại trong cài đặt của máy, hoặc chuyển sang chế độ khác, ví dụ Chạm.',
   'pose.loadingModel': 'Đang tải mô hình… bạn có thể vào khung hình',
   'pose.problem': 'Lỗi nhận diện',
   'pose.loadFailed': 'Không tải được bộ nhận diện ({reason}). Camera AI cần internet ở lần đầu.',
   'pose.httpFailed': 'Trang nhận diện trả về HTTP {code}. Thử lại sau ít phút.',
   'pose.viewCrashed': 'Khung camera bị dừng đột ngột. Hãy kết thúc hiệp và bắt đầu lại.',
+  'pose.outdated':
+    'Trang nhận diện trực tuyến vẫn là bản cũ, chỉ đếm được hít đất. Tạm thời hãy chuyển sang chế độ khác, ví dụ Chạm; trang sẽ tự cập nhật khi bản mới được phát hành.',
 
   'notice.nothingSaved': 'Không đếm được cái nào, không lưu.',
   'notice.saved': 'Đã lưu {reps} cái trong {time}.',
@@ -569,7 +682,7 @@ const vi = {
   'confirm.restartBody': 'Tiến độ ngày sẽ được đặt lại. Lịch sử tập vẫn giữ nguyên.',
   'confirm.restart': 'Bắt đầu lại',
 
-  'share.text': 'Tôi vừa hít đất {reps} cái trong {time} với Hít Đất AI 💪',
+  'share.text': 'Tôi vừa tập {reps} cái {exercise} trong {time} với Hít Đất AI 💪',
   'share.sets': ' ({sets} set)',
 
   'program.title': 'Chương trình 6 tuần',
@@ -609,6 +722,8 @@ const vi = {
   'progress.empty': 'Chưa có buổi tập nào',
   'progress.emptyBody': 'Tập xong một buổi, nó sẽ hiện ở đây.',
   'progress.weekTotal': '{reps} cái tuần này',
+  'progress.filter': 'Lọc theo bài tập',
+  'progress.filterAll': 'Tất cả',
 
   'session.today': 'Hôm nay',
   'session.yesterday': 'Hôm qua',
@@ -629,19 +744,19 @@ const vi = {
   'ach.first_workout.title': 'Buổi đầu tiên',
   'ach.first_workout.body': 'Hoàn thành buổi tập đầu tiên',
   'ach.reps_100.title': 'Một trăm',
-  'ach.reps_100.body': 'Tổng 100 cái',
+  'ach.reps_100.body': 'Tổng 100 cái hít đất',
   'ach.reps_500.title': 'Bốc lửa',
-  'ach.reps_500.body': 'Tổng 500 cái',
+  'ach.reps_500.body': 'Tổng 500 cái hít đất',
   'ach.reps_1000.title': 'Một nghìn',
-  'ach.reps_1000.body': 'Tổng 1.000 cái',
+  'ach.reps_1000.body': 'Tổng 1.000 cái hít đất',
   'ach.reps_5000.title': 'Cỗ máy',
-  'ach.reps_5000.body': 'Tổng 5.000 cái',
+  'ach.reps_5000.body': 'Tổng 5.000 cái hít đất',
   'ach.set_25.title': 'Set chắc tay',
-  'ach.set_25.body': '25 cái trong một set',
+  'ach.set_25.body': '25 cái hít đất trong một set',
   'ach.set_50.title': 'Năm mươi',
-  'ach.set_50.body': '50 cái trong một set',
+  'ach.set_50.body': '50 cái hít đất trong một set',
   'ach.set_100.title': 'Trăm cái',
-  'ach.set_100.body': '100 cái trong một set',
+  'ach.set_100.body': '100 cái hít đất trong một set',
   'ach.streak_3.title': 'Thành thói quen',
   'ach.streak_3.body': '3 ngày liên tiếp',
   'ach.streak_7.title': 'Trọn tuần',
@@ -660,6 +775,14 @@ const vi = {
   'ach.program_day.body': 'Hoàn thành một ngày trong chương trình',
   'ach.program_done.title': 'Tốt nghiệp',
   'ach.program_done.body': 'Hoàn thành chương trình 6 tuần',
+  'ach.squats_100.title': 'Chân thép',
+  'ach.squats_100.body': 'Tổng 100 cái squat',
+  'ach.situps_100.title': 'Bụng sáu múi',
+  'ach.situps_100.body': 'Tổng 100 cái gập bụng',
+  'ach.jacks_200.title': 'Lò xo',
+  'ach.jacks_200.body': 'Tổng 200 cái bật nhảy',
+  'ach.all_rounder.title': 'Toàn năng',
+  'ach.all_rounder.body': 'Tập mỗi bài ít nhất một lần',
 
   'blocker.title': 'Chặn ứng dụng',
   'blocker.subtitle':
@@ -697,7 +820,7 @@ const vi = {
   'blocker.sectionBlocking': 'Chặn',
   'blocker.toggle': 'Chặn ứng dụng',
   'blocker.waysNote':
-    'Hai quyền đầu là đủ để chặn ứng dụng, và app ngân hàng vẫn dùng bình thường. Trợ năng chỉ cần nếu muốn chặn cả trang web.',
+    'Hai quyền đầu là đủ để chặn ứng dụng. Khi bạn mở app ngân hàng, phần chặn tự nhường nên hầu hết vẫn dùng được; Trợ năng chỉ cần nếu muốn chặn cả trang web.',
   'blocker.usage': 'Xem ứng dụng đang mở',
   'blocker.usageOn': 'Đã bật (quyền truy cập dữ liệu sử dụng).',
   'blocker.usageOff':
@@ -707,13 +830,18 @@ const vi = {
   'blocker.overlayOff': 'Để hiện màn hình chặn và đồng hồ đếm ngược lên trên ứng dụng bị chặn.',
   'blocker.permission': 'Trợ năng (không bắt buộc)',
   'blocker.permissionOn':
-    'Đang bật: chặn cả trang web. App ngân hàng không cho mở thì tắt nó đi, ứng dụng vẫn bị chặn.',
+    'Đang bật: chặn được cả trang web. App ngân hàng cứ thấy Trợ năng bật là không cho mở, và không cài được kiểu chừa app ngân hàng ra. Muốn dùng thì bấm Tắt: ứng dụng vẫn bị chặn.',
   'blocker.permissionOnOnly':
-    'Đang bật. Nếu app ngân hàng không cho mở, cấp 2 quyền ở trên trước rồi hãy tắt Trợ năng.',
+    'Đang bật. App ngân hàng cứ thấy Trợ năng bật là không cho mở. Muốn dùng app ngân hàng mà vẫn chặn được ứng dụng: cấp 2 quyền ở trên rồi tắt Trợ năng.',
   'blocker.permissionOff':
     'Chặn thêm cả trang web trong trình duyệt. Nhiều app ngân hàng không cho mở khi có app đang bật Trợ năng.',
   'blocker.permissionButton': 'Bật',
   'blocker.permissionManage': 'Cài đặt',
+  'blocker.permissionSwitchOff': 'Tắt',
+  'blocker.devOptions': 'Tùy chọn nhà phát triển',
+  'blocker.devOptionsOn':
+    'Đang bật. Từ tháng 3/2026 nhiều app ngân hàng tự thoát khi Tùy chọn nhà phát triển hoặc Gỡ lỗi USB đang bật, kể cả khi đã tắt Trợ năng. Tắt ở nút gạt trên cùng của màn hình đó.',
+  'blocker.devOptionsButton': 'Mở',
   'blocker.restrictedHint':
     'Không bật được, hoặc Android báo "Cài đặt bị hạn chế"? Mở Thông tin ứng dụng, bấm ⋮ ở góc trên, chọn "Cho phép cài đặt bị hạn chế", rồi thử lại.',
   'blocker.openAppInfo': 'Mở thông tin ứng dụng',
@@ -737,6 +865,7 @@ const vi = {
   'blocker.removeSite': 'Bỏ chặn {site}',
   'blocker.sectionRate': 'Quy đổi',
   'blocker.rate': 'Mỗi cái hít đất đổi được',
+  'blocker.ratePerExercise': 'Theo từng bài, mỗi cái đổi được: {list}',
   'blocker.timer': 'Đồng hồ đếm ngược',
   'blocker.timerBody': 'Một đồng hồ nhỏ hiện trên ứng dụng bị chặn khi thời gian đang chạy.',
   'blocker.keepTitle': 'Giữ chặn luôn chạy',
@@ -815,7 +944,7 @@ const vi = {
   'settings.data': 'Dữ liệu',
   'settings.about': 'Giới thiệu',
   'settings.dailyGoal': 'Mục tiêu mỗi ngày',
-  'settings.dailyGoalBody': 'Số cái mỗi ngày. Mọi chế độ tập đều tính vào.',
+  'settings.dailyGoalBody': 'Số cái mỗi ngày. Mọi bài tập và mọi chế độ đếm đều tính vào.',
   'settings.countdown': 'Đếm ngược trước set',
   'settings.countdownBody': 'Thời gian để vào tư thế sau khi bấm Bắt đầu.',
   'settings.rest': 'Nghỉ giữa các set',
@@ -848,7 +977,7 @@ const vi = {
   'onboarding.title': 'Chào mừng đến Hít Đất AI',
   'onboarding.s1.title': 'Đếm không cần chạm',
   'onboarding.s1.body':
-    'Dựng điện thoại bên hông để thấy toàn thân: camera AI đếm từng cái và nhắc tư thế. Không dùng camera? Đặt máy trên sàn, dùng cảm biến hoặc chạm mũi vào màn hình.',
+    'Hít đất, squat, gập bụng hay bật nhảy: chọn bài ở tab Tập. Dựng điện thoại để thấy toàn thân, camera AI sẽ đếm từng cái và nhắc tư thế. Không dùng camera? Hít đất thì dùng cảm biến, các bài khác thì mang máy theo người (túi quần khi squat, áp ngực khi gập bụng, cầm tay khi bật nhảy), hoặc chạm vào màn hình. Mỗi bài đều hướng dẫn cách đặt máy.',
   'onboarding.s2.title': 'Set, nghỉ và giọng đọc',
   'onboarding.s2.body':
     'Mỗi set bắt đầu bằng đếm ngược để bạn kịp vào tư thế, và kết thúc bằng đồng hồ nghỉ. Bật đọc số để nghe số lần thay vì nhìn.',

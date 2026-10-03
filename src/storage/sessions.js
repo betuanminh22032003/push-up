@@ -4,6 +4,15 @@ const SESSIONS_KEY = 'pupg:sessions:v1';
 const SETTINGS_KEY = 'pupg:settings:v1';
 const PROGRAM_KEY = 'pupg:program:v1';
 
+/**
+ * The exercise a session without `exerciseId` was. Spelled out rather than
+ * imported from src/exercises/exercises.js: this module must stay loadable on
+ * its own (the Node suite feeds it in as a single file), and the value can
+ * never change anyway, since every record written before exercises existed
+ * depends on it.
+ */
+const LEGACY_EXERCISE_ID = 'pushup';
+
 /** Sessions are stored newest-first, so reads and prepends are both O(1)-ish. */
 
 function isValidSession(value) {
@@ -62,12 +71,19 @@ export function cleanSets(sets) {
  * `sets` is optional. A single-set workout is stored without it, exactly as
  * the first version stored everything, so old and new records share a shape
  * and every reader treats a missing `sets` as one set of `totalReps`.
+ *
+ * `exerciseId` follows the same rule: a push-up session is stored without it,
+ * as every session was before there were other exercises, and readers treat
+ * a missing one as a push-up (`exerciseOf`). Any other id is stored as given:
+ * which exercises exist is src/exercises/exercises.js's business, and it
+ * reads an id it does not know as a push-up as well.
  */
 export async function saveSession({
   totalReps,
   durationSeconds,
   timestamp = Date.now(),
   sourceId,
+  exerciseId,
   sets,
   restSeconds,
   program,
@@ -79,6 +95,9 @@ export async function saveSession({
     durationSeconds: Math.max(0, Math.round(durationSeconds)),
     sourceId: sourceId ?? null,
   };
+  if (typeof exerciseId === 'string' && exerciseId && exerciseId !== LEGACY_EXERCISE_ID) {
+    session.exerciseId = exerciseId;
+  }
   const cleaned = cleanSets(sets);
   if (cleaned.length > 1) session.sets = cleaned;
   if (Number.isFinite(restSeconds) && restSeconds > 0) {
@@ -120,15 +139,44 @@ export const DEFAULT_SETTINGS = {
   onboardingDone: false,
   blockerSecondsPerRep: 60, // fun time each rep earns; the blocker itself lives natively
   blockerSites: [], // websites the user added; the blocked apps' own sites are added on top
+  exerciseId: LEGACY_EXERCISE_ID, // the exercise the workout screen opens on
+  // Source picked per exercise, { [exerciseId]: sourceId }: the light sensor
+  // suits push-ups and the motion sensor squats, so one choice cannot serve
+  // all. A push-up with no entry falls back to `sourceId` above, which is
+  // where every version before this one kept it.
+  sourceIds: {},
 };
+
+const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Stored settings merged onto the defaults. Flat values need nothing more,
+ * but `sourceIds` is looked into (`sourceIds[exerciseId]`), so a corrupt one
+ * (null, an array, a string) would throw or answer nonsense: it falls back to
+ * `{}`, keeping only entries that can be a source (an id, or null for auto).
+ * The `sourceIds` returned is always a new object, never the one in
+ * DEFAULT_SETTINGS, so no caller can change the defaults through it.
+ */
+function mergeSettings(stored) {
+  const merged = { ...DEFAULT_SETTINGS, ...(isPlainObject(stored) ? stored : {}) };
+  const sourceIds = {};
+  if (isPlainObject(merged.sourceIds)) {
+    for (const [exerciseId, sourceId] of Object.entries(merged.sourceIds)) {
+      if (typeof sourceId === 'string' || sourceId === null) sourceIds[exerciseId] = sourceId;
+    }
+  }
+  if (typeof merged.exerciseId !== 'string' || !merged.exerciseId) {
+    merged.exerciseId = DEFAULT_SETTINGS.exerciseId;
+  }
+  return { ...merged, sourceIds };
+}
 
 export async function loadSettings() {
   try {
     const raw = await AsyncStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    return mergeSettings(raw ? JSON.parse(raw) : null);
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return mergeSettings(null);
   }
 }
 

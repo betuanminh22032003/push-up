@@ -1,4 +1,5 @@
 import { allVisible, angleAt, meanDefined, torsoTiltFromHorizontal } from './geometry';
+import { ISSUES, createRepEngine, poseAnalyzer } from './repEngine';
 
 /**
  * Counts push-ups from a stream of pose frames.
@@ -17,6 +18,9 @@ import { allVisible, angleAt, meanDefined, torsoTiltFromHorizontal } from './geo
  *   minRepMs       the same 500ms floor between reps used elsewhere
  *   form gates     torso must be roughly horizontal and the body straight,
  *                  so arm-waving at the camera counts nothing
+ *
+ * The counting itself is ./repEngine, shared with the other exercises; this
+ * file decides what to measure and which form gates apply.
  *
  * The analyser is pure and deterministic: same frames in, same reps out, with
  * all timing taken from the caller's timestamps rather than the clock. That is
@@ -85,12 +89,11 @@ export const DEFAULTS = {
   aspect: 1,
 };
 
-export const ISSUES = {
-  SHALLOW: 'shallow',
-  BODY_SAG: 'bodySag',
-  NOT_HORIZONTAL: 'notHorizontal',
-  LOST_TRACKING: 'lostTracking',
-};
+/**
+ * The shared vocabulary (./repEngine), re-exported for code written when this
+ * was the only analyser. New code imports it from ./analyzers.
+ */
+export { ISSUES };
 
 const ARM_JOINTS = {
   left: ['leftShoulder', 'leftElbow', 'leftWrist'],
@@ -134,233 +137,27 @@ export function measureFrame(pose, options = {}) {
 export function createPushupAnalyzer(options = {}) {
   const opts = { ...DEFAULTS, ...options };
 
-  let phase = 'unknown'; // 'unknown' | 'up' | 'down'
-  let reps = 0;
-  let lastRepAt = -Infinity;
-
-  let candidate = null; // phase we are waiting to confirm
-  let candidateSince = 0;
-
-  // Per-rep accumulators, reset when a descent begins.
-  let minElbowInRep = Infinity;
-  let worstBodyInRep = Infinity;
-  /** Most horizontal reading of the rep — the rep's best evidence, not its worst. */
-  let bestTiltInRep = Infinity;
-
-  // A dip taken while still in the 'up' phase, i.e. one that never got deep
-  // enough to commit a descent. Tracked outside the phase machine because a
-  // shallow dip produces no phase change for the machine to react to.
-  let inDip = false;
-  let dipMin = Infinity;
-
-  /** Recent elbow angles, for deriving this person's range of movement. */
-  let samples = [];
-
-  /**
-   * Thresholds for the current frame: adapted to the observed range once there
-   * is enough of it, otherwise the fixed fallbacks. Clamped so a small range
-   * cannot turn a twitch into a rep.
-   */
-  function thresholdsFor(elbow, timestamp) {
-    if (!opts.autoCalibrate) {
-      return { down: opts.downAngle, up: opts.upAngle, adapted: false };
-    }
-
-    samples.push({ t: timestamp, elbow });
-    const cutoff = timestamp - opts.calibrationWindowMs;
-    if (samples.length > 4 && samples[0].t < cutoff) {
-      samples = samples.filter((s) => s.t >= cutoff);
-    }
-
-    let min = Infinity;
-    let max = -Infinity;
-    for (const s of samples) {
-      if (s.elbow < min) min = s.elbow;
-      if (s.elbow > max) max = s.elbow;
-    }
-
-    const range = max - min;
-    if (!Number.isFinite(range) || range < opts.minRangeDeg) {
-      return { down: opts.downAngle, up: opts.upAngle, adapted: false };
-    }
-
-    const margin = range * opts.rangeFraction;
-    return {
-      down: Math.min(min + margin, opts.downAngleCeiling),
-      up: Math.max(max - margin, opts.upAngleFloor),
-      adapted: true,
-      observedMin: min,
-      observedMax: max,
-    };
-  }
-
-  function resetRepAccumulators() {
-    minElbowInRep = Infinity;
-    worstBodyInRep = Infinity;
-    bestTiltInRep = Infinity;
-  }
-
-  function clearDip() {
-    inDip = false;
-    dipMin = Infinity;
-  }
-
-  function result(extra) {
-    return {
-      reps,
-      phase,
-      repCompleted: false,
-      partialRep: false,
-      issues: [],
-      elbow: null,
-      body: null,
-      torsoTilt: null,
-      tracking: false,
-      thresholds: null,
-      ...extra,
-    };
-  }
-
-  return {
-    get reps() {
-      return reps;
+  const engine = createRepEngine(opts, [
+    {
+      // Reported on every rep, but only refuses one when asked to: see
+      // requireStraightBody for why the measurement cannot be trusted with a
+      // veto by default.
+      read: (frame) => frame.body,
+      keep: 'min',
+      fails: (body) => body < opts.straightBodyMinAngle,
+      issue: ISSUES.BODY_SAG,
+      veto: opts.requireStraightBody,
     },
-
-    get phase() {
-      return phase;
+    {
+      // Not being in a push-up position at all. The rep's most horizontal
+      // frame decides (see maxTorsoTilt), not its worst.
+      read: (frame) => frame.torsoTilt,
+      keep: 'min',
+      fails: (tilt) => tilt > opts.maxTorsoTilt,
+      issue: ISSUES.NOT_HORIZONTAL,
+      veto: true,
     },
+  ]);
 
-    reset() {
-      phase = 'unknown';
-      reps = 0;
-      lastRepAt = -Infinity;
-      candidate = null;
-      candidateSince = 0;
-      samples = [];
-      clearDip();
-      resetRepAccumulators();
-    },
-
-    /**
-     * Feed one pose frame.
-     * @param {object} pose       normalised joints (see ./landmarks)
-     * @param {number} timestamp  milliseconds, monotonic
-     */
-    push(pose, timestamp) {
-      const { tracking, elbow, body, torsoTilt } = measureFrame(pose, opts);
-
-      if (!tracking) {
-        // Hold the phase rather than guessing: a dropped frame mid-descent
-        // must not be read as the subject having come back up.
-        candidate = null;
-        return result({
-          tracking: false,
-          issues: [ISSUES.LOST_TRACKING],
-          elbow,
-          body,
-          torsoTilt,
-        });
-      }
-
-      if (Number.isFinite(torsoTilt)) bestTiltInRep = Math.min(bestTiltInRep, torsoTilt);
-
-      minElbowInRep = Math.min(minElbowInRep, elbow);
-      if (Number.isFinite(body)) worstBodyInRep = Math.min(worstBodyInRep, body);
-
-      const limits = thresholdsFor(elbow, timestamp);
-
-      // Instantaneous reading; null in the hysteresis band, where we hold.
-      let observed = null;
-      if (elbow <= limits.down) observed = 'down';
-      else if (elbow >= limits.up) observed = 'up';
-
-      let repCompleted = false;
-      let partialRep = false;
-      const issues = [];
-
-      // Shallow-dip detection, before the phase machine. Bending to 130 and
-      // coming back never crosses a threshold, so the machine sees nothing —
-      // but "go lower" is exactly the feedback that moment calls for.
-      if (phase === 'up') {
-        if (elbow < limits.up) {
-          inDip = true;
-          dipMin = Math.min(dipMin, elbow);
-        } else if (inDip) {
-          // "Too shallow to count" is relative to where the down threshold
-          // actually sits, so the advice stays honest under adaptation.
-          const wasShallow = dipMin <= limits.down + (opts.upAngle - opts.partialAngle);
-          clearDip();
-          if (wasShallow) {
-            partialRep = true;
-            issues.push(ISSUES.SHALLOW);
-          }
-        }
-      }
-
-      if (observed && observed !== phase) {
-        if (candidate !== observed) {
-          candidate = observed;
-          candidateSince = timestamp;
-        }
-
-        if (timestamp - candidateSince >= opts.minPhaseMs) {
-          const previous = phase;
-          phase = observed;
-          candidate = null;
-
-          if (phase === 'down') {
-            // A real descent supersedes any dip we were tracking, so it must
-            // not also be reported as a shallow rep on the way back up.
-            clearDip();
-            resetRepAccumulators();
-            minElbowInRep = elbow;
-            if (Number.isFinite(body)) worstBodyInRep = body;
-            if (Number.isFinite(torsoTilt)) bestTiltInRep = torsoTilt;
-          }
-
-          if (phase === 'up' && previous === 'down') {
-            // A full cycle finished. Decide whether it earns a count.
-            //
-            // Only two things veto a rep: not being in a push-up position at
-            // all, and arriving impossibly soon after the last one. Body
-            // position is reported but does not veto unless explicitly asked
-            // for — see requireStraightBody.
-            const notHorizontal =
-              Number.isFinite(bestTiltInRep) && bestTiltInRep > opts.maxTorsoTilt;
-            const sagging =
-              Number.isFinite(worstBodyInRep) && worstBodyInRep < opts.straightBodyMinAngle;
-
-            if (sagging) issues.push(ISSUES.BODY_SAG);
-
-            if (notHorizontal) {
-              issues.push(ISSUES.NOT_HORIZONTAL);
-            } else if (opts.requireStraightBody && sagging) {
-              /* vetoed by an explicit strictness setting */
-            } else if (timestamp - lastRepAt >= opts.minRepMs) {
-              reps += 1;
-              lastRepAt = timestamp;
-              repCompleted = true;
-            }
-            clearDip();
-            resetRepAccumulators();
-          }
-        }
-      } else if (observed === phase) {
-        candidate = null;
-      }
-
-      return result({
-        tracking: true,
-        phase,
-        reps,
-        repCompleted,
-        partialRep,
-        issues,
-        elbow,
-        body,
-        torsoTilt,
-        thresholds: limits,
-      });
-    },
-  };
+  return poseAnalyzer('pushup', engine, (pose) => measureFrame(pose, opts), 'elbow');
 }

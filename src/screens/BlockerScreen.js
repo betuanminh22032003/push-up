@@ -17,6 +17,7 @@ import {
   blockingMode,
   effectiveSites,
   formatAmount,
+  formatPerRep,
   searchKey,
   statusKey,
   watcherReady,
@@ -25,6 +26,7 @@ import { AppIcon } from '../components/AppIcon';
 import { AppPickerModal } from '../components/AppPickerModal';
 import { Button } from '../components/Button';
 import { Chips, Row, Section, Toggle } from '../components/SettingsRows';
+import { EXERCISES } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
 import { useBlocker } from '../state/BlockerContext';
 import { useSettings } from '../state/SettingsContext';
@@ -104,9 +106,11 @@ export function BlockerScreen({ onGoWorkout }) {
     setBlockedApps,
     addSite,
     removeSite,
+    switchOffAccessibility,
     openAccessibilitySettings,
     openUsageAccessSettings,
     openOverlaySettings,
+    openDeveloperSettings,
     openAppSettings,
     openBatterySettings,
     openAutostartSettings,
@@ -272,14 +276,17 @@ export function BlockerScreen({ onGoWorkout }) {
                     : 'blocker.permissionOnOnly',
               )}
             >
-              {state.serviceEnabled ? (
-                <SmallButton label={t('blocker.permissionManage')} onPress={openAccessibilitySettings} secondary />
-              ) : (
+              {!state.serviceEnabled ? (
                 <SmallButton
                   label={t('blocker.permissionButton')}
                   onPress={() => ask('accessibility')}
                   secondary
                 />
+              ) : ready ? (
+                // Banking apps refuse to open while it is on; the other way keeps apps blocked.
+                <SmallButton label={t('blocker.permissionSwitchOff')} onPress={switchOffAccessibility} secondary />
+              ) : (
+                <SmallButton label={t('blocker.permissionManage')} onPress={openAccessibilitySettings} secondary />
               )}
             </Row>
             {state.serviceEnabled ? null : (
@@ -290,6 +297,12 @@ export function BlockerScreen({ onGoWorkout }) {
                 </Pressable>
               </View>
             )}
+            {/* The next thing a banking app objects to, and nothing this app can switch off. */}
+            {state.developerOptions ? (
+              <Row title={t('blocker.devOptions')} body={t('blocker.devOptionsOn')} bodyWarn>
+                <SmallButton label={t('blocker.devOptionsButton')} onPress={openDeveloperSettings} secondary />
+              </Row>
+            ) : null}
             {state.batteryOptimized ? (
               <Row title={t('blocker.battery')} body={t('blocker.batteryOn')} bodyWarn>
                 <SmallButton label={t('blocker.batteryButton')} onPress={openBatterySettings} />
@@ -374,6 +387,15 @@ export function BlockerScreen({ onGoWorkout }) {
                 selected={rate}
                 onSelect={(blockerSecondsPerRep) => updateSettings({ blockerSecondsPerRep })}
               />
+              {/* The rate is per push-up; lighter exercises earn a share of it. */}
+              <Text style={styles.sectionNote}>
+                {t('blocker.ratePerExercise', {
+                  list: EXERCISES.map(
+                    (e) =>
+                      `${e.icon} ${t(`exercise.${e.id}`)} ${formatPerRep(rate * e.creditWeight, t)}`,
+                  ).join(' · '),
+                })}
+              </Text>
             </Row>
             <Row title={t('blocker.timer')} body={t('blocker.timerBody')}>
               <Toggle value={state.showTimer} onChange={setShowTimer} label={t('blocker.timer')} />

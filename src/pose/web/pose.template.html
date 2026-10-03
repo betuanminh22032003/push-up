@@ -87,8 +87,8 @@
 
   /*
    * Setup coach. "Zero reps" has four different causes that look identical on
-   * screen — no person found, arms out of frame, not in a push-up position, or
-   * still learning the range. Naming the actual one is the difference between
+   * screen — no person found, the joints that matter out of frame, not in the
+   * starting position, or still learning the range. Naming the actual one is the difference between
    * a user who can fix it and a user who just sees nothing happen.
    */
   #coach {
@@ -121,10 +121,10 @@
       <span id="hudIssue"></span>
     </div>
     <div id="hudGrid">
-      <div class="cell"><span class="k">ELBOW</span><span class="v" id="hudElbow">—</span></div>
+      <div class="cell"><span class="k" id="hudSignalK">ELBOW</span><span class="v" id="hudSignal">—</span></div>
       <div class="cell"><span class="k" id="hudDeepestK">DEEPEST</span><span class="v" id="hudDeepest">—</span></div>
-      <div class="cell"><span class="k">BODY</span><span class="v" id="hudBody">—</span></div>
-      <div class="cell"><span class="k">TILT</span><span class="v" id="hudTilt">—</span></div>
+      <div class="cell"><span class="k" id="hudAK">BODY</span><span class="v" id="hudA">—</span></div>
+      <div class="cell"><span class="k" id="hudBK">TILT</span><span class="v" id="hudB">—</span></div>
     </div>
     <div id="hudFps" hidden></div>
     <div id="hudBar"><div id="hudBarFill"></div></div>
@@ -139,17 +139,29 @@
 <script>
 /* ------------------------------------------------------------------------
  * Shared detection core, injected verbatim by scripts/build-pose-page.mjs
- * from src/pose/{geometry,landmarks,pushupAnalyzer}.js.
+ * from src/pose/ (geometry, landmarks, the rep engine, one analyser per
+ * exercise, and analyzers.js to pick between them).
  *
  * DO NOT EDIT the injected block: edit those modules and rebuild. They are
  * the same files the Node test suite exercises, so this page and the app
- * count push-ups by identical rules.
+ * count reps by identical rules.
  * --------------------------------------------------------------------- */
 /* __POSE_CORE__ */
 
 /* ------------------------------------------------------------------------
  * Page: camera, MediaPipe, skeleton overlay, and the bridge to React Native.
  * --------------------------------------------------------------------- */
+
+/**
+ * Which exercise to count, from ?exercise=<id>; anything unknown is a
+ * push-up, as everywhere else. The ready message reports the id actually
+ * counted, so the app can tell this page from an older one that only counts
+ * push-ups and ignores the parameter.
+ */
+const PAGE_EXERCISE = poseExerciseId(new URLSearchParams(location.search).get('exercise'));
+const PAGE_OPTS = POSE_DEFAULTS[PAGE_EXERCISE];
+const PAGE_PROTOCOL_VERSION = 2;
+
 const MEDIAPIPE_VERSION = '1.0.1';
 const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MEDIAPIPE_VERSION;
 const MODEL_URL =
@@ -191,7 +203,7 @@ function send(payload) {
 /**
  * Hold the screen awake.
  *
- * Doing push-ups means not touching the phone, so the display sleeps on its
+ * Working out means not touching the phone, so the display sleeps on its
  * usual ~30s timeout and takes the camera with it — the page looks like it
  * "switched itself off" moments after the model finished loading. The app has
  * expo-keep-awake for this; the page needs its own.
@@ -318,18 +330,68 @@ const hudEl = document.getElementById('hud');
 const hudReps = document.getElementById('hudReps');
 const hudPhase = document.getElementById('hudPhase');
 const hudIssue = document.getElementById('hudIssue');
-const hudElbow = document.getElementById('hudElbow');
-const hudBody = document.getElementById('hudBody');
-const hudTilt = document.getElementById('hudTilt');
+const hudSignal = document.getElementById('hudSignal');
+const hudSignalK = document.getElementById('hudSignalK');
 const hudFps = document.getElementById('hudFps');
 const hudBarFill = document.getElementById('hudBarFill');
 const hudCopied = document.getElementById('hudCopied');
 const hudSys = document.getElementById('hudSys');
 const hudDeepest = document.getElementById('hudDeepest');
 const hudDeepestK = document.getElementById('hudDeepestK');
+const hudCellEls = [
+  [document.getElementById('hudAK'), document.getElementById('hudA')],
+  [document.getElementById('hudBK'), document.getElementById('hudB')],
+];
+
+const fmtDeg = (v) => (Number.isFinite(v) ? Math.round(v) + '°' : '—');
 
 /**
- * Deepest elbow angle reached, against the angle actually required.
+ * What the HUD shows for each exercise: its signal under its own name, the
+ * word for its best moment, and two readings its gates judge — each with the
+ * test that turns it red (null: never red, just shown).
+ */
+const HUD_SPEC = {
+  pushup: {
+    signal: 'ELBOW',
+    best: 'DEEPEST',
+    cells: [
+      ['BODY', (r) => r.body, (v) => v < PAGE_OPTS.straightBodyMinAngle, fmtDeg],
+      ['TILT', (r) => r.torsoTilt, (v) => v > PAGE_OPTS.maxTorsoTilt, fmtDeg],
+    ],
+  },
+  squat: {
+    signal: 'KNEE',
+    best: 'DEEPEST',
+    cells: [
+      ['TILT', (r) => r.torsoTilt, (v) => v < PAGE_OPTS.minUprightTilt, fmtDeg],
+      ['RANGE', (r) => (r.thresholds && r.thresholds.adapted
+        ? r.thresholds.observedMax - r.thresholds.observedMin : null), null, fmtDeg],
+    ],
+  },
+  situp: {
+    signal: 'TRUNK',
+    best: 'HIGHEST',
+    cells: [
+      ['TILT', (r) => r.torsoTilt, null, fmtDeg],
+      ['LEGS', (r) => r.legTilt, (v) => v > PAGE_OPTS.maxLyingTilt, fmtDeg],
+    ],
+  },
+  jumpingjack: {
+    signal: 'ARM GAP',
+    best: 'HIGHEST',
+    cells: [
+      ['TILT', (r) => r.torsoTilt, (v) => v < PAGE_OPTS.minUprightTilt, fmtDeg],
+      ['FEET', (r) => r.legSpread, null, (v) => (Number.isFinite(v) ? v.toFixed(1) + '×' : '—')],
+    ],
+  },
+}[PAGE_EXERCISE];
+
+hudSignalK.textContent = HUD_SPEC.signal;
+HUD_SPEC.cells.forEach((cell, i) => { hudCellEls[i][0].textContent = cell[0]; });
+
+/**
+ * The best signal reached in the rep (the lowest: deepest push-up or squat,
+ * highest sit-up, arms closest to overhead), against what is actually required.
  *
  * This is the one number that explains a silent failure. If a rep never gets
  * below downAngle the analyser makes no phase transition at all, so it reports
@@ -337,7 +399,7 @@ const hudDeepestK = document.getElementById('hudDeepestK');
  * says immediately whether the problem is depth, the camera angle flattening
  * the measurement, or a threshold that is simply wrong for this setup.
  */
-let deepestElbow = Infinity;
+let deepestSignal = Infinity;
 let lastNeeded = null;
 let prevPhase = null;
 
@@ -353,9 +415,10 @@ function persistSummary(reps) {
       when: new Date().toISOString(),
       frames: sessionFrames,
       tracked: trackedFrames,
-      deepestElbow: Number.isFinite(deepestElbow) ? Math.round(deepestElbow) : null,
+      exercise: PAGE_EXERCISE,
+      deepest: Number.isFinite(deepestSignal) ? Math.round(deepestSignal) : null,
       reps: reps,
-      needed: lastNeeded == null ? DEFAULTS.downAngle : Math.round(lastNeeded),
+      needed: lastNeeded == null ? PAGE_OPTS.downAngle : Math.round(lastNeeded),
       delegate: delegateUsed,
       stuckAt: coachState,
     }));
@@ -371,10 +434,13 @@ function showLastSummary() {
     if (!raw) return;
     const s = JSON.parse(raw);
     if (!s || !s.frames) return;
-    const deep = s.deepestElbow == null ? 'never tracked' : s.deepestElbow + '° deepest';
+    // Runs saved before there was more than one exercise were push-ups.
+    const best = s.deepest != null ? s.deepest : s.deepestElbow;
+    const deep = best == null ? 'never tracked' : best + '° best';
     const why = s.stuckAt && s.stuckAt !== 'ready' ? ' — stuck at: ' + s.stuckAt : '';
     hudCopied.textContent =
-      'Last run: ' + s.reps + ' reps, ' + deep + ' (need ' + s.needed + '°)' + why;
+      'Last run (' + (s.exercise || 'pushup') + '): ' + s.reps + ' reps, ' + deep +
+      ' (need ' + s.needed + '°)' + why;
     setTimeout(() => { hudCopied.textContent = ''; }, 8000);
   } catch (e) {
     /* ignore */
@@ -399,7 +465,7 @@ function updateSysLine() {
   const tracked = sessionFrames
     ? Math.round((trackedFrames / sessionFrames) * 100) + '% tracked'
     : 'no frames';
-  hudSys.innerHTML =
+  hudSys.innerHTML = PAGE_EXERCISE + ' &middot; ' +
     lockText + ' &middot; ' + (delegateUsed || '—') + ' &middot; ' + fps + ' &middot; ' + tracked;
 }
 
@@ -421,44 +487,108 @@ let stickyIssueAt = 0;
 const trace = [];
 const TRACE_LIMIT = 6000;
 
-const ISSUE_TEXT = {
-  lostTracking: 'Step into frame',
-  notHorizontal: 'Get into push-up position',
-  bodySag: 'Keep your body straight',
-  shallow: 'Go lower',
-};
+/** What each issue asks for, with the exercises that word one their own way. */
+const ISSUE_TEXT = Object.assign(
+  {
+    lostTracking: 'Step into frame',
+    notHorizontal: 'Get into push-up position',
+    bodySag: 'Keep your body straight',
+    shallow: 'Go lower',
+    notUpright: 'Stand up straight',
+    notLying: 'Lie on your back to start',
+  },
+  {
+    situp: { shallow: 'Come up higher' },
+    jumpingjack: { shallow: 'Arms all the way up' },
+  }[PAGE_EXERCISE],
+);
 
 const coachEl = document.getElementById('coach');
 const coachTitleEl = document.getElementById('coachTitle');
 const coachBodyEl = document.getElementById('coachBody');
 
+const NO_POSE_HELP = ['No one in frame',
+  'Prop the phone so your whole body is visible, about 2m away, and make sure the room is lit.'];
+
+/** Per exercise: the joints that must be in frame, and the position it starts from. */
 const SETUP_HELP = {
-  noPose: ['No one in frame',
-    'Prop the phone so your whole body is visible, about 2m away, and make sure the room is lit.'],
-  noArms: ['Arms out of frame',
-    'Your shoulder, elbow and wrist all have to be visible. Move the phone back or turn it sideways.'],
-  notHorizontal: ['Get into a push-up position',
-    'Lie face down with your body roughly level. Standing in front of the camera will not count.'],
-  calibrating: ['Learning your range',
-    'Do one full push-up — all the way down, all the way up — and counting starts.'],
-};
+  pushup: {
+    outOfFrame: ['Arms out of frame',
+      'Your shoulder, elbow and wrist all have to be visible. Move the phone back or turn it sideways.'],
+    position: ['Get into a push-up position',
+      'Lie face down with your body roughly level. Standing in front of the camera will not count.'],
+    calibrating: ['Learning your range',
+      'Do one full push-up — all the way down, all the way up — and counting starts.'],
+  },
+  squat: {
+    outOfFrame: ['Legs out of frame',
+      'Hips, knees and ankles all have to be visible. Move the phone back, or lower it to about knee height.'],
+    position: ['Stand up straight',
+      'Squats count from standing. Face the camera or stand side-on, either works.'],
+    calibrating: ['Learning your range',
+      'Do one full squat — thighs down to level, then all the way up — and counting starts.'],
+  },
+  situp: {
+    outOfFrame: ['Body out of frame',
+      'Shoulders, hips and ankles all have to be visible. Put the phone at your side, about 2m away.'],
+    position: ['Lie on your back',
+      'Knees bent, feet on the floor, side-on to the camera. Sitting on a chair or standing will not count.'],
+    calibrating: ['Learning your range',
+      'Do one full sit-up — all the way up, all the way back down — and counting starts.'],
+  },
+  jumpingjack: {
+    outOfFrame: ['Arms out of frame',
+      'Both shoulders and elbows have to stay visible, overhead too. Step back from the phone.'],
+    position: ['Stand up straight',
+      'Face the camera, arms at your sides. Lying on the floor will not count.'],
+    calibrating: ['Learning your range',
+      'Do one full jumping jack — arms all the way overhead, then back to your sides — and counting starts.'],
+  },
+}[PAGE_EXERCISE];
+
+/**
+ * What each exercise needs to see (`seen` tests one joint), and whether this
+ * frame shows the wrong starting position for it.
+ */
+const SETUP_CHECKS = {
+  pushup: {
+    inFrame: (seen) => ['left', 'right'].some((side) =>
+      seen(side + 'Shoulder') && seen(side + 'Elbow') && seen(side + 'Wrist')),
+    misplaced: (r) => Number.isFinite(r.torsoTilt) && r.torsoTilt > PAGE_OPTS.maxTorsoTilt,
+  },
+  squat: {
+    inFrame: (seen) => ['left', 'right'].some((side) =>
+      seen(side + 'Hip') && seen(side + 'Knee') && seen(side + 'Ankle')),
+    misplaced: (r) => Number.isFinite(r.torsoTilt) && r.torsoTilt < PAGE_OPTS.minUprightTilt,
+  },
+  situp: {
+    inFrame: (seen) => ['Shoulder', 'Hip', 'Ankle'].every((joint) =>
+      seen('left' + joint) || seen('right' + joint)),
+    // The legs stay on the floor all through a sit-up, so they can be judged
+    // on any frame without nagging mid-rep.
+    misplaced: (r) => Number.isFinite(r.legTilt) && r.legTilt > PAGE_OPTS.maxLyingTilt,
+  },
+  jumpingjack: {
+    inFrame: (seen) => ['left', 'right'].every((side) =>
+      seen(side + 'Hip') && seen(side + 'Shoulder') && seen(side + 'Elbow')),
+    misplaced: (r) => Number.isFinite(r.torsoTilt) && r.torsoTilt < PAGE_OPTS.minUprightTilt,
+  },
+}[PAGE_EXERCISE];
 
 let coachState = null;
 let coachSince = 0;
 
 /**
- * Work out which of the four silent failures is happening, rather than leaving
- * the screen at zero with no explanation.
+ * Work out which of the four silent failures is happening — no one in frame,
+ * the joints this exercise needs out of frame, the wrong starting position, or
+ * still learning the range — rather than leaving the screen at zero with no
+ * explanation.
  */
 function setupState(pose, result) {
   if (!pose) return 'noPose';
-  const seen = (j) => pose[j] && pose[j].score >= DEFAULTS.minVisibility;
-  const arm = (side) =>
-    seen(side + 'Shoulder') && seen(side + 'Elbow') && seen(side + 'Wrist');
-  if (!arm('left') && !arm('right')) return 'noArms';
-  if (Number.isFinite(result.torsoTilt) && result.torsoTilt > DEFAULTS.maxTorsoTilt) {
-    return 'notHorizontal';
-  }
+  const seen = (j) => pose[j] && pose[j].score >= PAGE_OPTS.minVisibility;
+  if (!SETUP_CHECKS.inFrame(seen)) return 'outOfFrame';
+  if (SETUP_CHECKS.misplaced(result)) return 'position';
   if (result.thresholds && !result.thresholds.adapted) return 'calibrating';
   return 'ready';
 }
@@ -479,7 +609,7 @@ function updateCoach(pose, result, now) {
     return;
   }
 
-  const help = SETUP_HELP[state];
+  const help = state === 'noPose' ? NO_POSE_HELP : SETUP_HELP[state];
   if (!help) {
     coachEl.classList.add('hidden');
     return;
@@ -497,37 +627,38 @@ function updateHud(result) {
   fpsWindow.push(now);
   while (fpsWindow.length && now - fpsWindow[0] > 1000) fpsWindow.shift();
 
-  const fmt = (v) => (Number.isFinite(v) ? Math.round(v) + '°' : '—');
+  // Every analyser reports its signal under the same name, whatever it is
+  // measuring; an untracked frame has none.
+  const signal = result.signal;
 
   sessionFrames += 1;
-  if (Number.isFinite(result.elbow)) {
+  if (Number.isFinite(signal)) {
     trackedFrames += 1;
-    deepestElbow = Math.min(deepestElbow, result.elbow);
+    deepestSignal = Math.min(deepestSignal, signal);
   }
-  // Reset at the start of a descent, not when a rep completes: resetting on
+  // Reset at the start of an effort, not when a rep completes: resetting on
   // completion immediately replaced a good depth with the angle of someone
-  // standing at the top, which then rendered red and read as a failure. Held
-  // this way, the cell shows the depth of the rep just finished until the next
-  // one begins.
-  if (result.phase === 'down' && prevPhase !== 'down') deepestElbow = Infinity;
+  // back at rest, which then rendered red and read as a failure. Held this
+  // way, the cell shows the best of the rep just finished until the next one
+  // begins.
+  if (result.phase === 'down' && prevPhase !== 'down') deepestSignal = Infinity;
   prevPhase = result.phase;
 
   hudReps.textContent = result.reps != null ? result.reps : 0;
   hudPhase.textContent = (result.phase || 'unknown').toUpperCase();
   hudPhase.className = result.phase === 'down' ? 'down' : result.phase === 'up' ? 'up' : '';
-  hudElbow.textContent = fmt(result.elbow);
-  hudBody.textContent = fmt(result.body);
-  hudTilt.textContent = fmt(result.torsoTilt);
+  hudSignal.textContent = fmtDeg(signal);
 
-  // The target is whatever the analyser is currently using, which adapts to
+  // The targets are whatever the analyser is currently using, which adapt to
   // the range this person actually moves through.
-  const needed = result.thresholds ? result.thresholds.down : DEFAULTS.downAngle;
-  hudDeepest.textContent = Number.isFinite(deepestElbow) ? Math.round(deepestElbow) + '°' : '—';
+  const needed = result.thresholds ? result.thresholds.down : PAGE_OPTS.downAngle;
+  const restAt = result.thresholds ? result.thresholds.up : PAGE_OPTS.upAngle;
+  hudDeepest.textContent = fmtDeg(deepestSignal);
   hudDeepestK.textContent =
-    'DEEPEST / ' + Math.round(needed) + '°' +
+    HUD_SPEC.best + ' / ' + Math.round(needed) + '°' +
     (result.thresholds && result.thresholds.adapted ? ' AUTO' : '');
   hudDeepest.className =
-    'v' + (Number.isFinite(deepestElbow) ? (deepestElbow <= needed ? ' ok' : ' bad') : '');
+    'v' + (Number.isFinite(deepestSignal) ? (deepestSignal <= needed ? ' ok' : ' bad') : '');
   lastNeeded = needed;
 
   if (now - lastSummaryWrite > 2000) {
@@ -536,12 +667,13 @@ function updateHud(result) {
     updateSysLine(); // refresh fps and tracked-percentage
   }
 
-  hudElbow.className = 'v' + (Number.isFinite(result.elbow)
-    ? (result.elbow <= DEFAULTS.downAngle ? ' ok' : '') : ' bad');
-  hudBody.className = 'v' + (Number.isFinite(result.body)
-    ? (result.body < DEFAULTS.straightBodyMinAngle ? ' bad' : ' ok') : '');
-  hudTilt.className = 'v' + (Number.isFinite(result.torsoTilt)
-    ? (result.torsoTilt > DEFAULTS.maxTorsoTilt ? ' bad' : ' ok') : '');
+  hudSignal.className = 'v' + (Number.isFinite(signal) ? (signal <= needed ? ' ok' : '') : ' bad');
+  HUD_SPEC.cells.forEach((cell, i) => {
+    const value = cell[1](result);
+    hudCellEls[i][1].textContent = cell[3](value);
+    hudCellEls[i][1].className = 'v' + (Number.isFinite(value) && cell[2]
+      ? (cell[2](value) ? ' bad' : ' ok') : '');
+  });
 
   const issue = (result.issues || [])[0];
   if (result.repCompleted) {
@@ -554,32 +686,35 @@ function updateHud(result) {
   }
   hudIssue.textContent = stickyIssue || '';
 
-  // Depth bar: full at the down threshold, empty when fully extended.
-  if (Number.isFinite(result.elbow)) {
-    const span = DEFAULTS.upAngle - DEFAULTS.downAngle;
-    const pct = Math.max(0, Math.min(1, (DEFAULTS.upAngle - result.elbow) / span)) * 100;
+  // Effort bar: full at the effort threshold, empty back at rest.
+  if (Number.isFinite(signal)) {
+    const span = Math.max(1, restAt - needed);
+    const pct = Math.max(0, Math.min(1, (restAt - signal) / span)) * 100;
     hudBarFill.style.width = pct.toFixed(0) + '%';
     hudBarFill.style.background = pct >= 100 ? '#4ADE80' : '#FBBF24';
   }
 
   if (trace.length < TRACE_LIMIT) {
-    trace.push({
+    const row = {
       t: Math.round(now),
-      elbow: Number.isFinite(result.elbow) ? +result.elbow.toFixed(1) : null,
-      body: Number.isFinite(result.body) ? +result.body.toFixed(1) : null,
-      tilt: Number.isFinite(result.torsoTilt) ? +result.torsoTilt.toFixed(1) : null,
+      signal: Number.isFinite(signal) ? +signal.toFixed(1) : null,
       phase: result.phase,
       reps: result.reps,
       rep: !!result.repCompleted,
       issues: result.issues && result.issues.length ? result.issues : undefined,
+    };
+    HUD_SPEC.cells.forEach((cell) => {
+      const value = cell[1](result);
+      row[cell[0].toLowerCase()] = Number.isFinite(value) ? +value.toFixed(2) : null;
     });
+    trace.push(row);
   }
 }
 
 document.getElementById('hudReset').addEventListener('click', () => {
   if (analyzer) analyzer.reset();
   trace.length = 0;
-  deepestElbow = Infinity;
+  deepestSignal = Infinity;
   sessionFrames = 0;
   trackedFrames = 0;
   hudCopied.textContent = 'reset';
@@ -588,20 +723,17 @@ document.getElementById('hudReset').addEventListener('click', () => {
 
 document.getElementById('hudCopy').addEventListener('click', async () => {
   const counted = trace.filter((r) => r.rep).length;
-  const elbows = trace.map((r) => r.elbow).filter((v) => v != null);
+  const signals = trace.map((r) => r.signal).filter((v) => v != null);
   const payload = {
-    thresholds: {
-      downAngle: DEFAULTS.downAngle,
-      upAngle: DEFAULTS.upAngle,
-      straightBodyMinAngle: DEFAULTS.straightBodyMinAngle,
-      maxTorsoTilt: DEFAULTS.maxTorsoTilt,
-    },
+    exercise: PAGE_EXERCISE,
+    signal: HUD_SPEC.signal,
+    thresholds: PAGE_OPTS,
     summary: {
       frames: trace.length,
       countedReps: counted,
-      minElbow: elbows.length ? Math.min.apply(null, elbows) : null,
-      maxElbow: elbows.length ? Math.max.apply(null, elbows) : null,
-      trackedFrames: elbows.length,
+      minSignal: signals.length ? Math.min.apply(null, signals) : null,
+      maxSignal: signals.length ? Math.max.apply(null, signals) : null,
+      trackedFrames: signals.length,
     },
     trace: trace,
   };
@@ -714,12 +846,19 @@ async function start() {
       delegateUsed = 'CPU';
     }
 
-    analyzer = createPushupAnalyzer({
+    analyzer = createAnalyzer(PAGE_EXERCISE, {
       aspect: (videoEl.videoWidth || 640) / (videoEl.videoHeight || 480),
     });
 
     setStatus(null);
-    send({ type: 'status', phase: 'ready' });
+    // `exercise` is what this page counts, not what was asked for: the app
+    // refuses to run on a page that would count the wrong thing.
+    send({
+      type: 'status',
+      phase: 'ready',
+      exercise: analyzer.exercise,
+      version: PAGE_PROTOCOL_VERSION,
+    });
 
     // Inside the app the WebView sits behind the app's own counter, so the HUD
     // would just get in the way. Opened directly in a browser it is the point.

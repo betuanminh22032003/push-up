@@ -73,6 +73,7 @@ export const EMPTY_STATE = Object.freeze({
   overlayAllowed: false,
   watcherRunning: false,
   batteryOptimized: false,
+  developerOptions: false,
   enabled: false,
   blocked: [],
   sites: [],
@@ -100,6 +101,8 @@ export function normalizeState(raw) {
     overlayAllowed: raw.overlayAllowed === true,
     watcherRunning: raw.watcherRunning === true,
     batteryOptimized: raw.batteryOptimized === true,
+    // Developer options or USB debugging on: many banking apps close then, whatever this app does.
+    developerOptions: raw.developerOptions === true,
     enabled: raw.enabled === true,
     blocked: strings(raw.blocked),
     sites: strings(raw.sites),
@@ -182,13 +185,15 @@ export function statusKey(state, stalled) {
 /**
  * Which warning card the tab shows, if any: 'watcher' (both permissions
  * granted, the phone stopped it), 'stalled' (accessibility on, not running)
- * or 'switchedOff' (accessibility turned off, nothing else blocking).
+ * or 'switchedOff' (accessibility turned off, nothing else to block with).
+ * Switched off with both permissions granted, the watcher is taking over,
+ * so there is no alarm unless the second look finds it did not.
  */
 export function alertKind(state, stalled) {
   if (!isSetUp(state) || blockingMode(state) !== null) return null;
   if (stalled && wantsWatcher(state)) return 'watcher';
   if (stalled && state.serviceEnabled) return 'stalled';
-  if (wasSwitchedOff(state)) return 'switchedOff';
+  if (wasSwitchedOff(state) && !wantsWatcher(state)) return 'switchedOff';
   return null;
 }
 
@@ -223,11 +228,23 @@ export function isBlocking(state) {
   return blockingMode(state) !== null;
 }
 
-/** Seconds of fun time a workout of `reps` earns at `secondsPerRep`. */
-export function creditFor(reps, secondsPerRep) {
+/**
+ * Seconds of fun time a workout of `reps` earns at `secondsPerRep`.
+ *
+ * `weight` is the exercise's `creditWeight` (src/exercises/exercises.js): a
+ * squat earns half what a push-up does. Left out it is 1, so a caller that
+ * predates exercises pays push-up rates. Anything else that is not a finite
+ * number, or is negative, earns nothing, like a missing rate: a weight that
+ * went wrong must not hand out time the blocker cannot take back. Rates and
+ * weights multiply to fractions (3 jumping jacks at 30 s x 0.25), so the
+ * result is rounded to whole seconds: what is credited is then exactly what
+ * the "earned" toast says.
+ */
+export function creditFor(reps, secondsPerRep, weight = 1) {
   const count = Math.max(0, Math.round(finite(reps)));
   const rate = Math.max(0, finite(secondsPerRep));
-  return count * rate;
+  const factor = Math.max(0, finite(weight));
+  return Math.round(count * rate * factor);
 }
 
 /**
@@ -241,6 +258,18 @@ export function formatAmount(seconds, t) {
   if (m > 0 && s > 0) return t('time.minSec', { m, s });
   if (m > 0) return t('time.min', { n: m });
   return t('time.sec', { n: s });
+}
+
+/**
+ * What one rep earns, unrounded: "7.5 sec" ("7,5 giây"). A workout is
+ * credited once, on its total (see creditFor), so ten 7.5-second jumping
+ * jacks earn 75 seconds; showing one rep rounded to 8 would promise 80.
+ * Amounts of a minute or more are whole seconds at every rate on offer.
+ */
+export function formatPerRep(seconds, t) {
+  const tenths = Math.round(Math.max(0, finite(seconds)) * 10) / 10;
+  if (Number.isInteger(tenths) || tenths >= 60) return formatAmount(tenths, t);
+  return t('time.sec', { n: String(tenths).replace('.', t('time.decimal')) });
 }
 
 /** Case- and accent-insensitive: "lien quan" finds "Liên Quân", "tik" finds TikTok. */

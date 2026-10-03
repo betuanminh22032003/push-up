@@ -174,14 +174,15 @@ export function BlockerProvider({ children }) {
   /**
    * Turn a saved workout into fun time. Only while the blocker is set up:
    * banking hours before it is switched on would defeat it on day one.
+   * `weight` is the exercise's `creditWeight`; see creditFor.
    * @returns {Promise<number>} seconds credited (0 when nothing was)
    */
   const creditReps = useCallback(
-    async (reps) => {
+    async (reps, weight = 1) => {
       if (!NativeBlocker) return 0;
       try {
         if (!isSetUp(await read())) return 0;
-        const seconds = creditFor(reps, rate);
+        const seconds = creditFor(reps, rate, weight);
         if (seconds <= 0) return 0;
         const next = accept(normalizeState(await NativeBlocker.addCredit(seconds)));
         return next.reachable ? seconds : 0;
@@ -214,6 +215,31 @@ export function BlockerProvider({ children }) {
     refresh();
     return opened;
   }, [refresh]);
+
+  /**
+   * One tap instead of a trip through settings, for banking apps: they refuse
+   * to open while Accessibility is on, whichever apps it watches. Android lets
+   * an app switch its own service off but never on. When it stays on (the
+   * phone had already stopped the service), the settings open instead.
+   */
+  const switchOffAccessibility = useCallback(async () => {
+    if (!NativeBlocker) return false;
+    let off = false;
+    try {
+      off = (await NativeBlocker.switchOffAccessibility?.()) === true;
+    } catch {
+      // the settings, then
+    }
+    if (!off) NativeBlocker.openAccessibilitySettings();
+    refresh();
+    return off;
+  }, [refresh]);
+
+  // Many banking apps close while Developer options or USB debugging is on.
+  const openDeveloperSettings = useCallback(
+    () => NativeBlocker?.openDeveloperSettings?.() ?? false,
+    [],
+  );
 
   const openAppSettings = useCallback(() => NativeBlocker?.openAppSettings() ?? false, []);
   const openBatterySettings = useCallback(() => NativeBlocker?.openBatterySettings() ?? false, []);
@@ -278,9 +304,11 @@ export function BlockerProvider({ children }) {
       removeSite,
       creditReps,
       reset,
+      switchOffAccessibility,
       openAccessibilitySettings,
       openUsageAccessSettings,
       openOverlaySettings,
+      openDeveloperSettings,
       openAppSettings,
       openBatterySettings,
       openAutostartSettings,
@@ -303,9 +331,11 @@ export function BlockerProvider({ children }) {
       removeSite,
       creditReps,
       reset,
+      switchOffAccessibility,
       openAccessibilitySettings,
       openUsageAccessSettings,
       openOverlaySettings,
+      openDeveloperSettings,
       openAppSettings,
       openBatterySettings,
       openAutostartSettings,

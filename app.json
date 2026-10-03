@@ -25,7 +25,8 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.HIGH_SAMPLING_RATE_SENSORS"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
