@@ -38,9 +38,14 @@ export function SettingsProvider({ children }) {
     setSettings({ ...DEFAULT_SETTINGS, onboardingDone: true });
   }, []);
 
+  /** Read the stored settings again, after a backup was restored underneath us. */
+  const reload = useCallback(async () => {
+    setSettings(await loadSettings());
+  }, []);
+
   const value = useMemo(
-    () => ({ settings, isLoaded, updateSettings, resetSettings }),
-    [settings, isLoaded, updateSettings, resetSettings],
+    () => ({ settings, isLoaded, updateSettings, resetSettings, reload }),
+    [settings, isLoaded, updateSettings, resetSettings, reload],
   );
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
