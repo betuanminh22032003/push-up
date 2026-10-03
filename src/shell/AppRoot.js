@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Platform, StyleSheet, View } from 'react-native';
+import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 
+import { decodeChallenge, extractChallengeToken } from '../challenge/codec';
 import { TabBar } from '../components/TabBar';
 import { Toast } from '../components/Toast';
 import { useT } from '../i18n/I18nContext';
 import { configureNotifications, scheduleDailyReminder } from '../notifications/reminders';
 import { BlockerScreen } from '../screens/BlockerScreen';
+import { ChallengeScreen } from '../screens/ChallengeScreen';
 import { OnboardingModal } from '../screens/OnboardingModal';
 import { ProgramScreen } from '../screens/ProgramScreen';
 import { ProgressScreen } from '../screens/ProgressScreen';
@@ -44,6 +47,11 @@ export function AppRoot() {
   const [toasts, setToasts] = useState([]);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const workoutControls = useRef(null);
+  // The challenge sheet: null, { mode: 'new', exerciseId } or { mode: 'received', challenge }.
+  const [challenge, setChallenge] = useState(null);
+  // A challenge link that arrived mid-workout waits for the workout to end:
+  // two screens cannot share the camera.
+  const [pendingChallenge, setPendingChallenge] = useState(null);
 
   // --- splash: hold it until the stored state is in memory ------------------
   const ready = settingsLoaded && sessionsLoaded;
@@ -77,6 +85,38 @@ export function AppRoot() {
   useEffect(() => {
     if (earnSignal > 0) setTab('workout');
   }, [earnSignal]);
+
+  // --- challenge links: hitdat://challenge?c=..., or #c=... on the web build ------
+  const linkingUrl = Linking.useLinkingURL();
+  const handledToken = useRef(null);
+  useEffect(() => {
+    const token = extractChallengeToken(linkingUrl);
+    if (!token || token === handledToken.current) return;
+    handledToken.current = token;
+    const decoded = decodeChallenge(token);
+    if (decoded.ok) {
+      setPendingChallenge({ mode: 'received', challenge: decoded.challenge });
+    } else {
+      setToasts((prev) => [...prev, t('challenge.badLink')]);
+    }
+    // On the web the link lives in the address bar; drop it so a reload does
+    // not open the same challenge again.
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.history?.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [linkingUrl, t]);
+
+  useEffect(() => {
+    // After first-run onboarding, too: a friend's link is often how someone
+    // first opens the app, and two sheets at once would fight for the screen.
+    if (pendingChallenge && ready && !workoutBusy && !onboardingOpen && settings.onboardingDone) {
+      setChallenge(pendingChallenge);
+      setPendingChallenge(null);
+    }
+  }, [pendingChallenge, ready, workoutBusy, onboardingOpen, settings.onboardingDone]);
+
+  const openChallenge = useCallback((exerciseId) => setChallenge({ mode: 'new', exerciseId }), []);
+  const closeChallenge = useCallback(() => setChallenge(null), []);
 
   // --- Android back button ------------------------------------------------------
   useEffect(() => {
@@ -131,6 +171,7 @@ export function AppRoot() {
           onStatusChange={handleStatus}
           onCelebrate={celebrate}
           onOpenBlocker={openBlocker}
+          onOpenChallenge={openChallenge}
           controlsRef={workoutControls}
         />
       </View>
@@ -138,7 +179,7 @@ export function AppRoot() {
         <ProgramScreen onStartPlan={startPlan} />
       </View>
       <View style={[styles.screen, tab !== 'progress' && styles.hidden]}>
-        <ProgressScreen />
+        <ProgressScreen onOpenChallenge={openChallenge} />
       </View>
       <View style={[styles.screen, tab !== 'blocker' && styles.hidden]}>
         <BlockerScreen onGoWorkout={openWorkout} />
@@ -151,6 +192,7 @@ export function AppRoot() {
 
       <Toast message={toasts[0] ?? null} onHide={popToast} />
       <OnboardingModal visible={onboardingOpen} onClose={closeOnboarding} />
+      <ChallengeScreen request={challenge} onClose={closeChallenge} />
     </View>
   );
 }

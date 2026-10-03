@@ -2,8 +2,9 @@
   "expo": {
     "name": "Hít Đất AI",
     "slug": "pupg-pushup",
+    "scheme": "hitdat",
     "version": "1.0.0",
-    "description": "Hands-free push-up counter with AI camera form coaching, a 6-week program, daily goals and streaks.",
+    "description": "Hands-free workout counter: the AI camera counts 38 exercises (push-ups, squats, planks...) and coaches your form. 4-week training schedule, daily goals, streaks, challenge links for friends and local backups. No account, no ads, no tracking.",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -76,7 +77,8 @@
           "defaultChannel": "reminders"
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

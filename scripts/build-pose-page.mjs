@@ -39,6 +39,7 @@ const MODULES = [
   'lowerBodyAnalyzers',
   'coreAnalyzers',
   'holdAnalyzers',
+  'visibility',
   'analyzers',
 ];
 
@@ -79,6 +80,7 @@ if (/^import\s/m.test(core)) problems.push('an `import` survived the strip');
 const declared = new Set(topLevelNames(core));
 for (const symbol of [
   'createAnalyzer',
+  'createExerciseGate',
   'poseExerciseId',
   'POSE_EXERCISE_IDS',
   'POSE_DEFAULTS',

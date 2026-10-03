@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ACHIEVEMENTS, longestStreak } from '../achievements/achievements';
@@ -8,14 +8,15 @@ import { ExercisePicker } from '../components/ExercisePicker';
 import { SessionRow } from '../components/SessionRow';
 import { StatTile } from '../components/StatTile';
 import { WeeklyChart } from '../components/WeeklyChart';
-import { EXERCISES, exerciseOf, filterByExercise, isHold, isHoldSession } from '../exercises/exercises';
+import { EXERCISES, exerciseOf, filterByExercise, getExercise, isHold, isHoldSession } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
+import { useChallenges } from '../state/ChallengesContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
 import { colors, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { computeStats, dailyTotals } from '../utils/stats';
-import { formatDuration } from '../utils/time';
+import { formatDuration, formatSessionDate } from '../utils/time';
 
 /**
  * Chart, records, badges, and every workout — the "why keep going" tab.
@@ -28,10 +29,11 @@ import { formatDuration } from '../utils/time';
  * Under "All" the rep figures leave holds out (a plank's seconds are not
  * reps); filtered to a hold, every figure is in seconds held.
  */
-export function ProgressScreen() {
+export function ProgressScreen({ onOpenChallenge }) {
   const t = useT();
   const insets = useSafeAreaInsets();
   const { sessions, stats, achievements, removeSession } = useSessions();
+  const { records: challengeRecords } = useChallenges();
   const { settings } = useSettings();
   const [filter, setFilter] = useState('all');
 
@@ -147,6 +149,20 @@ export function ProgressScreen() {
       </View>
       <AchievementGrid unlocked={achievements} />
 
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionLabel}>{t('challenge.listTitle')}</Text>
+        <Pressable onPress={() => onOpenChallenge?.(null)} hitSlop={8} accessibilityRole="button">
+          <Text style={styles.sectionAction}>{t('challenge.entry')}</Text>
+        </Pressable>
+      </View>
+      {challengeRecords.length ? (
+        challengeRecords.slice(0, CHALLENGES_SHOWN).map((record) => (
+          <ChallengeRow key={record.id} record={record} />
+        ))
+      ) : (
+        <Text style={styles.challengeEmpty}>{t('challenge.listEmpty')}</Text>
+      )}
+
       <Text style={styles.sectionLabel}>{t('progress.history')}</Text>
     </View>
   );
@@ -170,7 +186,65 @@ export function ProgressScreen() {
   );
 }
 
+/** Challenges shown under the badges; the list keeps more. */
+const CHALLENGES_SHOWN = 5;
+
+/** One challenge sent or received: who, what, the scores and how it went. */
+function ChallengeRow({ record }) {
+  const t = useT();
+  const exercise = getExercise(record.exerciseId);
+  const unit = record.format === 'hold' ? t('common.secs') : t('common.reps');
+  const what =
+    record.format === 'hold'
+      ? `${exercise.icon} ${t('challenge.formatHold')}`
+      : `${exercise.icon} ${t('common.seconds', { n: record.durationSeconds })}`;
+  const line =
+    record.direction === 'received'
+      ? t('challenge.rowReceived', {
+          name: record.opponent || t('challenge.someone'),
+          theirs: record.theirScore,
+          mine: Number.isFinite(record.myScore) ? record.myScore : '—',
+        })
+      : t('challenge.rowSent', { mine: record.myScore });
+  return (
+    <View style={styles.challengeRow}>
+      <View style={styles.challengeText}>
+        <Text style={styles.challengeLine} numberOfLines={1}>
+          {what} · {line} {unit}
+        </Text>
+        <Text style={styles.challengeDate}>
+          {formatSessionDate(record.at, Date.now(), {
+            today: t('session.today'),
+            yesterday: t('session.yesterday'),
+          })}
+        </Text>
+      </View>
+      {record.result ? (
+        <Text style={[styles.challengeResult, styles[`result_${record.result}`]]}>
+          {t(`challenge.short.${record.result}`)}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  sectionAction: { fontSize: 13, fontWeight: '600', color: colors.accent, marginTop: spacing.lg },
+  challengeEmpty: { fontSize: 13, color: colors.textFaint, lineHeight: 19 },
+  challengeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  challengeText: { flex: 1 },
+  challengeLine: { fontSize: 14, color: colors.text },
+  challengeDate: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
+  challengeResult: { ...type.label, marginLeft: spacing.sm },
+  result_win: { color: colors.accent },
+  result_lose: { color: colors.danger },
+  result_draw: { color: colors.warn },
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   title: { ...type.title, color: colors.text, marginBottom: spacing.md },

@@ -26,48 +26,42 @@ Hít Đất AI: Push-up Counter
 **Short description** (80)
 
 ```
-Hands-free push-up counter. AI camera, 6-week program, goals and streaks.
+AI camera counts 38 exercises hands-free. 4-week plan, streaks and challenges.
 ```
 
 **Full description**
 
 ```
-Put the phone down and just do push-ups. Hít Đất AI counts every rep for you — with the camera, the sensor, or a tap of your nose — and turns them into a habit.
+Put the phone down and just train. Hít Đất AI counts every rep for you — with the camera, the sensor, or a tap — and turns it into a habit.
 
 COUNTS HANDS-FREE
-• Four exercises: push-ups, squats, sit-ups and jumping jacks. Pick one before you start, and it shows you where to put the phone.
-• AI camera: prop the phone up, get into position, and the camera counts your reps and coaches your form ("go lower", "keep your body straight").
-• Sensor mode for push-ups: phone on the floor, cover the sensor at the bottom of each rep.
-• Motion mode: squats with the phone in your pocket, sit-ups with it on your chest, jumping jacks with it in your hand.
-• Tap mode: works on every phone, no camera needed.
+• 38 exercises: push-ups and their variations, squats, lunges, sit-ups, crunches, bridges, burpees, jumping jacks, and holds such as the plank and wall sit, timed in seconds of good form.
+• AI camera: prop the phone up and the camera counts your reps and coaches your form ("go lower", "keep your body straight").
+• A setup card shows where to put the phone for each exercise — side or front, how far, how high — and counting only starts once the camera can see every body part it needs. It tells you what is out of frame.
+• Sensor mode for push-ups, motion mode for squats, sit-ups and jumping jacks, and tap mode on every phone.
 • Voice count says each number out loud so you never look at the screen.
 
-REAL WORKOUTS
-• Countdown before every set so you can get into position.
-• Multiple sets with a rest timer between them.
-• Sound, vibration and voice cues at the start and end of every set.
+A REAL TRAINING PLAN
+• 4-week schedule at three levels — beginner, intermediate, advanced — mixing exercises for the whole body.
+• Countdown before every set, rest timer between sets, sound, vibration and voice cues.
 
-6-WEEK PROGRAM
-• Take a one-set max test and get a program sized to you: 18 workouts, 5 sets each, three days a week.
-• Targets grow every workout. Sets complete themselves when you hit the number, and the last set is always "as many as you can".
-• Redo any day, retake the test for a harder cycle.
+CHALLENGE YOUR FRIENDS
+• Set a score — most reps in 30, 60 or 120 seconds, or the longest hold — and send a friend the link.
+• They take it in their own app; you see who won and can ask for a rematch. Challenges are counted by the camera only, so everyone plays by the same rules.
+• No account and no server: the challenge lives in the link itself.
 
 STAY MOTIVATED
-• Daily goal with a progress bar.
-• Streak of consecutive days with reps.
-• Weekly chart and personal records, for all exercises or one at a time, and 21 achievements.
+• Daily goal with a progress bar, streak of consecutive days, weekly chart, personal records and achievements.
 • Share your result after every workout.
 
 EARN YOUR SCREEN TIME
-• Pick the apps and websites that eat your time (social media, videos, games) and Hít Đất AI locks them, in the browser too.
-• Every push-up earns a minute of use; you choose the rate. Squats and sit-ups earn half of that, jumping jacks a quarter. A small timer counts it down while you scroll.
-• Out of time? The app stays covered until you do more push-ups. Switch it off whenever you like.
+• Pick the apps and websites that eat your time and Hít Đất AI locks them until your reps earn you time on them. You choose the rate.
 
-PRIVATE BY DESIGN
-• No account. No ads. No analytics.
+YOUR DATA, YOUR PHONE
+• No account. No ads. No analytics. No tracking.
 • Camera frames are processed on your phone and never uploaded.
-• The app blocker only checks which app is open, on your phone.
-• All history stays on your device — delete it any time.
+• Back up your history to a file you keep (Drive, Zalo, email…) and restore it on a new phone, with a preview first.
+• Something counted wrong or crashed? Send a report through your share sheet — you read it first, and nothing is sent automatically.
 
 Available in English and Vietnamese.
 ```
@@ -83,48 +77,42 @@ Hít Đất AI: Đếm bằng camera
 **Short description** (80)
 
 ```
-Đếm hít đất rảnh tay. Camera AI, chương trình 6 tuần, mục tiêu và chuỗi ngày.
+Camera AI đếm 38 bài tập rảnh tay. Lịch tập 4 tuần, chuỗi ngày và thách đấu.
 ```
 
 **Full description**
 
 ```
-Đặt điện thoại xuống và chỉ việc hít đất. Hít Đất AI đếm từng cái cho bạn — bằng camera, cảm biến, hoặc chạm mũi — và biến nó thành thói quen.
+Đặt điện thoại xuống và chỉ việc tập. Hít Đất AI đếm từng cái cho bạn — bằng camera, cảm biến hoặc chạm — và biến nó thành thói quen.
 
 ĐẾM RẢNH TAY
-• Bốn bài tập: hít đất, squat, gập bụng và bật nhảy. Chọn bài trước khi tập, bài nào cũng hướng dẫn cách đặt máy.
-• Camera AI: dựng điện thoại lên, vào tư thế, camera đếm số cái và nhắc tư thế ("xuống thấp hơn", "giữ thẳng người").
-• Chế độ cảm biến cho hít đất: đặt máy trên sàn, che cảm biến ở điểm thấp nhất mỗi cái.
-• Chế độ chuyển động: squat với máy trong túi quần, gập bụng với máy áp trên ngực, bật nhảy với máy cầm trong tay.
-• Chế độ chạm: chạy trên mọi máy, không cần camera.
+• 38 bài tập: hít đất và các biến thể, squat, lunge, gập bụng, crunch, cầu mông, burpee, bật nhảy, và các bài giữ tư thế như plank, ngồi dựa tường — tính bằng số giây giữ đúng tư thế.
+• Camera AI: dựng điện thoại lên, camera đếm số cái và nhắc tư thế ("xuống thấp hơn", "giữ thẳng người").
+• Thẻ hướng dẫn cho từng bài: đặt máy bên hông hay trước mặt, cách bao xa, cao bao nhiêu. Máy chỉ bắt đầu đếm khi camera đã thấy đủ các phần cơ thể cần thiết, và báo phần nào đang ra khỏi khung hình.
+• Chế độ cảm biến cho hít đất, chuyển động cho squat, gập bụng, bật nhảy, và chạm màn hình trên mọi máy.
 • Đọc số bằng giọng nói, không cần nhìn màn hình.
 
-BUỔI TẬP THỰC SỰ
-• Đếm ngược trước mỗi set để kịp vào tư thế.
-• Nhiều set, có đồng hồ nghỉ giữa các set.
-• Âm thanh, rung và giọng nói báo đầu và cuối mỗi set.
+LỊCH TẬP THỰC SỰ
+• Lịch tập 4 tuần với ba cấp độ — mới tập, trung bình, nâng cao — kết hợp các bài cho toàn thân.
+• Đếm ngược trước mỗi set, đồng hồ nghỉ giữa các set, âm thanh, rung và giọng nói.
 
-CHƯƠNG TRÌNH 6 TUẦN
-• Làm bài kiểm tra một set tối đa để nhận chương trình đúng sức: 18 buổi, mỗi buổi 5 set, 3 ngày một tuần.
-• Mục tiêu tăng dần qua từng buổi. Set tự kết thúc khi đủ số, set cuối luôn là "cố hết sức".
-• Tập lại bất kỳ ngày nào, kiểm tra lại để lên vòng khó hơn.
+THÁCH ĐẤU BẠN BÈ
+• Lập điểm — nhiều cái nhất trong 30, 60 hoặc 120 giây, hoặc giữ tư thế lâu nhất — rồi gửi link cho bạn bè.
+• Họ nhận thách đấu trên app của mình; bạn biết ai thắng và có thể phục thù. Thách đấu chỉ tính khi đếm bằng camera, để ai cũng cùng một luật.
+• Không tài khoản, không máy chủ: thách đấu nằm ngay trong link.
 
 GIỮ ĐỘNG LỰC
-• Mục tiêu mỗi ngày với thanh tiến độ.
-• Chuỗi ngày tập liên tiếp.
-• Biểu đồ tuần và kỷ lục cá nhân, xem chung hoặc theo từng bài, cùng 21 thành tích.
+• Mục tiêu mỗi ngày, chuỗi ngày tập liên tiếp, biểu đồ tuần, kỷ lục cá nhân và thành tích.
 • Chia sẻ kết quả sau mỗi buổi tập.
 
 ĐỔI HÍT ĐẤT LẤY GIỜ GIẢI TRÍ
-• Chọn những ứng dụng và trang web hay ngốn thời gian (mạng xã hội, video, game), Hít Đất AI sẽ khoá chúng, cả trong trình duyệt.
-• Mỗi cái hít đất đổi được 1 phút sử dụng, tuỳ chỉnh được. Squat và gập bụng được một nửa, bật nhảy một phần tư. Đồng hồ nhỏ đếm ngược khi bạn lướt.
-• Hết giờ? Ứng dụng bị che lại cho tới khi bạn hít đất tiếp. Tắt bất cứ lúc nào.
+• Chọn ứng dụng và trang web hay ngốn thời gian, Hít Đất AI sẽ khoá chúng cho tới khi bạn tập để đổi lấy thời gian dùng. Tỉ lệ đổi tuỳ bạn chọn.
 
-RIÊNG TƯ TỪ THIẾT KẾ
-• Không tài khoản. Không quảng cáo. Không theo dõi.
+DỮ LIỆU CỦA BẠN, TRÊN MÁY BẠN
+• Không tài khoản. Không quảng cáo. Không phân tích. Không theo dõi.
 • Khung hình camera xử lý ngay trên máy, không bao giờ tải lên.
-• Tính năng chặn ứng dụng chỉ kiểm tra ứng dụng nào đang mở, ngay trên máy.
-• Toàn bộ lịch sử nằm trên máy bạn — xoá bất cứ lúc nào.
+• Sao lưu lịch sử ra tệp bạn tự giữ (Drive, Zalo, email…) và khôi phục trên máy mới, có xem trước.
+• Đếm sai hay app bị lỗi? Gửi báo cáo qua bảng chia sẻ — bạn đọc trước, không có gì tự động gửi đi.
 
 Có tiếng Việt và tiếng Anh.
 ```
@@ -142,22 +130,35 @@ Có tiếng Việt và tiếng Anh.
 | Ads | No, the app contains no ads |
 | App access | All functionality available without special access |
 | Target audience | 18 and over (simplest; no children's-policy obligations) |
-| Content rating (IARC) | Answer "No" to everything → Everyone |
+| Content rating (IARC) | Answer "No" to everything → Everyone. User-to-user content: challenge links carry a display name the sender types, but they are shared outside the app (any messaging app); there is no in-app chat, feed or profile |
 | News app | No |
 | COVID-19 contact tracing / status | No |
 | Government app | No |
 | Financial features | None |
 | Health | "My app is a fitness/wellness app": no medical claims, no Health Connect |
 
-## Data safety form
+## Data safety
 
-Play asks whether the app **collects** or **shares** user data, where "collect" means data that leaves the device.
+Play asks whether the app **collects** or **shares** user data, where "collect" means data that leaves the device to the developer or a third party. Data the user sends themselves, to a destination they choose, through the system share sheet is **not** collection: Play's definition excludes "user-initiated" transfers the user can see, such as sharing a file or a message.
+
+### Form answers
 
 | Question | Answer | Why |
 | --- | --- | --- |
-| Does your app collect or share any of the required user data types? | **No** | Workouts, settings and program progress are stored only on the device. Nothing is transmitted. |
-| Is all user data encrypted in transit? | n/a (nothing collected) | The only network traffic is downloading static files for the pose detector. |
-| Do you provide a way for users to request deletion? | n/a | "Delete all data" in Settings wipes local storage. |
+| Does your app collect or share any of the required user data types? | **No** | Workouts, schedule, settings, challenges, miscount notes and the error log are stored only on the device. The app has no backend, no analytics SDK and no crash-reporting SDK. |
+| Is all user data encrypted in transit? | n/a (nothing collected) | The only network traffic the app makes itself is downloading static files: the pose detector page (GitHub Pages), the MediaPipe library (jsDelivr) and the model (Google Cloud Storage). |
+| Do you provide a way for users to request deletion? | n/a | "Delete all data" in Settings wipes local storage, including challenges, miscount notes and the error log. |
+
+### What stays on the device, and what the user may share
+
+| Data | Stored | Leaves the device only when |
+| --- | --- | --- |
+| Workout history, schedule progress, settings | AsyncStorage | The user exports a backup file and shares it (share sheet / file picker). Never uploaded by the app. |
+| Challenges sent and received (exercise, scores, display names) | AsyncStorage | The user taps *Challenge friends* / *Rematch*; the link holds the exercise, format, score, date, a random id and the optional display name. The payload is in the URL fragment, so GitHub Pages never receives it. |
+| "Miscounted?" notes | AsyncStorage | The user taps *Send report*: plain text in the share sheet. |
+| Local error log (last 20 JS errors: message + stack, no personal data) | AsyncStorage | Included in a feedback / miscount / crash report the user reads and shares. No automatic crash reporting. |
+| Device details in reports (model, Android version, app version, language) | Not stored | Only inside a report the user shares. No device identifiers (no Android ID, no advertising ID). |
+| Camera frames | Never stored | Never. Processed on device in real time. |
 
 Camera: the camera is used only on device for live pose estimation; frames are never stored or transmitted. Declare no "Photos and videos" collection.
 
@@ -174,7 +175,11 @@ The manifest requests only:
 - `VIBRATE`, `INTERNET`, `MODIFY_AUDIO_SETTINGS` — normal permissions, no prompt
 - `HIGH_SAMPLING_RATE_SENSORS` — motion mode reads the phone's orientation fast enough to count a brisk jumping jack; normal permission, no prompt, no data leaves the device
 
+Backups need no storage permission: export goes through the share sheet (expo-sharing, a `content://` URI from the app's cache) and import through the system document picker (expo-document-picker). `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE` stay blocked in `app.json`.
+
 `RECORD_AUDIO`, `ACTIVITY_RECOGNITION` and the media-playback foreground-service permission that the Expo modules add by default are blocked in `app.json`.
+
+Challenge links open the app through its `hitdat://` scheme (an intent filter for that scheme only; no App Links / `autoVerify`, no web domain claimed).
 
 The app blocker (`modules/app-blocker`) works either way the user chooses: usage access plus "display over other apps", run by a **special-use foreground service**, or an **accessibility service**. Many Vietnamese banking apps refuse to open while any accessibility service is on, which is why the first way exists. Each needs its own declaration, below. It finds installed apps and browsers through targeted `<queries>` intents, so `QUERY_ALL_PACKAGES` is not requested.
 

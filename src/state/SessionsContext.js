@@ -33,14 +33,19 @@ export function SessionsProvider({ children }) {
   const [schedule, setSchedule] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const readStored = useCallback(async () => {
+    const [loadedSessions, loadedProgram, loadedSchedule] = await Promise.all([
+      loadSessions(),
+      loadProgram(),
+      loadSchedule(),
+    ]);
+    return { loadedSessions, loadedProgram, loadedSchedule };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [loadedSessions, loadedProgram, loadedSchedule] = await Promise.all([
-        loadSessions(),
-        loadProgram(),
-        loadSchedule(),
-      ]);
+      const { loadedSessions, loadedProgram, loadedSchedule } = await readStored();
       if (cancelled) return;
       setSessions(loadedSessions);
       setProgram(loadedProgram);
@@ -50,7 +55,16 @@ export function SessionsProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [readStored]);
+
+  /** Read everything again, after a backup was restored underneath us. */
+  const reload = useCallback(async () => {
+    const { loadedSessions, loadedProgram, loadedSchedule } = await readStored();
+    scheduleRef.current = loadedSchedule;
+    setSessions(loadedSessions);
+    setProgram(loadedProgram);
+    setSchedule(loadedSchedule);
+  }, [readStored]);
 
   const addSession = useCallback(async (payload) => {
     const { session, sessions: next } = await saveSession(payload);
@@ -129,6 +143,7 @@ export function SessionsProvider({ children }) {
       completeScheduleDay,
       resetSchedule,
       eraseEverything,
+      reload,
     }),
     [
       sessions,
@@ -143,6 +158,7 @@ export function SessionsProvider({ children }) {
       completeScheduleDay,
       resetSchedule,
       eraseEverything,
+      reload,
     ],
   );
   return <SessionsContext.Provider value={value}>{children}</SessionsContext.Provider>;

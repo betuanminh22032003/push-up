@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { newlyUnlocked, unlockedAchievements } from '../achievements/achievements';
 import { creditFor, formatAmount, hasWayToBlock, isSetUp } from '../blocker/blockerLogic';
 import { Button } from '../components/Button';
+import { CameraSetupGuide } from '../components/CameraSetupGuide';
 import { ExerciseLibraryButton } from '../components/ExerciseLibrary';
+import { MiscountModal } from '../components/MiscountModal';
 import { StatTile } from '../components/StatTile';
+import { VisibilityPill } from '../components/VisibilityPill';
 import {
   DEFAULT_EXERCISE_ID,
   EXERCISE_IDS,
@@ -124,6 +127,7 @@ function freshLive() {
  * @param {Function} onStatusChange  so the shell can hide the tabs mid-set
  * @param {Function} onCelebrate     toasts for the goal and new achievements
  * @param {Function} onOpenBlocker   the fun-time chip leads to the blocker tab
+ * @param {Function} onOpenChallenge (exerciseId) opens a new timed challenge
  * @param {object}   controlsRef     lets the shell pause on the back button
  */
 export function WorkoutScreen({
@@ -132,6 +136,7 @@ export function WorkoutScreen({
   onStatusChange,
   onCelebrate,
   onOpenBlocker,
+  onOpenChallenge,
   controlsRef,
 }) {
   const { t, speechTag } = useI18n();
@@ -160,6 +165,13 @@ export function WorkoutScreen({
   const [coach, setCoach] = useState(null);
   // A countdown that leads back into a paused set rather than into a new one.
   const [resuming, setResuming] = useState(false);
+  // The camera's visibility gate: which body parts it is still waiting for.
+  const [visibility, setVisibility] = useState(null);
+  // The camera setup card: 'start' before a set (Start opens the camera),
+  // 'info' when asked for from the idle screen.
+  const [guide, setGuide] = useState(null);
+  // The last camera session, while its "Miscounted?" form is open.
+  const [miscount, setMiscount] = useState(null);
 
   const [source, setSource] = useState(null);
   const [sourceConfig, setSourceConfig] = useState(null);
@@ -443,6 +455,9 @@ export function WorkoutScreen({
       sets: sets.length,
       durationSeconds,
       earnedSeconds,
+      // For "Miscounted?", which only a single camera-counted exercise offers.
+      sourceId: groups.length === 1 ? groups[0].sets[0].sourceId : null,
+      at: saved[0]?.timestamp ?? Date.now(),
     });
     const time = formatDuration(durationSeconds);
     const savedText =
@@ -584,8 +599,13 @@ export function WorkoutScreen({
   });
 
   // --- controls ------------------------------------------------------------
-  const start = useCallback(async () => {
+  const start = useCallback(async ({ skipGuide = false } = {}) => {
     if (!source) return;
+    // The first camera set of each exercise shows where to put the phone.
+    if (source.isPoseDriven && !skipGuide && !settings.setupSeen?.[exercise.id]) {
+      setGuide('start');
+      return;
+    }
     controlFeedback();
     setNotice(null);
     setSummary(null);
@@ -607,7 +627,19 @@ export function WorkoutScreen({
     }
 
     beginSet();
-  }, [source, controlFeedback, t, beginSet]);
+  }, [source, controlFeedback, t, beginSet, settings.setupSeen, exercise.id]);
+
+  const closeGuide = useCallback(
+    (andStart) => {
+      const wasStart = guide === 'start';
+      setGuide(null);
+      if (!settings.setupSeen?.[exercise.id]) {
+        updateSettings({ setupSeen: { ...settings.setupSeen, [exercise.id]: true } });
+      }
+      if (andStart && wasStart) start({ skipGuide: true });
+    },
+    [guide, settings.setupSeen, exercise.id, updateSettings, start],
+  );
 
   // Also what Cancel does on the countdown back into a paused set: the set
   // stays paused, its reps intact.
@@ -716,6 +748,12 @@ export function WorkoutScreen({
       },
     };
   }, [controlsRef, status, resuming, pause]);
+
+  // A camera that is off has no view; the next one starts waiting afresh.
+  const cameraOn = !!source?.isPoseDriven && status !== 'idle' && status !== 'calibrating';
+  useEffect(() => {
+    if (!cameraOn) setVisibility(null);
+  }, [cameraOn]);
 
   // --- render --------------------------------------------------------------
   // Only sources this device has that can count this exercise, best first.
@@ -876,8 +914,10 @@ export function WorkoutScreen({
             paused={status !== 'active'}
             onRep={() => handleRepRef.current?.()}
             onFrame={handlePoseFrame}
+            onVisibility={setVisibility}
           />
         ) : null}
+        {poseActive ? <VisibilityPill visibility={visibility} /> : null}
 
         <View
           style={[styles.stageContent, fitScale < 1 && { transform: [{ scale: fitScale }] }]}
@@ -920,6 +960,32 @@ export function WorkoutScreen({
               >
                 <Text style={styles.shareText}>{t('btn.share')}</Text>
               </Pressable>
+              {summary.sourceId === 'ai' && summary.exercises === 1 ? (
+                <View style={styles.summaryLinks}>
+                  <Pressable
+                    onPress={() =>
+                      setMiscount({
+                        exerciseId: summary.exerciseId,
+                        sourceId: summary.sourceId,
+                        totalReps: summary.totalReps,
+                        durationSeconds: summary.durationSeconds,
+                        timestamp: summary.at,
+                      })
+                    }
+                    hitSlop={8}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.summaryLink}>{t('miscount.link')}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => onOpenChallenge?.(summary.exerciseId)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.summaryLink}>{t('challenge.fromSummary')}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
           ) : (
             <>
@@ -1058,7 +1124,7 @@ export function WorkoutScreen({
                 ? t('btn.startProgramDay', { week: activePlan.week, day: activePlan.day })
                 : t('btn.start')
             }
-            onPress={start}
+            onPress={() => start()}
             style={styles.grow}
           />
         ) : null}
@@ -1114,7 +1180,20 @@ export function WorkoutScreen({
       </View>
 
       <View style={styles.footer}>
-        {status === 'paused' ? (
+        {status === 'idle' ? (
+          <View style={styles.footerLinks}>
+            {source.isPoseDriven ? (
+              <Pressable onPress={() => setGuide('info')} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.footerLink}>{t('setup.link')}</Text>
+              </Pressable>
+            ) : null}
+            {planSets ? null : (
+              <Pressable onPress={() => onOpenChallenge?.(exercise.id)} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.footerLink}>{t('challenge.entry')}</Text>
+              </Pressable>
+            )}
+          </View>
+        ) : status === 'paused' ? (
           <Pressable onPress={confirmDiscard} hitSlop={8} accessibilityRole="button">
             <Text style={styles.discard}>{t('btn.discard')}</Text>
           </Pressable>
@@ -1155,6 +1234,18 @@ export function WorkoutScreen({
           </Pressable>
         </View>
       ) : null}
+
+      <Modal visible={!!guide} transparent animationType="fade" onRequestClose={() => closeGuide(false)}>
+        <ScrollView style={styles.guideBackdrop} contentContainerStyle={styles.guideContent}>
+          <CameraSetupGuide
+            exerciseId={exercise.id}
+            onStart={() => closeGuide(true)}
+            startLabel={guide === 'start' ? t('setup.start') : t('setup.ok')}
+            onCancel={guide === 'start' ? () => closeGuide(false) : undefined}
+          />
+        </ScrollView>
+      </Modal>
+      <MiscountModal session={miscount} onClose={() => setMiscount(null)} />
     </View>
   );
 }
@@ -1281,6 +1372,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   shareText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  summaryLinks: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.md },
+  summaryLink: { fontSize: 13, color: colors.textDim, textDecorationLine: 'underline' },
+  footerLinks: { flexDirection: 'row', gap: spacing.lg },
+  footerLink: { fontSize: 13, color: colors.textDim },
+  guideBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)' },
+  guideContent: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
 
   notice: {
     ...type.body,

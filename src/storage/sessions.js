@@ -4,6 +4,38 @@ const SESSIONS_KEY = 'pupg:sessions:v1';
 const SETTINGS_KEY = 'pupg:settings:v1';
 const PROGRAM_KEY = 'pupg:program:v1';
 const SCHEDULE_KEY = 'pupg:schedule:v1';
+const CHALLENGES_KEY = 'pupg:challenges:v1';
+const MISCOUNTS_KEY = 'pupg:miscounts:v1';
+const ERRORS_KEY = 'pupg:errors:v1';
+
+/**
+ * Every AsyncStorage key the app owns. Other modules read and write the newer
+ * ones (src/storage/records.js, src/diagnostics/errorLog.js) but take the
+ * names from here, so "delete all data" and the backup can never miss one.
+ */
+export const STORAGE_KEYS = {
+  sessions: SESSIONS_KEY,
+  settings: SETTINGS_KEY,
+  program: PROGRAM_KEY,
+  schedule: SCHEDULE_KEY,
+  challenges: CHALLENGES_KEY,
+  miscounts: MISCOUNTS_KEY,
+  errors: ERRORS_KEY,
+};
+
+/**
+ * What a backup file carries: everything but the local error log, which
+ * describes this phone and means nothing on another one. The app blocker's
+ * state lives natively (modules/app-blocker) and is not in AsyncStorage.
+ */
+export const BACKUP_KEYS = [
+  SESSIONS_KEY,
+  SETTINGS_KEY,
+  PROGRAM_KEY,
+  SCHEDULE_KEY,
+  CHALLENGES_KEY,
+  MISCOUNTS_KEY,
+];
 
 /**
  * The exercise a session without `exerciseId` was. Spelled out rather than
@@ -16,7 +48,7 @@ const LEGACY_EXERCISE_ID = 'pushup';
 
 /** Sessions are stored newest-first, so reads and prepends are both O(1)-ish. */
 
-function isValidSession(value) {
+export function isValidSession(value) {
   return (
     value &&
     typeof value === 'object' &&
@@ -149,6 +181,12 @@ export const DEFAULT_SETTINGS = {
   // all. A push-up with no entry falls back to `sourceId` above, which is
   // where every version before this one kept it.
   sourceIds: {},
+  // The name a challenge link shows a friend. null: never asked; '' asked and
+  // left blank. It only leaves the phone inside a link the user shares.
+  challengeName: null,
+  // Exercises whose camera setup card has been seen ({ [exerciseId]: true }):
+  // it opens by itself the first time, and on request after that.
+  setupSeen: {},
 };
 
 const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -172,7 +210,14 @@ function mergeSettings(stored) {
   if (typeof merged.exerciseId !== 'string' || !merged.exerciseId) {
     merged.exerciseId = DEFAULT_SETTINGS.exerciseId;
   }
-  return { ...merged, sourceIds };
+  if (typeof merged.challengeName !== 'string') merged.challengeName = null;
+  const setupSeen = {};
+  if (isPlainObject(merged.setupSeen)) {
+    for (const [exerciseId, seen] of Object.entries(merged.setupSeen)) {
+      if (seen === true) setupSeen[exerciseId] = true;
+    }
+  }
+  return { ...merged, sourceIds, setupSeen };
 }
 
 export async function loadSettings() {
@@ -269,5 +314,5 @@ export async function saveSchedule(schedule) {
 
 /** Everything the app stores, for "delete all data". */
 export async function clearAllData() {
-  await AsyncStorage.multiRemove([SESSIONS_KEY, SETTINGS_KEY, PROGRAM_KEY, SCHEDULE_KEY]);
+  await AsyncStorage.multiRemove(Object.values(STORAGE_KEYS));
 }

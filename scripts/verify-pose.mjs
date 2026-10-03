@@ -28,6 +28,7 @@ const POSE_MODULES = [
   'lowerBodyAnalyzers',
   'coreAnalyzers',
   'holdAnalyzers',
+  'visibility',
   'analyzers',
 ];
 const unwrap = (source) =>

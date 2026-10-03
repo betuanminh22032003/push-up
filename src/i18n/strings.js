@@ -8,6 +8,7 @@
  */
 
 import { EXERCISE_STRINGS } from './exerciseStrings';
+import { FEATURE_STRINGS } from './featureStrings';
 
 export const LANGUAGES = ['en', 'vi'];
 
@@ -1100,8 +1101,8 @@ const vi = {
 };
 
 export const STRINGS = {
-  en: { ...en, ...EXERCISE_STRINGS.en },
-  vi: { ...vi, ...EXERCISE_STRINGS.vi },
+  en: { ...en, ...EXERCISE_STRINGS.en, ...FEATURE_STRINGS.en },
+  vi: { ...vi, ...EXERCISE_STRINGS.vi, ...FEATURE_STRINGS.vi },
 };
 
 /**

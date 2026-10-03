@@ -31,8 +31,27 @@ import { colors, radius, spacing, type } from '../theme/theme';
  * explanation, rather than silently counting push-ups during a set of squats.
  * A ready message with no exercise at all comes from that older page, which
  * counts push-ups correctly, so for push-ups it is accepted.
+ *
+ * Pages from protocol 3 on run the visibility gate (./visibility): no reps
+ * until the joints the exercise needs have been in view for a second, and
+ * `visibility` messages saying which body part is missing, passed on through
+ * `onVisibility`. An older page has no gate; it is reported as open the
+ * moment it is ready, so counting works as it always did.
+ *
+ * `resetKey`: changing it restarts the analyser's count (a challenge starts
+ * from zero when its clock does). `regateKey`: changing it closes the gate
+ * again, so the whole body has to be seen once more.
  */
-export function PoseStage({ active, paused, onRep, onFrame, exercise = 'pushup' }) {
+export function PoseStage({
+  active,
+  paused,
+  onRep,
+  onFrame,
+  onVisibility,
+  resetKey,
+  regateKey,
+  exercise = 'pushup',
+}) {
   const t = useT();
   const webviewRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -43,10 +62,12 @@ export function PoseStage({ active, paused, onRep, onFrame, exercise = 'pushup' 
 
   const onRepRef = useRef(onRep);
   const onFrameRef = useRef(onFrame);
+  const onVisibilityRef = useRef(onVisibility);
   useEffect(() => {
     onRepRef.current = onRep;
     onFrameRef.current = onFrame;
-  }, [onRep, onFrame]);
+    onVisibilityRef.current = onVisibility;
+  }, [onRep, onFrame, onVisibility]);
 
   // Reps and frames are passed on only once the page has said it counts the
   // exercise asked for. A ref, so the message handler never goes stale.
@@ -76,6 +97,20 @@ export function PoseStage({ active, paused, onRep, onFrame, exercise = 'pushup' 
     webviewRef.current?.postMessage(JSON.stringify({ type: paused ? 'pause' : 'resume' }));
   }, [paused, ready]);
 
+  // Commands keyed on a value: nothing is sent on the first render with it.
+  const sentKeys = useRef({ resetKey, regateKey });
+  useEffect(() => {
+    if (!ready) return;
+    const sent = sentKeys.current;
+    if (resetKey !== sent.resetKey) {
+      webviewRef.current?.postMessage(JSON.stringify({ type: 'reset' }));
+    }
+    if (regateKey !== sent.regateKey) {
+      webviewRef.current?.postMessage(JSON.stringify({ type: 'regate' }));
+    }
+    sentKeys.current = { resetKey, regateKey };
+  }, [resetKey, regateKey, ready]);
+
   const handleMessage = useCallback((event) => {
     let message;
     try {
@@ -88,6 +123,14 @@ export function PoseStage({ active, paused, onRep, onFrame, exercise = 'pushup' 
       if (countingRef.current) onRepRef.current?.(message);
     } else if (message.type === 'frame') {
       if (countingRef.current) onFrameRef.current?.(message);
+    } else if (message.type === 'visibility') {
+      if (countingRef.current) {
+        onVisibilityRef.current?.({
+          ready: !!message.ready,
+          missing: Array.isArray(message.missing) ? message.missing : [],
+          progress: Number(message.progress) || 0,
+        });
+      }
     } else if (message.type === 'status') {
       if (message.phase === 'camera') {
         // Camera is live but the model is still downloading. Stop covering the
@@ -107,6 +150,9 @@ export function PoseStage({ active, paused, onRep, onFrame, exercise = 'pushup' 
         setReady(true);
         setFailure(null);
         setOutdated(false);
+        // A page from before the gate counts at once; say so, or the screen
+        // would wait for a visibility message that never comes.
+        if (!message.gate) onVisibilityRef.current?.({ ready: true, missing: [], progress: 1, legacy: true });
       } else if (message.phase === 'error') {
         setFailure(message.message || 'Pose detection failed.');
       }
