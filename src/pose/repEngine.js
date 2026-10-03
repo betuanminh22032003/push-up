@@ -42,6 +42,9 @@
  *   notHorizontal  push-up: not in a push-up position
  *   notUpright     squat, jumping jack: not standing
  *   notLying       sit-up: did not start from lying on the back
+ *   notInPosition  not in the exercise's own starting position (all fours,
+ *                  seated, elbows bent, a plank...); each exercise words it
+ *   bentKnees      good morning: the knees bent, so it became a squat
  */
 export const ISSUES = {
   LOST_TRACKING: 'lostTracking',
@@ -50,6 +53,8 @@ export const ISSUES = {
   NOT_HORIZONTAL: 'notHorizontal',
   NOT_UPRIGHT: 'notUpright',
   NOT_LYING: 'notLying',
+  NOT_IN_POSITION: 'notInPosition',
+  BENT_KNEES: 'bentKnees',
 };
 
 /**

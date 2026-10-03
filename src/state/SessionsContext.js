@@ -1,22 +1,28 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { unlockedAchievements } from '../achievements/achievements';
-import { levelForTest } from '../program/program';
+import { isHoldSession } from '../exercises/exercises';
+import { normalizeLevel, programDayKey } from '../program/program';
 import {
   clearAllData,
   deleteSession,
   loadProgram,
+  loadSchedule,
   loadSessions,
-  saveProgram,
+  saveSchedule,
   saveSession,
 } from '../storage/sessions';
 import { computeStats } from '../utils/stats';
 
 const SessionsContext = createContext(null);
 
+/** Stats count reps; a hold's seconds are kept out of them (src/utils/stats.js). */
+const STATS_OPTIONS = { isHold: isHoldSession };
+
 /**
- * Owns the persisted workout history and program progress, plus everything
- * derived from them (stats, achievements).
+ * Owns the persisted workout history and training-schedule progress, plus
+ * everything derived from them (stats, achievements). The old push-up
+ * program's progress (`program`) is only read, for the badges it earned.
  *
  * Each mutation resolves to the list AsyncStorage actually holds and sets
  * state from that, so the UI can never drift from disk.
@@ -24,15 +30,21 @@ const SessionsContext = createContext(null);
 export function SessionsProvider({ children }) {
   const [sessions, setSessions] = useState([]);
   const [program, setProgram] = useState(null);
+  const [schedule, setSchedule] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [loadedSessions, loadedProgram] = await Promise.all([loadSessions(), loadProgram()]);
+      const [loadedSessions, loadedProgram, loadedSchedule] = await Promise.all([
+        loadSessions(),
+        loadProgram(),
+        loadSchedule(),
+      ]);
       if (cancelled) return;
       setSessions(loadedSessions);
       setProgram(loadedProgram);
+      setSchedule(loadedSchedule);
       setIsLoaded(true);
     })();
     return () => {
@@ -50,53 +62,57 @@ export function SessionsProvider({ children }) {
     setSessions(await deleteSession(id));
   }, []);
 
-  /** Start (or restart) the program from a max-test result. */
-  const startProgram = useCallback(async (testReps) => {
+  // Mirrors `schedule` so a write can be computed synchronously: a functional
+  // setState updater runs lazily at the next render, too late to persist from.
+  const scheduleRef = useRef(schedule);
+  useEffect(() => {
+    scheduleRef.current = schedule;
+  }, [schedule]);
+
+  /** Start (or restart, or change the level of) the training schedule. */
+  const startSchedule = useCallback(async (level, { keepProgress = false } = {}) => {
+    const prev = scheduleRef.current;
     const next = {
-      level: levelForTest(testReps),
-      testReps,
-      startedAt: Date.now(),
-      completedDays: {},
+      level: normalizeLevel(level),
+      startedAt: keepProgress && prev ? prev.startedAt : Date.now(),
+      completed: keepProgress && prev ? prev.completed : {},
     };
-    setProgram(next);
-    await saveProgram(next);
+    scheduleRef.current = next;
+    setSchedule(next);
+    await saveSchedule(next);
     return next;
   }, []);
 
-  // Mirrors `program` so a write can be computed synchronously: a functional
-  // setState updater runs lazily at the next render, too late to persist from.
-  const programRef = useRef(program);
-  useEffect(() => {
-    programRef.current = program;
-  }, [program]);
-
-  const completeProgramDay = useCallback(async (day) => {
-    const prev = programRef.current;
+  const completeScheduleDay = useCallback(async (week, day) => {
+    const prev = scheduleRef.current;
     if (!prev) return;
-    const next = { ...prev, completedDays: { ...prev.completedDays, [day]: Date.now() } };
-    programRef.current = next;
-    setProgram(next);
-    await saveProgram(next);
+    const next = { ...prev, completed: { ...prev.completed, [programDayKey(week, day)]: Date.now() } };
+    scheduleRef.current = next;
+    setSchedule(next);
+    await saveSchedule(next);
   }, []);
 
-  const resetProgram = useCallback(async () => {
-    setProgram(null);
-    await saveProgram(null);
+  const resetSchedule = useCallback(async () => {
+    scheduleRef.current = null;
+    setSchedule(null);
+    await saveSchedule(null);
   }, []);
 
   const eraseEverything = useCallback(async () => {
     await clearAllData();
     setSessions([]);
     setProgram(null);
+    setSchedule(null);
   }, []);
 
   // `sessions` is replaced wholesale on every write, so identity is a sound
   // cache key — stats only recompute when the data really changed.
-  const stats = useMemo(() => computeStats(sessions), [sessions]);
+  const stats = useMemo(() => computeStats(sessions, Date.now(), STATS_OPTIONS), [sessions]);
   const completedDays = program?.completedDays;
+  const scheduleCompleted = schedule?.completed;
   const achievements = useMemo(
-    () => unlockedAchievements(sessions, completedDays || {}),
-    [sessions, completedDays],
+    () => unlockedAchievements(sessions, completedDays || {}, scheduleCompleted || {}),
+    [sessions, completedDays, scheduleCompleted],
   );
 
   const value = useMemo(
@@ -105,12 +121,13 @@ export function SessionsProvider({ children }) {
       stats,
       achievements,
       program,
+      schedule,
       isLoaded,
       addSession,
       removeSession,
-      startProgram,
-      completeProgramDay,
-      resetProgram,
+      startSchedule,
+      completeScheduleDay,
+      resetSchedule,
       eraseEverything,
     }),
     [
@@ -118,12 +135,13 @@ export function SessionsProvider({ children }) {
       stats,
       achievements,
       program,
+      schedule,
       isLoaded,
       addSession,
       removeSession,
-      startProgram,
-      completeProgramDay,
-      resetProgram,
+      startSchedule,
+      completeScheduleDay,
+      resetSchedule,
       eraseEverything,
     ],
   );

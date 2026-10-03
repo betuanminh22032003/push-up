@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const SESSIONS_KEY = 'pupg:sessions:v1';
 const SETTINGS_KEY = 'pupg:settings:v1';
 const PROGRAM_KEY = 'pupg:program:v1';
+const SCHEDULE_KEY = 'pupg:schedule:v1';
 
 /**
  * The exercise a session without `exerciseId` was. Spelled out rather than
@@ -104,7 +105,10 @@ export async function saveSession({
     session.restSeconds = Math.round(restSeconds);
   }
   if (program && Number.isFinite(program.day)) {
-    session.program = { level: program.level, day: program.day };
+    // Schedule days carry their week; the old push-up program's never did.
+    session.program = Number.isFinite(program.week)
+      ? { level: program.level, week: program.week, day: program.day }
+      : { level: program.level, day: program.day };
   }
   const existing = await loadSessions();
   const next = [session, ...existing];
@@ -189,6 +193,10 @@ export async function saveSettings(settings) {
 }
 
 /**
+ * Progress in the old 6-week push-up program, which the training schedule
+ * replaced. Still read, so the badges it earned are kept; nothing writes it
+ * any more except to clear it.
+ *
  * Program progress: the level the test assigned and which days are done.
  * `null` means no program has been started.
  *   { level, testReps, startedAt, completedDays: { [day]: timestamp } }
@@ -224,7 +232,42 @@ export async function saveProgram(program) {
   return program;
 }
 
+/**
+ * Training schedule progress (src/program/program.js): the level picked and
+ * which days are done. `null` means no schedule has been started.
+ *   { level, startedAt, completed: { [programDayKey]: timestamp } }
+ */
+export async function loadSchedule() {
+  try {
+    const raw = await AsyncStorage.getItem(SCHEDULE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!isPlainObject(parsed) || typeof parsed.level !== 'string') return null;
+    const completed = {};
+    for (const [key, at] of Object.entries(isPlainObject(parsed.completed) ? parsed.completed : {})) {
+      if (/^\d+-\d+$/.test(key) && Number.isFinite(at)) completed[key] = at;
+    }
+    return {
+      level: parsed.level,
+      startedAt: Number.isFinite(parsed.startedAt) ? parsed.startedAt : Date.now(),
+      completed,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSchedule(schedule) {
+  try {
+    if (!schedule) await AsyncStorage.removeItem(SCHEDULE_KEY);
+    else await AsyncStorage.setItem(SCHEDULE_KEY, JSON.stringify(schedule));
+  } catch {
+    /* non-fatal: progress is re-derived from the in-memory copy next write */
+  }
+  return schedule;
+}
+
 /** Everything the app stores, for "delete all data". */
 export async function clearAllData() {
-  await AsyncStorage.multiRemove([SESSIONS_KEY, SETTINGS_KEY, PROGRAM_KEY]);
+  await AsyncStorage.multiRemove([SESSIONS_KEY, SETTINGS_KEY, PROGRAM_KEY, SCHEDULE_KEY]);
 }

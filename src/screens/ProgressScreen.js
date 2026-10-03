@@ -8,7 +8,7 @@ import { ExercisePicker } from '../components/ExercisePicker';
 import { SessionRow } from '../components/SessionRow';
 import { StatTile } from '../components/StatTile';
 import { WeeklyChart } from '../components/WeeklyChart';
-import { EXERCISES, exerciseOf, filterByExercise } from '../exercises/exercises';
+import { EXERCISES, exerciseOf, filterByExercise, isHold, isHoldSession } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
@@ -24,6 +24,9 @@ import { formatDuration } from '../utils/time';
  * the chart, the records and the list to one of them. The daily goal counts
  * every exercise, so its bar and line only show under "All"; achievements
  * are global and never filtered.
+ *
+ * Under "All" the rep figures leave holds out (a plank's seconds are not
+ * reps); filtered to a hold, every figure is in seconds held.
  */
 export function ProgressScreen() {
   const t = useT();
@@ -43,10 +46,16 @@ export function ProgressScreen() {
   const all = shown === 'all';
 
   const filtered = useMemo(() => filterByExercise(sessions, shown), [sessions, shown]);
-  const shownStats = useMemo(() => (all ? stats : computeStats(filtered)), [all, stats, filtered]);
+  const seconds = !all && isHold(shown);
+  const options = useMemo(() => ({ isHold: isHoldSession, unit: seconds ? 'seconds' : 'reps' }), [seconds]);
+  const shownStats = useMemo(
+    () => (all ? stats : computeStats(filtered, Date.now(), options)),
+    [all, stats, filtered, options],
+  );
+  const unit = seconds ? t('common.secs') : undefined;
   const goal = all ? settings.dailyGoal : 0;
 
-  const week = useMemo(() => dailyTotals(filtered, 7), [filtered]);
+  const week = useMemo(() => dailyTotals(filtered, 7, Date.now(), options), [filtered, options]);
   const weekTotal = week.reduce((sum, d) => sum + d.reps, 0);
   const streakRecord = useMemo(() => longestStreak(filtered), [filtered]);
 
@@ -81,11 +90,12 @@ export function ProgressScreen() {
       ) : null}
 
       <View style={styles.statsRow}>
-        <StatTile label={t('stat.total')} value={shownStats.totalReps} />
+        <StatTile label={t('stat.total')} value={shownStats.totalReps} suffix={unit} />
         <View style={styles.gap} />
         <StatTile
           label={t('stat.today')}
           value={shownStats.todayReps}
+          suffix={unit}
           highlight
           progress={
             all
@@ -107,15 +117,15 @@ export function ProgressScreen() {
 
       <View style={styles.sectionRow}>
         <Text style={styles.sectionLabel}>{t('progress.lastDays')}</Text>
-        <Text style={styles.sectionMeta}>{t('progress.weekTotal', { reps: weekTotal })}</Text>
+        <Text style={styles.sectionMeta}>{t(seconds ? 'progress.weekTotalHold' : 'progress.weekTotal', { reps: weekTotal })}</Text>
       </View>
       <WeeklyChart days={week} goal={goal} />
 
       <Text style={styles.sectionLabel}>{t('progress.records')}</Text>
       <View style={styles.statsRow}>
-        <StatTile label={t('progress.bestSet')} value={shownStats.bestSet} />
+        <StatTile label={t('progress.bestSet')} value={shownStats.bestSet} suffix={unit} />
         <View style={styles.gap} />
-        <StatTile label={t('progress.bestDay')} value={shownStats.bestDay} />
+        <StatTile label={t('progress.bestDay')} value={shownStats.bestDay} suffix={unit} />
         <View style={styles.gap} />
         <StatTile
           label={t('progress.longestStreak')}

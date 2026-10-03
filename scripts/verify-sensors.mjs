@@ -846,7 +846,7 @@ function emitStream(samples, os, { repeats = 1 } = {}) {
 }
 
 await check('it is registered per the contract, between light and tap', () => {
-  assert.deepEqual(SOURCES.map((s) => s.id), ['ai', 'light', 'motion', 'tap']);
+  assert.deepEqual(SOURCES.map((s) => s.id), ['ai', 'light', 'motion', 'tap', 'timer']);
   assert.equal(motion.id, 'motion');
   assert.equal(motion.labelKey, 'source.motion');
   assert.equal(motion.hintKey, 'source.motion.hint');
@@ -854,6 +854,18 @@ await check('it is registered per the contract, between light and tap', () => {
   assert.equal(typeof motion.subscribe, 'function');
   assert.equal(motion.calibrateAsync, undefined, 'the baseline is taken at subscribe');
   assert.equal(getSourceById('nope').id, 'tap');
+});
+
+await check('the timer source is a stopwatch for holds: always there, no stream', async () => {
+  const timer = getSourceById('timer');
+  assert.equal(timer.isTimerDriven, true);
+  assert.equal(timer.isTapDriven, false);
+  assert.equal(await timer.isAvailableAsync(), true);
+  const off = timer.subscribe(() => assert.fail('a stopwatch emits no near/far'));
+  assert.equal(typeof off, 'function');
+  off();
+  // Rep exercises never fall back to it, nor holds to tapping.
+  for (const e of EXERCISES) assert.equal(e.sources.includes('timer'), e.kind === 'hold', e.id);
 });
 
 await check('every exercise source exists, and every motion exercise has usable angles', () => {

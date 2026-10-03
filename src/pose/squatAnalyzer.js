@@ -169,7 +169,7 @@ export function measureSquatFrame(pose, options = {}, standing = null) {
  * The largest value pushed over the last `windowMs`: a queue kept falling
  * from front to back, so each frame costs next to nothing.
  */
-function windowMax(windowMs) {
+export function windowMax(windowMs) {
   let queue = [];
   return {
     max(t) {
@@ -187,7 +187,15 @@ function windowMax(windowMs) {
   };
 }
 
-export function createSquatAnalyzer(options = {}) {
+/**
+ * @param {object} [options]   overrides for SQUAT_DEFAULTS
+ * @param {string} [exercise]  the id this analyser reports. Sumo squats,
+ *   lunges, side lunges and split squats all lower the hips the same way and
+ *   are counted by the hip's height under their own id: in a lunge the front
+ *   leg's hip-over-ankle height halves just as it does in a squat, and the back
+ *   leg's falls further.
+ */
+export function createSquatAnalyzer(options = {}, exercise = 'squat') {
   const opts = { ...SQUAT_DEFAULTS, ...options };
 
   const engine = createRepEngine(opts, [
@@ -221,5 +229,5 @@ export function createSquatAnalyzer(options = {}) {
     standing.right.reset();
   };
 
-  return poseAnalyzer('squat', engine, measure, 'knee', reset);
+  return poseAnalyzer(exercise, engine, measure, 'knee', reset);
 }

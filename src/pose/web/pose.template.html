@@ -384,7 +384,16 @@ const HUD_SPEC = {
       ['FEET', (r) => r.legSpread, null, (v) => (Number.isFinite(v) ? v.toFixed(1) + '×' : '—')],
     ],
   },
-}[PAGE_EXERCISE];
+}[PAGE_EXERCISE] || {
+  // Every other exercise: its signal, the torso's tilt, and for a hold the
+  // seconds held so far (a rep exercise has none, so it shows a dash).
+  signal: 'SIGNAL',
+  best: 'BEST',
+  cells: [
+    ['TILT', (r) => r.torsoTilt, null, fmtDeg],
+    ['HELD', (r) => r.held, null, (v) => (Number.isFinite(v) ? v.toFixed(1) + 's' : '—')],
+  ],
+};
 
 hudSignalK.textContent = HUD_SPEC.signal;
 HUD_SPEC.cells.forEach((cell, i) => { hudCellEls[i][0].textContent = cell[0]; });
@@ -496,6 +505,8 @@ const ISSUE_TEXT = Object.assign(
     shallow: 'Go lower',
     notUpright: 'Stand up straight',
     notLying: 'Lie on your back to start',
+    notInPosition: 'Get into the starting position',
+    bentKnees: 'Keep your legs straight',
   },
   {
     situp: { shallow: 'Come up higher' },
@@ -544,7 +555,12 @@ const SETUP_HELP = {
     calibrating: ['Learning your range',
       'Do one full jumping jack — arms all the way overhead, then back to your sides — and counting starts.'],
   },
-}[PAGE_EXERCISE];
+}[PAGE_EXERCISE] || {
+  outOfFrame: ['Body out of frame',
+    'Shoulders and hips have to be visible. Step back from the phone; the app says which side to face it.'],
+  calibrating: ['Learning your range',
+    'Do one full, slow rep and counting starts.'],
+};
 
 /**
  * What each exercise needs to see (`seen` tests one joint), and whether this
@@ -573,7 +589,12 @@ const SETUP_CHECKS = {
       seen(side + 'Hip') && seen(side + 'Shoulder') && seen(side + 'Elbow')),
     misplaced: (r) => Number.isFinite(r.torsoTilt) && r.torsoTilt < PAGE_OPTS.minUprightTilt,
   },
-}[PAGE_EXERCISE];
+}[PAGE_EXERCISE] || {
+  // The other exercises' positions are their analysers' gates, reported as
+  // issues; the page only checks that a body is there to judge.
+  inFrame: (seen) => ['Shoulder', 'Hip'].every((joint) => seen('left' + joint) || seen('right' + joint)),
+  misplaced: () => false,
+};
 
 let coachState = null;
 let coachSince = 0;
@@ -655,7 +676,8 @@ function updateHud(result) {
   const restAt = result.thresholds ? result.thresholds.up : PAGE_OPTS.upAngle;
   hudDeepest.textContent = fmtDeg(deepestSignal);
   hudDeepestK.textContent =
-    HUD_SPEC.best + ' / ' + Math.round(needed) + '°' +
+    // A hold has no effort threshold, only a position to keep.
+    HUD_SPEC.best + ' / ' + (Number.isFinite(needed) ? Math.round(needed) + '°' : '—') +
     (result.thresholds && result.thresholds.adapted ? ' AUTO' : '');
   hudDeepest.className =
     'v' + (Number.isFinite(deepestSignal) ? (deepestSignal <= needed ? ' ok' : ' bad') : '');

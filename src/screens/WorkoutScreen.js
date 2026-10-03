@@ -6,15 +6,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { newlyUnlocked, unlockedAchievements } from '../achievements/achievements';
 import { creditFor, formatAmount, hasWayToBlock, isSetUp } from '../blocker/blockerLogic';
 import { Button } from '../components/Button';
-import { ExercisePicker } from '../components/ExercisePicker';
+import { ExerciseLibraryButton } from '../components/ExerciseLibrary';
 import { StatTile } from '../components/StatTile';
 import {
   DEFAULT_EXERCISE_ID,
-  EXERCISES,
   EXERCISE_IDS,
   getExercise,
+  isHold,
   supportsSource,
 } from '../exercises/exercises';
+import { programDayKey } from '../program/program';
 import { useCountdown } from '../hooks/useCountdown';
 import { useFeedback } from '../hooks/useFeedback';
 import { useRepDetector } from '../hooks/useRepDetector';
@@ -56,8 +57,39 @@ const COACH_KEYS = Object.fromEntries(
   ]),
 );
 
-/** The program and its max test are push-ups, whatever exercise is chosen. */
-const PROGRAM_EXERCISE = EXERCISES.find((e) => e.program) ?? getExercise(DEFAULT_EXERCISE_ID);
+/**
+ * Sources a schedule day may switch to between exercises. The light sensor
+ * calibrates when a workout starts and the motion source needs the phone put
+ * on the body, neither of which a mid-workout change of exercise allows.
+ */
+const PROGRAM_SOURCE_IDS = ['ai', 'tap', 'timer'];
+
+/** A hold says its count only every this many seconds; every second is too much. */
+const HOLD_SPEAK_EVERY = 10;
+
+/**
+ * Where set `index` sits in its exercise's run of sets: a schedule day is
+ * every set of one exercise, then every set of the next.
+ */
+function setOfExercise(sets, index) {
+  const id = sets[index].exerciseId;
+  let first = index;
+  while (first > 0 && sets[first - 1].exerciseId === id) first -= 1;
+  let last = index;
+  while (last < sets.length - 1 && sets[last + 1].exerciseId === id) last += 1;
+  return { n: index - first + 1, total: last - first + 1 };
+}
+
+/** Consecutive sets of one exercise, as one saved session each. */
+function groupByExercise(sets) {
+  const groups = [];
+  for (const set of sets) {
+    const last = groups[groups.length - 1];
+    if (last && last.exerciseId === set.exerciseId) last.sets.push(set);
+    else groups.push({ exerciseId: set.exerciseId, sets: [set] });
+  }
+  return groups;
+}
 
 const STATUS_COLOR = {
   idle: colors.textDim,
@@ -80,8 +112,14 @@ function freshLive() {
  * -> rest -> countdown -> ... -> saved. With a source that has to be put back
  * in place (motion), paused -> active also goes through a countdown.
  *
- * @param {object|null} plan   what to do: null (free), { kind: 'test' } or a
- *                             program day from src/program/program.js
+ * A hold (plank, wall sit...) runs the same way: its "reps" are seconds held,
+ * so a target of 30 ends the set at 30 seconds.
+ *
+ * @param {object|null} plan   what to do: null (free), or a schedule day,
+ *                             { kind: 'program', level, week, day, restSeconds,
+ *                             items, sets } where `sets` is planSets() from
+ *                             src/program/program.js: every set in order, each
+ *                             naming its exercise
  * @param {Function} onClearPlan     the plan was finished or dismissed
  * @param {Function} onStatusChange  so the shell can hide the tabs mid-set
  * @param {Function} onCelebrate     toasts for the goal and new achievements
@@ -108,9 +146,9 @@ export function WorkoutScreen({
     stats,
     achievements,
     program,
+    schedule,
     addSession,
-    startProgram,
-    completeProgramDay,
+    completeScheduleDay,
   } = useSessions();
 
   const [status, setStatus] = useState('idle');
@@ -160,10 +198,17 @@ export function WorkoutScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan]);
 
-  // What is being counted. A plan (program day or max test) is push-ups;
-  // otherwise the exercise picked on this screen. Both only change between
-  // workouts, so a running set keeps the exercise it started with.
-  const exercise = activePlan ? PROGRAM_EXERCISE : getExercise(settings.exerciseId);
+  const planSets = activePlan?.kind === 'program' ? activePlan.sets : null;
+  const setIndex = completedSets.length; // 0-based index of the set in progress
+  const planIndex = planSets ? Math.min(setIndex, planSets.length - 1) : 0;
+
+  // What is being counted. A schedule day names the exercise of every set;
+  // otherwise it is the one picked on this screen. Both only change between
+  // sets, so a running set keeps the exercise it started with.
+  const exercise = planSets
+    ? getExercise(planSets[planIndex].exerciseId)
+    : getExercise(settings.exerciseId);
+  const holdMode = exercise.kind === 'hold';
 
   // Everything the async handlers (camera messages, timers) read is mirrored
   // here so a closure can never save a stale count.
@@ -178,11 +223,9 @@ export function WorkoutScreen({
     speechTag,
   );
 
-  const planSets = activePlan?.kind === 'day' ? activePlan.sets : null;
-  const setIndex = completedSets.length; // 0-based index of the set in progress
-  const currentTarget = planSets ? planSets[Math.min(setIndex, planSets.length - 1)] : null;
+  const currentTarget = planSets ? planSets[planIndex] : null;
   const isLastSet = !!planSets && setIndex === planSets.length - 1;
-  const restSeconds = activePlan?.kind === 'day' ? activePlan.restSeconds : settings.restSeconds;
+  const restSeconds = planSets ? activePlan.restSeconds : settings.restSeconds;
   // A source that measures from where the phone is put (motion) always gets
   // time to put it there, even with the countdown switched off.
   const countdownSeconds = Math.max(settings.countdownSeconds || 0, source?.settleSeconds || 0);
@@ -213,14 +256,28 @@ export function WorkoutScreen({
    * device: the one last chosen for it, else (push-ups only) the choice saved
    * before each exercise had its own, else the exercise's best. A stored
    * choice only wins if that hardware is still present. Picked again when the
-   * exercise changes, which only happens between workouts.
+   * exercise changes, which only happens between workouts — or, on a schedule
+   * day, in the rest before the next exercise, where only sources that need
+   * no setting up are picked.
    */
   useEffect(() => {
-    if (!availableSourceIds || status !== 'idle') return;
-    const usable = exercise.sources.filter((id) => availableSourceIds.includes(id));
+    if (!availableSourceIds || (status !== 'idle' && status !== 'rest')) return;
+    const usable = exercise.sources.filter(
+      (id) => availableSourceIds.includes(id) && (!planSets || PROGRAM_SOURCE_IDS.includes(id)),
+    );
     const stored = settings.sourceIds?.[exercise.id];
     const legacy = exercise.id === DEFAULT_EXERCISE_ID ? settings.sourceId : null;
-    const pick = [stored, legacy].find((id) => id && usable.includes(id)) ?? usable[0];
+    // Through a schedule day, the way of counting carries over: the camera
+    // stays the camera, and without it tapping becomes the stopwatch for a
+    // hold and back again, rather than switching the camera on mid-workout.
+    const carried = !planSets || !source
+      ? null
+      : usable.includes(source.id)
+        ? source.id
+        : source.isPoseDriven
+          ? null
+          : usable.find((id) => id !== 'ai');
+    const pick = [carried, stored, legacy].find((id) => id && usable.includes(id)) ?? usable[0];
     const next = getSourceById(pick); // tap, if somehow nothing else is usable
     if (next === source) return;
     setSource(next);
@@ -228,7 +285,7 @@ export function WorkoutScreen({
     // The stored choices are read, not followed: picking a source writes the
     // state and the setting together, so a settings write has nothing to add.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exercise, availableSourceIds]);
+  }, [exercise, availableSourceIds, planSets]);
 
   // --- keep the screen on for the duration of a workout --------------------
   useEffect(() => {
@@ -297,7 +354,7 @@ export function WorkoutScreen({
   const finishWorkout = useCallback(async () => {
     closeRest();
     const sets = live.current.sets;
-    const totalReps = sets.reduce((sum, s) => sum + s.reps, 0);
+    const totalCount = sets.reduce((sum, s) => sum + s.reps, 0);
     const durationSeconds = sets.reduce((sum, s) => sum + s.durationSeconds, 0);
     const restTotal = Math.round(live.current.restSeconds);
     const followed = activePlan;
@@ -306,7 +363,7 @@ export function WorkoutScreen({
 
     // A workout with no reps is not a workout — persisting it would dirty the
     // history list and the averages without recording anything real.
-    if (totalReps === 0) {
+    if (totalCount === 0) {
       resetWorkout();
       setNotice({ tone: 'warn', text: t('notice.nothingSaved') });
       if (followed) onClearPlan?.();
@@ -319,53 +376,81 @@ export function WorkoutScreen({
     const todayBefore = stats.todayReps;
     const achievementsBefore = achievements;
 
-    const session = await addSession({
-      totalReps,
-      durationSeconds,
-      sourceId: source?.id,
-      exerciseId: exercise.id,
-      sets,
-      restSeconds: restTotal,
-      program: followed?.kind === 'day' ? { level: followed.level, day: followed.day } : null,
-    });
-    // Credited with the save, so fun time always matches the history: a
-    // discarded workout earns nothing, exactly as it records nothing. Lighter
-    // exercises earn a share of a push-up's rate.
-    const earnedSeconds = await creditReps(totalReps, exercise.creditWeight);
-
-    let completedDays = program?.completedDays ?? {};
-    let level = null;
-    if (followed?.kind === 'day') {
-      await completeProgramDay(followed.day);
-      completedDays = { ...completedDays, [followed.day]: Date.now() };
-    } else if (followed?.kind === 'test') {
-      level = (await startProgram(totalReps)).level;
-      completedDays = {};
+    // One session per exercise, so every exercise's history, totals and badges
+    // stay its own: a schedule day of six exercises saves six. A hold's reps
+    // are its seconds. Rest is the workout's, so it goes on the first.
+    const groups = groupByExercise(sets);
+    const saved = [];
+    let earnedSeconds = 0;
+    for (const [i, group] of groups.entries()) {
+      const groupReps = group.sets.reduce((sum, s) => sum + s.reps, 0);
+      if (groupReps === 0) continue;
+      const session = await addSession({
+        totalReps: groupReps,
+        durationSeconds: group.sets.reduce((sum, s) => sum + s.durationSeconds, 0),
+        sourceId: group.sets[0].sourceId,
+        exerciseId: group.exerciseId,
+        sets: group.sets,
+        restSeconds: i === 0 ? restTotal : 0,
+        program:
+          followed?.kind === 'program'
+            ? { level: followed.level, week: followed.week, day: followed.day }
+            : null,
+      });
+      saved.push(session);
+      // Credited with the save, so fun time always matches the history: a
+      // discarded workout earns nothing, exactly as it records nothing.
+      // Lighter exercises earn a share of a push-up's rate.
+      earnedSeconds += await creditReps(groupReps, getExercise(group.exerciseId).creditWeight);
     }
 
+    // A schedule day is done once every one of its sets is.
+    let scheduleCompleted = schedule?.completed ?? {};
+    const dayDone = followed?.kind === 'program' && sets.length >= followed.sets.length;
+    if (dayDone) {
+      await completeScheduleDay(followed.week, followed.day);
+      scheduleCompleted = {
+        ...scheduleCompleted,
+        [programDayKey(followed.week, followed.day)]: Date.now(),
+      };
+    }
+
+    // The daily goal counts reps; a hold's seconds are not reps.
+    const repsToday = saved.filter((s) => !isHold(s.exerciseId)).reduce((sum, s) => sum + s.totalReps, 0);
     const celebrations = [];
-    if (goal > 0 && todayBefore < goal && todayBefore + totalReps >= goal) {
+    if (goal > 0 && todayBefore < goal && todayBefore + repsToday >= goal) {
       celebrations.push(t('notice.goalReached'));
     }
-    const achievementsAfter = unlockedAchievements([session, ...sessions], completedDays);
+    const achievementsAfter = unlockedAchievements(
+      [...saved.slice().reverse(), ...sessions],
+      program?.completedDays ?? {},
+      scheduleCompleted,
+    );
     for (const id of newlyUnlocked(achievementsBefore, achievementsAfter)) {
       celebrations.push(t('notice.achievement', { name: t(`ach.${id}.title`) }));
     }
 
     resetWorkout();
+    const only = groups.length === 1 ? groups[0].exerciseId : null;
     setSummary({
-      kind: followed?.kind ?? 'free',
+      kind: followed?.kind === 'program' ? 'program' : 'free',
+      week: followed?.week,
       day: followed?.day,
-      level,
-      exerciseId: exercise.id,
-      totalReps,
+      exerciseId: only ?? groups[0].exerciseId,
+      exercises: groups.length,
+      totalReps: totalCount,
+      reps: repsToday,
       sets: sets.length,
       durationSeconds,
       earnedSeconds,
     });
-    const savedText = level
-      ? t('notice.levelAssigned', { level })
-      : t('notice.saved', { reps: totalReps, time: formatDuration(durationSeconds) });
+    const time = formatDuration(durationSeconds);
+    const savedText =
+      groups.length > 1
+        ? t('notice.savedProgram', { n: groups.length, time })
+        : isHold(only)
+          ? t('notice.savedHold', { reps: totalCount, time })
+          : t('notice.saved', { reps: totalCount, time });
     setNotice({
       tone: 'ok',
       text: earnedSeconds
@@ -385,11 +470,9 @@ export function WorkoutScreen({
     stats.todayReps,
     achievements,
     addSession,
-    source,
-    exercise,
     program,
-    completeProgramDay,
-    startProgram,
+    schedule,
+    completeScheduleDay,
     sessions,
     onCelebrate,
     creditReps,
@@ -439,12 +522,15 @@ export function WorkoutScreen({
       return;
     }
     const durationSeconds = Math.round(readElapsedMs() / 1000);
-    const done = [...live.current.sets, { reps: setReps_, durationSeconds }];
+    const done = [
+      ...live.current.sets,
+      { reps: setReps_, durationSeconds, exerciseId: exercise.id, sourceId: source?.id },
+    ];
     live.current.sets = done;
     setCompletedSets(done);
 
-    // The last program set, or the single set of the max test, ends the workout.
-    if ((planSets && done.length >= planSets.length) || activePlan?.kind === 'test') {
+    // The last set of a schedule day ends the workout.
+    if (planSets && done.length >= planSets.length) {
       finishWorkout();
       return;
     }
@@ -452,22 +538,32 @@ export function WorkoutScreen({
     live.current.restStartedAt = Date.now();
     setRestOver(false);
     setStatus('rest');
-  }, [finishWorkout, readElapsedMs, planSets, activePlan, doneFeedback, t]);
+  }, [finishWorkout, readElapsedMs, planSets, doneFeedback, t, exercise.id, source]);
 
   const handleRep = useCallback(() => {
     const next = live.current.reps + 1;
     live.current.reps = next;
     setReps(next);
-    repFeedback(next);
+    // A hold counts a "rep" a second: saying every one would never stop.
+    if (!holdMode || next % HOLD_SPEAK_EVERY === 0) repFeedback(next);
     // A program set with a fixed target completes itself; the max set never
     // does, since "as many as you can" is only over when you say so.
     if (currentTarget && !currentTarget.max && next >= currentTarget.target) endSet();
-  }, [repFeedback, currentTarget, endSet]);
+  }, [repFeedback, currentTarget, endSet, holdMode]);
 
   const handleRepRef = useRef(handleRep);
   useEffect(() => {
     handleRepRef.current = handleRep;
   }, [handleRep]);
+
+  // The timer source: a hold without the camera is a stopwatch, a "rep" each
+  // second the set is active.
+  const timerDriven = !!source?.isTimerDriven;
+  useEffect(() => {
+    if (!timerDriven || status !== 'active') return undefined;
+    const id = setInterval(() => handleRepRef.current?.(), 1000);
+    return () => clearInterval(id);
+  }, [timerDriven, status]);
 
   const countdownRemaining = useCountdown({
     seconds: status === 'rest' ? restSeconds : countdownSeconds,
@@ -588,7 +684,7 @@ export function WorkoutScreen({
 
   const selectExercise = useCallback(
     (exerciseId) => {
-      // Only between workouts, and never under a plan: the program is push-ups.
+      // Only between workouts, and never under a plan: a schedule day names its own.
       if (status !== 'idle' || activePlan || exerciseId === exercise.id) return;
       controlFeedback();
       setNotice(null);
@@ -599,7 +695,7 @@ export function WorkoutScreen({
 
   const share = useCallback(() => {
     if (!summary) return;
-    let text = t('share.text', {
+    let text = t(isHold(summary.exerciseId) ? 'share.textHold' : 'share.text', {
       reps: summary.totalReps,
       time: formatDuration(summary.durationSeconds),
       exercise: t(`exercise.${summary.exerciseId}.noun`),
@@ -628,10 +724,6 @@ export function WorkoutScreen({
       exercise.sources.filter((id) => availableSourceIds?.includes(id)).map(getSourceById),
     [exercise, availableSourceIds],
   );
-  const exerciseOptions = useMemo(
-    () => EXERCISES.map((e) => ({ id: e.id, icon: e.icon, label: t(`exercise.${e.id}`) })),
-    [t],
-  );
 
   if (!source) {
     return (
@@ -654,8 +746,13 @@ export function WorkoutScreen({
   const pocketLock = source.id === 'motion' && (status === 'countdown' || status === 'active');
   const setsDone = completedSets.length;
   const totalSets = planSets ? planSets.length : null;
-  // Reps so far this workout, for the running fun-time preview.
+  // Fun time so far this workout, each set at its own exercise's weight.
   const workoutReps = completedSets.reduce((sum, s) => sum + s.reps, 0) + reps;
+  const workoutCredit =
+    completedSets.reduce(
+      (sum, s) => sum + creditFor(s.reps, blockerRate, getExercise(s.exerciseId).creditWeight),
+      0,
+    ) + creditFor(reps, blockerRate, exercise.creditWeight);
   // Where to put the phone depends on both. For the one render between an
   // exercise change and its source being picked, the source's own hint.
   const hintKey = supportsSource(exercise.id, source.id)
@@ -663,17 +760,25 @@ export function WorkoutScreen({
     : source.hintKey;
   const summaryExercise = getExercise(summary?.exerciseId);
 
+  // Set n of this exercise's sets, and its target: reps, or seconds held.
   const planLine = (() => {
-    if (activePlan?.kind === 'test') return t('workout.test');
     if (!planSets) return null;
-    const idx = Math.min(setIndex, planSets.length - 1);
-    const target = planSets[idx];
-    const which = t('workout.set', { n: idx + 1, total: planSets.length });
-    const goal = target.max
-      ? t('workout.maxSet', { n: target.target })
-      : t('workout.target', { n: target.target });
-    return `${which} · ${goal}`;
+    const target = planSets[planIndex];
+    const which = t('workout.set', setOfExercise(planSets, planIndex));
+    const goal = target.hold
+      ? t('workout.holdTarget', { n: target.target })
+      : target.max
+        ? t('workout.maxSet', { n: target.target })
+        : t('workout.target', { n: target.target });
+    return `${exercise.icon} ${t(`exercise.${exercise.id}`)} · ${which} · ${goal}`;
   })();
+  // In the rest before a different exercise, what comes next.
+  const lastSet = completedSets[setsDone - 1];
+  const nextUp =
+    planSets && status === 'rest' && lastSet && lastSet.exerciseId !== exercise.id
+      ? t('workout.nextExercise', { exercise: `${exercise.icon} ${t(`exercise.${exercise.id}`)}` })
+      : null;
+  const summaryCount = summary && isHold(summary.exerciseId) && summary.exercises === 1;
 
   return (
     <View
@@ -687,9 +792,9 @@ export function WorkoutScreen({
           <Text style={styles.brand}>HÍT ĐẤT AI</Text>
           <Text style={styles.brandSub}>PUSH-UP</Text>
         </View>
-        {activePlan?.kind === 'day' ? (
+        {planSets ? (
           <Text style={styles.headerPlan}>
-            {t('workout.day', { day: activePlan.day, week: activePlan.week })}
+            {t('workout.programDay', { day: activePlan.day, week: activePlan.week })}
           </Text>
         ) : earning && status === 'idle' ? (
           <Pressable
@@ -736,12 +841,9 @@ export function WorkoutScreen({
       </View>
 
       {status === 'idle' && !activePlan ? (
-        <ExercisePicker
-          options={exerciseOptions}
+        <ExerciseLibraryButton
           selected={exercise.id}
           onSelect={selectExercise}
-          label={t('workout.exercisePicker')}
-          bleed={spacing.lg}
           style={styles.exerciseRow}
         />
       ) : null}
@@ -784,19 +886,24 @@ export function WorkoutScreen({
           {status === 'idle' && summary ? (
             <View style={styles.summary}>
               <Text style={styles.summaryTitle}>
-                {summary.kind === 'day'
-                  ? t('workout.summaryDay', { day: summary.day })
-                  : summary.kind === 'test'
-                    ? t('workout.summaryTest')
-                    : t('workout.summaryTitle')}
+                {summary.kind === 'program'
+                  ? t('workout.summaryProgram', { week: summary.week, day: summary.day })
+                  : t('workout.summaryTitle')}
               </Text>
               <Text style={styles.summaryReps} allowFontScaling={false}>
-                {summary.totalReps}
+                {/* Several exercises: their reps together (holds are not reps), else the sets. */}
+                {summary.exercises > 1 ? summary.reps || summary.sets : summary.totalReps}
               </Text>
               <Text style={styles.summaryMeta}>
                 {[
-                  `${summaryExercise.icon} ${t(`exercise.${summaryExercise.id}`)}`,
-                  `${summary.sets} ${t('common.sets')}`,
+                  summary.exercises > 1
+                    ? t('workout.exercisesDone', { n: summary.exercises })
+                    : `${summaryExercise.icon} ${t(`exercise.${summaryExercise.id}`)}`,
+                  summary.exercises > 1
+                    ? `${summary.sets} ${t('common.sets')}`
+                    : summaryCount
+                      ? t('common.secs')
+                      : `${summary.sets} ${t('common.sets')}`,
                   formatDuration(summary.durationSeconds),
                 ].join(' · ')}
               </Text>
@@ -844,11 +951,12 @@ export function WorkoutScreen({
                     </Text>
                   )}
                   <Text style={styles.subline}>
-                    {t('workout.setDone', {
+                    {t(isHold(lastSet?.exerciseId) ? 'workout.setDoneHold' : 'workout.setDone', {
                       n: setsDone,
-                      reps: completedSets[setsDone - 1]?.reps ?? 0,
+                      reps: lastSet?.reps ?? 0,
                     })}
                   </Text>
+                  {nextUp ? <Text style={styles.subline}>{nextUp}</Text> : null}
                   <Text style={styles.stageHint}>
                     {planSets ? t('workout.nextIn') : t('workout.restHint')}
                   </Text>
@@ -858,22 +966,19 @@ export function WorkoutScreen({
                   <Text
                     style={styles.counter}
                     allowFontScaling={false}
-                    accessibilityLabel={`${reps} ${t('common.reps')}`}
+                    accessibilityLabel={`${reps} ${holdMode ? t('common.secs') : t('common.reps')}`}
                   >
                     {reps}
                   </Text>
+                  {/* A hold's count is seconds with good form; the clock is all of the set. */}
+                  {holdMode ? <Text style={styles.unit}>{t('common.secs')}</Text> : null}
                   <Text style={styles.timer} allowFontScaling={false}>
                     {formatDuration(elapsedSeconds)}
                   </Text>
                   {running && planLine ? <Text style={styles.subline}>{planLine}</Text> : null}
                   {running && earning && workoutReps > 0 ? (
                     <Text style={styles.earnedLine}>
-                      {t('workout.earned', {
-                        time: formatAmount(
-                          creditFor(workoutReps, blockerRate, exercise.creditWeight),
-                          t,
-                        ),
-                      })}
+                      {t('workout.earned', { time: formatAmount(workoutCredit, t) })}
                     </Text>
                   ) : null}
                   {tapActive ? (
@@ -902,26 +1007,22 @@ export function WorkoutScreen({
         {notice
           ? notice.text
           : status === 'idle'
-            ? activePlan?.kind === 'test'
-              ? t('workout.testHint')
-              : t(hintKey)
+            ? t(hintKey)
             : ' '}
       </Text>
 
       {status === 'idle' && planSets ? (
         <View style={styles.planCard}>
-          <Text style={styles.planSets}>
-            {planSets.map((s) => (s.max ? `${s.target}+` : String(s.target))).join(' · ')}
+          <Text style={styles.planSets} numberOfLines={2}>
+            {activePlan.items
+              .map((item) =>
+                `${getExercise(item.exerciseId).icon} ${item.sets}×${item.target}${item.hold ? 's' : ''}`,
+              )
+              .join('  ')}
           </Text>
           <Text style={styles.planRest}>
             {t('program.rest', { seconds: activePlan.restSeconds })}
           </Text>
-          <Pressable onPress={() => onClearPlan?.()} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.planCancel}>{t('btn.cancelPlan')}</Text>
-          </Pressable>
-        </View>
-      ) : status === 'idle' && activePlan?.kind === 'test' ? (
-        <View style={styles.planCard}>
           <Pressable onPress={() => onClearPlan?.()} hitSlop={8} accessibilityRole="button">
             <Text style={styles.planCancel}>{t('btn.cancelPlan')}</Text>
           </Pressable>
@@ -953,11 +1054,9 @@ export function WorkoutScreen({
         {status === 'idle' ? (
           <Button
             label={
-              activePlan?.kind === 'day'
-                ? t('btn.startDay', { day: activePlan.day })
-                : activePlan?.kind === 'test'
-                  ? t('btn.startTest')
-                  : t('btn.start')
+              planSets
+                ? t('btn.startProgramDay', { week: activePlan.week, day: activePlan.day })
+                : t('btn.start')
             }
             onPress={start}
             style={styles.grow}
@@ -1020,12 +1119,13 @@ export function WorkoutScreen({
             <Text style={styles.discard}>{t('btn.discard')}</Text>
           </Pressable>
         ) : running && (totalSets || setsDone > 0) ? (
-          <View style={styles.dots} accessibilityLabel={t('workout.set', { n: setIndex + 1, total: totalSets ?? setIndex + 1 })}>
+          <View style={[styles.dots, planSets && styles.dotsDense]} accessibilityLabel={t('workout.set', { n: setIndex + 1, total: totalSets ?? setIndex + 1 })}>
             {Array.from({ length: totalSets ?? setsDone + 1 }).map((_, i) => (
               <View
                 key={i}
                 style={[
                   styles.dot,
+                  planSets && styles.dotSmall,
                   i < setsDone && styles.dotDone,
                   i === setsDone && status !== 'rest' && styles.dotCurrent,
                 ]}
@@ -1140,6 +1240,7 @@ const styles = StyleSheet.create({
     textShadow: '0px 2px 12px rgba(0,0,0,0.85)',
   },
   timer: { ...type.timer, color: colors.textDim, marginTop: -spacing.sm },
+  unit: { ...type.label, color: colors.textDim, marginTop: -spacing.md, marginBottom: spacing.sm },
   subline: {
     ...type.body,
     color: colors.text,
@@ -1191,7 +1292,7 @@ const styles = StyleSheet.create({
   noticeWarn: { color: colors.warn },
 
   planCard: { alignItems: 'center', marginBottom: spacing.md },
-  planSets: { fontSize: 18, fontWeight: '600', color: colors.text, letterSpacing: 1 },
+  planSets: { fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'center' },
   planRest: { fontSize: 13, color: colors.textDim, marginTop: 2 },
   planCancel: { fontSize: 13, color: colors.textFaint, marginTop: spacing.sm },
 
@@ -1215,7 +1316,8 @@ const styles = StyleSheet.create({
 
   controls: { flexDirection: 'row' },
   lock: {
-    ...StyleSheet.absoluteFillObject,
+    // absoluteFill: React Native 0.86 removed absoluteFillObject (see PoseStage).
+    ...StyleSheet.absoluteFill,
     zIndex: 10,
     elevation: 10,
     alignItems: 'center',
@@ -1237,6 +1339,9 @@ const styles = StyleSheet.create({
   footer: { height: 44, alignItems: 'center', justifyContent: 'center' },
   discard: { fontSize: 14, color: colors.danger },
   dots: { flexDirection: 'row', gap: spacing.sm },
+  // A schedule day can run to twenty sets; they still fit one row.
+  dotsDense: { gap: 5 },
+  dotSmall: { width: 6, height: 6, borderRadius: 3 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
   dotDone: { backgroundColor: colors.accent },
   dotCurrent: { borderWidth: 1, borderColor: colors.accent, backgroundColor: 'transparent' },

@@ -1,6 +1,9 @@
 import { dayKey, shiftDayKey } from '../utils/time';
-import { PROGRAM_DAYS } from '../program/program';
-import { EXERCISE_IDS, exerciseOf } from '../exercises/exercises';
+import { countCompleted, isProgramComplete, weeksCompleted } from '../program/program';
+import { CLASSIC_EXERCISE_IDS, EXERCISE_IDS, exerciseOf, isHold } from '../exercises/exercises';
+
+/** Days in the old 6-week push-up program, whose progress still earns its badges. */
+const LEGACY_PROGRAM_DAYS = 18;
 
 /**
  * Achievements derived from history, never stored. Recomputing from the data
@@ -14,6 +17,9 @@ import { EXERCISE_IDS, exerciseOf } from '../exercises/exercises';
  * The rep and set badges are push-ups only (their copy says push-ups, and a
  * jumping jack is far less work); the other exercises have their own totals.
  * Workouts, streaks, the time of day and the program count every exercise.
+ *
+ * The program badges are earned by the training schedule, or by the old 6-week
+ * push-up program it replaced, so nobody loses a badge to the change.
  */
 export const ACHIEVEMENTS = [
   { id: 'first_workout', icon: '🏁', test: (f) => f.sessions >= 1 },
@@ -32,15 +38,20 @@ export const ACHIEVEMENTS = [
   { id: 'early_bird', icon: '🌅', test: (f) => f.earliestHour !== null && f.earliestHour < 7 },
   { id: 'night_owl', icon: '🌙', test: (f) => f.latestHour !== null && f.latestHour >= 22 },
   { id: 'program_day', icon: '📘', test: (f) => f.programDays >= 1 },
-  { id: 'program_done', icon: '🎓', test: (f) => f.programDays >= PROGRAM_DAYS },
+  { id: 'program_done', icon: '🎓', test: (f) => f.programComplete },
   { id: 'squats_100', icon: '🦵', test: (f) => f.repsByExercise.squat >= 100 },
   { id: 'situps_100', icon: '🧘', test: (f) => f.repsByExercise.situp >= 100 },
   { id: 'jacks_200', icon: '🤸', test: (f) => f.repsByExercise.jumpingjack >= 200 },
   {
     id: 'all_rounder',
     icon: '🏅',
-    test: (f) => EXERCISE_IDS.every((id) => f.repsByExercise[id] > 0),
+    // The four there were when the badge was made; the library has its own.
+    test: (f) => CLASSIC_EXERCISE_IDS.every((id) => f.repsByExercise[id] > 0),
   },
+  { id: 'explorer_10', icon: '🧭', test: (f) => f.exercisesTried >= 10 },
+  { id: 'explorer_25', icon: '🗺️', test: (f) => f.exercisesTried >= 25 },
+  { id: 'hold_300', icon: '⏱️', test: (f) => f.holdSeconds >= 300 },
+  { id: 'program_week', icon: '🗓', test: (f) => f.programWeeks >= 1 },
 ];
 
 /** Longest run of consecutive local days with at least one rep. */
@@ -76,14 +87,16 @@ export function bestSetReps(sessions) {
  * included. Sessions saved before there were exercises carry no
  * `exerciseId` and are push-ups, the same rule as everywhere (`exerciseOf`).
  */
-export function computeFacts(sessions, completedProgramDays = {}) {
+export function computeFacts(sessions, completedProgramDays = {}, scheduleCompleted = {}) {
   const repsByExercise = Object.fromEntries(EXERCISE_IDS.map((id) => [id, 0]));
+  let holdSeconds = 0;
   const pushups = [];
   let earliestHour = null;
   let latestHour = null;
   for (const s of sessions) {
     const exercise = exerciseOf(s);
     repsByExercise[exercise] += s.totalReps || 0;
+    if (isHold(exercise)) holdSeconds += s.totalReps || 0;
     if (exercise === 'pushup') pushups.push(s);
     if ((s.totalReps || 0) > 0) {
       const hour = new Date(s.timestamp).getHours();
@@ -99,13 +112,18 @@ export function computeFacts(sessions, completedProgramDays = {}) {
     longestStreak: longestStreak(sessions),
     earliestHour,
     latestHour,
-    programDays: Object.keys(completedProgramDays).length,
+    holdSeconds,
+    exercisesTried: EXERCISE_IDS.filter((id) => repsByExercise[id] > 0).length,
+    programDays: Object.keys(completedProgramDays).length + countCompleted(scheduleCompleted),
+    programComplete:
+      Object.keys(completedProgramDays).length >= LEGACY_PROGRAM_DAYS || isProgramComplete(scheduleCompleted),
+    programWeeks: weeksCompleted(scheduleCompleted),
   };
 }
 
 /** Ids of every achievement earned by this history, in definition order. */
-export function unlockedAchievements(sessions, completedProgramDays = {}) {
-  const facts = computeFacts(sessions, completedProgramDays);
+export function unlockedAchievements(sessions, completedProgramDays = {}, scheduleCompleted = {}) {
+  const facts = computeFacts(sessions, completedProgramDays, scheduleCompleted);
   return ACHIEVEMENTS.filter((a) => a.test(facts)).map((a) => a.id);
 }
 

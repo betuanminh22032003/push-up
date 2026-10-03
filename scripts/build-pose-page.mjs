@@ -30,10 +30,15 @@ const MODULES = [
   'geometry',
   'landmarks',
   'repEngine',
+  'readings',
   'pushupAnalyzer',
   'squatAnalyzer',
   'situpAnalyzer',
   'jumpingJackAnalyzer',
+  'upperBodyAnalyzers',
+  'lowerBodyAnalyzers',
+  'coreAnalyzers',
+  'holdAnalyzers',
   'analyzers',
 ];
 

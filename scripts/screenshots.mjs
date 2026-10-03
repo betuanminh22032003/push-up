@@ -61,29 +61,29 @@ function seedSessions() {
       ...extra,
     };
   };
-  const program = (day) => ({ program: { level: 3, day } });
+  const program = (week, day) => ({ program: { level: 'intermediate', week, day } });
   return [
-    make(0, 7, [12, 12, 10, 10, 14], program(5)),
-    make(1, 19, [12, 11, 10, 10, 15], program(4)),
-    make(2, 18, [20, 16]),
-    make(3, 7, [11, 11, 9, 9, 13], program(3)),
+    make(0, 7, [12, 12, 10], program(2, 1)),
+    make(1, 19, [12, 11, 10], { exerciseId: 'plank', ...program(1, 6) }),
+    make(2, 18, [20, 16], { exerciseId: 'squat' }),
+    make(3, 7, [11, 11, 9], { exerciseId: 'crunch', ...program(1, 5) }),
     make(4, 20, [25]),
-    make(5, 19, [11, 11, 9, 9, 12], program(2)),
+    make(5, 19, [11, 11, 9], { exerciseId: 'lunge', ...program(1, 2) }),
     make(6, 8, [18, 14]),
-    make(7, 19, [11, 11, 9, 9, 12], program(1)),
+    make(7, 19, [11, 11, 9], program(1, 1)),
     make(8, 21, [22]),
     make(10, 19, [16]),
     make(12, 7, [14, 10]),
   ].sort((a, b) => b.timestamp - a.timestamp);
 }
 
-function seedProgram() {
+/** The training schedule (src/program/program.js) a week and a day in. */
+function seedSchedule() {
   const now = Date.now();
   return {
-    level: 3,
-    testReps: 16,
+    level: 'intermediate',
     startedAt: now - 8 * DAY,
-    completedDays: { 1: now - 7 * DAY, 2: now - 5 * DAY, 3: now - 3 * DAY, 4: now - 1 * DAY, 5: now },
+    completed: { '1-1': now - 7 * DAY, '1-2': now - 5 * DAY, '1-3': now - 3 * DAY, '1-5': now - 1 * DAY, '1-6': now - 1 * DAY, '2-1': now },
   };
 }
 
@@ -207,8 +207,8 @@ async function shoot(cdp, file) {
 
 /** The labels each language uses, so the walk can press the right controls. */
 const LABELS = {
-  en: { go: "Let's go", tap: 'Tap', start: 'Start', done: 'Done', finish: 'Finish workout', tabs: ['Program', 'Progress', 'Settings', 'Blocker'] },
-  vi: { go: 'Bắt đầu thôi', tap: 'Chạm', start: 'Bắt đầu', done: 'Xong', finish: 'Kết thúc buổi tập', tabs: ['Chương trình', 'Tiến độ', 'Cài đặt', 'Chặn app'] },
+  en: { go: "Let's go", tap: 'Tap', start: 'Start', done: 'Done', finish: 'Finish workout', tabs: ['Schedule', 'Progress', 'Settings', 'Blocker'] },
+  vi: { go: 'Bắt đầu thôi', tap: 'Chạm', start: 'Bắt đầu', done: 'Xong', finish: 'Kết thúc buổi tập', tabs: ['Lịch tập', 'Tiến độ', 'Cài đặt', 'Chặn app'] },
 };
 
 async function captureLanguage(cdp, lang) {
@@ -219,7 +219,7 @@ async function captureLanguage(cdp, lang) {
   // Seed a fresh state and reload so the providers read it.
   await cdp.eval(`
     localStorage.setItem('pupg:sessions:v1', ${JSON.stringify(JSON.stringify(seedSessions()))});
-    localStorage.setItem('pupg:program:v1', ${JSON.stringify(JSON.stringify(seedProgram()))});
+    localStorage.setItem('pupg:schedule:v1', ${JSON.stringify(JSON.stringify(seedSchedule()))});
     localStorage.setItem('pupg:settings:v1', ${JSON.stringify(JSON.stringify(seedSettings(lang, false)))});
     localStorage.setItem('pupg:blockerDemo', ${JSON.stringify(JSON.stringify(seedBlocker()))});
   `);
