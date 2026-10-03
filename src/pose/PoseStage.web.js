@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fromMediaPipe, SKELETON_BONES } from './landmarks';
-import { createAnalyzer, ISSUES } from './analyzers';
+import { createAnalyzer, createExerciseGate, ISSUES } from './analyzers';
 import { useT } from '../i18n/I18nContext';
 import { colors } from '../theme/theme';
 
@@ -75,6 +75,9 @@ export function PoseStage({
   paused,
   onRep,
   onFrame,
+  onVisibility,
+  resetKey,
+  regateKey,
   analyzerOptions,
   exercise = 'pushup',
 }) {
@@ -84,6 +87,10 @@ export function PoseStage({
 
   const landmarkerRef = useRef(null);
   const analyzerRef = useRef(null);
+  // The visibility gate (./visibility): no counting until the joints this
+  // exercise needs have been in view for a second. Same rules as the page.
+  const gateRef = useRef(null);
+  const gateSentRef = useRef('');
   const timerRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
   /** Frame aspect of the running camera, kept to rebuild the analyser with. */
@@ -97,6 +104,8 @@ export function PoseStage({
     exerciseRef.current = exercise;
     if (analyzerRef.current) {
       analyzerRef.current = createAnalyzer(exercise, { ...analyzerOptions, aspect: aspectRef.current });
+      gateRef.current = createExerciseGate(exercise);
+      gateSentRef.current = '';
     }
     // analyzerOptions is read once per analyser, as in the camera effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,12 +120,25 @@ export function PoseStage({
   // pause would mean reloading the model on every resume.
   const onRepRef = useRef(onRep);
   const onFrameRef = useRef(onFrame);
+  const onVisibilityRef = useRef(onVisibility);
   const pausedRef = useRef(paused);
   useEffect(() => {
     onRepRef.current = onRep;
     onFrameRef.current = onFrame;
+    onVisibilityRef.current = onVisibility;
     pausedRef.current = paused;
-  }, [onRep, onFrame, paused]);
+  }, [onRep, onFrame, onVisibility, paused]);
+
+  // Keyed commands, as on native: a change resets the count, or the gate.
+  const keysRef = useRef({ resetKey, regateKey });
+  useEffect(() => {
+    if (resetKey !== keysRef.current.resetKey) analyzerRef.current?.reset();
+    if (regateKey !== keysRef.current.regateKey) {
+      gateRef.current?.reset();
+      gateSentRef.current = '';
+    }
+    keysRef.current = { resetKey, regateKey };
+  }, [resetKey, regateKey]);
 
   const draw = useCallback((pose, result) => {
     const canvas = canvasRef.current;
@@ -196,7 +218,17 @@ export function PoseStage({
             const raw = detection?.landmarks?.[0] ?? null;
             const pose = raw ? fromMediaPipe(raw) : null;
 
-            if (pausedRef.current) {
+            // Watched while paused too: the countdown is when people step into frame.
+            const gate = gateRef.current;
+            const vis = gate ? gate.push(pose, now) : { ready: true, missing: [], progress: 1 };
+            const progress = Math.floor(vis.progress * 4) / 4;
+            const key = `${vis.ready}|${vis.missing.join(',')}|${progress}`;
+            if (key !== gateSentRef.current) {
+              gateSentRef.current = key;
+              onVisibilityRef.current?.({ ready: vis.ready, missing: vis.missing, progress });
+            }
+
+            if (pausedRef.current || !vis.ready) {
               // Keep the preview and skeleton live so the user can reframe
               // themselves, but count nothing while the set is paused.
               draw(pose, { tracking: !!pose });
@@ -267,6 +299,8 @@ export function PoseStage({
           ...analyzerOptions,
           aspect: aspectRef.current,
         });
+        gateRef.current = createExerciseGate(exerciseRef.current);
+        gateSentRef.current = '';
 
         setPhase('ready');
         timerRef.current = setInterval(tick, FRAME_INTERVAL_MS);
@@ -294,6 +328,7 @@ export function PoseStage({
       }
       landmarkerRef.current = null;
       analyzerRef.current = null;
+      gateRef.current = null;
 
       stream?.getTracks().forEach((track) => track.stop());
       if (videoRef.current) videoRef.current.srcObject = null;

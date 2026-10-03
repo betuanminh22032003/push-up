@@ -2503,6 +2503,126 @@ function createArmCircleAnalyzer(options = {}) {
   return holdAnalyzer('armcircles', opts, (pose) => measureArmCircleFrame(pose, opts));
 }
 
+/**
+ * The visibility gate: counting starts only once the camera has seen every
+ * joint an exercise needs, confidently, for about a second.
+ *
+ * Before it, an analyser fed half a body learns its range from noise, and
+ * the user sees a counter stuck at zero with no idea why. The gate instead
+ * says which body part is out of frame ("legs"), and opens once the whole
+ * set-up is right. It latches: once open it stays open for the set, and the
+ * analysers' own lost-tracking handling takes over from there.
+ *
+ * Each exercise declares what it needs in ./analyzers.js (POSE_NEEDS), as a
+ * list of groups:
+ *   { joints: ['Shoulder', 'Elbow', 'Wrist'], sides: 'either' }
+ *     'either'  all of them on one side (side-on, the far arm is hidden)
+ *     'both'    all of them on both sides (front-on, e.g. both arms)
+ *     'any'     each of them on at least one side
+ * Joint names are JOINTS from ./landmarks without the side ('nose' has none).
+ *
+ * Pure and dependency-free: inlined into the pose page with the analysers.
+ */
+
+/** Which body part a joint belongs to, for telling the user what is missing. */
+const PART_OF_JOINT = {
+  nose: 'head',
+  Shoulder: 'shoulders',
+  Elbow: 'arms',
+  Wrist: 'arms',
+  Hip: 'hips',
+  Knee: 'legs',
+  Ankle: 'legs',
+};
+
+/** The order parts are named in, head to toe; 'body' means no one at all. */
+const BODY_PARTS_ORDER = ['body', 'head', 'shoulders', 'arms', 'hips', 'legs'];
+
+const GATE_DEFAULTS = {
+  // Higher than the analysers' 0.4: a joint the model is unsure of at the
+  // start is the one that flickers in and out mid-set.
+  minScore: 0.6,
+  holdMs: 1000,
+  // One dropped frame does not restart the second.
+  graceMs: 250,
+};
+
+const GATE_SIDES = ['left', 'right'];
+
+function gateJointName(side, joint) {
+  return joint === 'nose' ? 'nose' : side + joint;
+}
+
+/**
+ * The body parts `needs` cannot see in this frame, head to toe; [] when
+ * everything is in view, ['body'] when there is no pose at all.
+ */
+function missingParts(pose, needs, minScore = GATE_DEFAULTS.minScore) {
+  if (!pose) return ['body'];
+  const seen = (name) => {
+    const p = pose[name];
+    return !!p && Number.isFinite(p.score) && p.score >= minScore && Number.isFinite(p.x) && Number.isFinite(p.y);
+  };
+  const missingJoints = new Set();
+  for (const group of needs) {
+    const unseenOn = (side) => group.joints.filter((j) => !seen(gateJointName(side, j)));
+    if (group.sides === 'both') {
+      for (const side of GATE_SIDES) for (const j of unseenOn(side)) missingJoints.add(j);
+    } else if (group.sides === 'any') {
+      for (const j of group.joints) {
+        if (!GATE_SIDES.some((side) => seen(gateJointName(side, j)))) missingJoints.add(j);
+      }
+    } else {
+      // 'either': the better side; what it lacks is what to bring into view.
+      const left = unseenOn('left');
+      const right = unseenOn('right');
+      for (const j of right.length < left.length ? right : left) missingJoints.add(j);
+    }
+  }
+  const parts = new Set([...missingJoints].map((j) => PART_OF_JOINT[j] || 'body'));
+  return BODY_PARTS_ORDER.filter((part) => parts.has(part));
+}
+
+/**
+ * @param {Array} needs     the exercise's groups (see above)
+ * @param {object} options  overrides for GATE_DEFAULTS
+ * @returns {{ push(pose, now): {ready, visible, missing, progress}, reset(), ready: boolean }}
+ */
+function createVisibilityGate(needs, options = {}) {
+  const opts = { ...GATE_DEFAULTS, ...options };
+  let since = null;
+  let lostAt = null;
+  let ready = false;
+
+  return {
+    get ready() {
+      return ready;
+    },
+    reset() {
+      since = null;
+      lostAt = null;
+      ready = false;
+    },
+    push(pose, now) {
+      const missing = missingParts(pose, needs, opts.minScore);
+      const visible = missing.length === 0;
+      if (ready) return { ready, visible, missing, progress: 1 };
+
+      if (visible) {
+        if (since === null) since = now;
+        lostAt = null;
+      } else if (since !== null) {
+        if (lostAt === null) lostAt = now;
+        if (now - lostAt > opts.graceMs) since = null;
+      }
+      const progress = since === null ? 0 : Math.min(1, (now - since) / opts.holdMs);
+      if (visible && progress >= 1) ready = true;
+      return { ready, visible, missing, progress };
+    },
+  };
+}
+
+
 
 
 
@@ -2617,6 +2737,78 @@ function poseExerciseId(exerciseId) {
   return POSE_EXERCISE_IDS.includes(exerciseId) ? exerciseId : 'pushup';
 }
 
+// --- what each exercise needs the camera to see --------------------------------
+// The joints each analyser reads, as groups for the visibility gate
+// (./visibility). Counting waits until all of them have been in view for a
+// second, and until then the user is told which body part is missing.
+const need = (joints, sides) => ({ joints, sides });
+const ARM_SIDE = need(['Shoulder', 'Elbow', 'Wrist'], 'either');
+const ARMS_BOTH = need(['Shoulder', 'Elbow', 'Wrist'], 'both');
+const HIPS = need(['Hip'], 'any');
+const TORSO = need(['Shoulder', 'Hip'], 'any');
+const LEG_SIDE = need(['Hip', 'Knee', 'Ankle'], 'either');
+const LEGS_BOTH = need(['Hip', 'Knee', 'Ankle'], 'both');
+const BODY_LINE = need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'any');
+
+const PUSHUP_NEEDS = [ARM_SIDE, need(['Hip', 'Knee'], 'any')];
+const SQUAT_NEEDS = [LEG_SIDE, need(['Shoulder'], 'any')];
+const LYING_NEEDS = [need(['Shoulder', 'Hip', 'Ankle'], 'any')];
+
+const POSE_NEEDS = {
+  pushup: PUSHUP_NEEDS,
+  squat: SQUAT_NEEDS,
+  situp: LYING_NEEDS,
+  jumpingjack: [need(['Shoulder', 'Elbow', 'Hip'], 'both')],
+
+  kneepushup: PUSHUP_NEEDS,
+  widepushup: PUSHUP_NEEDS,
+  diamondpushup: PUSHUP_NEEDS,
+  inclinepushup: PUSHUP_NEEDS,
+  declinepushup: PUSHUP_NEEDS,
+  dip: [ARM_SIDE, HIPS],
+
+  pikepushup: [ARM_SIDE, need(['Hip', 'Knee'], 'any')],
+  shoulderpress: [ARMS_BOTH, HIPS],
+  lateralraise: [ARMS_BOTH, HIPS],
+  frontraise: [ARM_SIDE, HIPS],
+  bicepcurl: [ARM_SIDE, HIPS],
+  armcircles: [need(['Shoulder', 'Elbow'], 'both'), HIPS],
+
+  sumosquat: SQUAT_NEEDS,
+  lunge: SQUAT_NEEDS,
+  sidelunge: SQUAT_NEEDS,
+  splitsquat: SQUAT_NEEDS,
+  wallsit: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+  glutebridge: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+  singlelegbridge: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+  donkeykick: [need(['Shoulder', 'Hip', 'Knee'], 'either')],
+  firehydrant: [need(['Shoulder', 'Hip', 'Knee'], 'either')],
+  goodmorning: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+
+  crunch: LYING_NEEDS,
+  legraise: LYING_NEEDS,
+  bicyclecrunch: [TORSO, need(['Hip', 'Knee'], 'both')],
+  mountainclimber: [TORSO, need(['Hip', 'Knee'], 'both')],
+  russiantwist: [TORSO, need(['Wrist'], 'any')],
+  plank: [BODY_LINE],
+  sideplank: [BODY_LINE],
+  hollowhold: [need(['Shoulder', 'Elbow', 'Hip', 'Knee'], 'any')],
+  superman: [need(['Shoulder', 'Elbow', 'Hip', 'Knee'], 'any')],
+
+  highknees: [TORSO, LEGS_BOTH],
+  buttkicks: [TORSO, LEGS_BOTH],
+  burpee: [BODY_LINE],
+};
+
+/**
+ * A fresh visibility gate for this exercise (unknown or missing: a push-up).
+ * @param {string} exerciseId
+ * @param {object} [options]  overrides for the gate's defaults
+ */
+function createExerciseGate(exerciseId, options) {
+  return createVisibilityGate(POSE_NEEDS[poseExerciseId(exerciseId)], options);
+}
+
 /**
  * A fresh analyser for this exercise; unknown or missing ids get the push-up
  * one, as everywhere else in the app.
@@ -2640,7 +2832,9 @@ function createAnalyzer(exerciseId, options) {
  */
 const PAGE_EXERCISE = poseExerciseId(new URLSearchParams(location.search).get('exercise'));
 const PAGE_OPTS = POSE_DEFAULTS[PAGE_EXERCISE];
-const PAGE_PROTOCOL_VERSION = 2;
+// 3: the visibility gate. Counting waits until the joints the exercise needs
+// are in view, and `visibility` messages say which body part is missing.
+const PAGE_PROTOCOL_VERSION = 3;
 
 const MEDIAPIPE_VERSION = '1.0.1';
 const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MEDIAPIPE_VERSION;
@@ -2661,6 +2855,10 @@ const canvasEl = document.getElementById('overlay');
 const statusEl = document.getElementById('status');
 
 let analyzer = null;
+let gate = null;
+/** The gate's last reading, and the last one sent to the app (sent on change only). */
+let gateState = { ready: false, visible: false, missing: ['body'], progress: 0 };
+let gateSent = '';
 let landmarker = null;
 let timer = null;
 let stream = null;
@@ -3087,11 +3285,33 @@ let coachSince = 0;
  */
 function setupState(pose, result) {
   if (!pose) return 'noPose';
+  // Until the visibility gate opens nothing is counted, whatever else is right.
+  if (!gateState.ready) return 'outOfFrame';
   const seen = (j) => pose[j] && pose[j].score >= PAGE_OPTS.minVisibility;
   if (!SETUP_CHECKS.inFrame(seen)) return 'outOfFrame';
+  if (!result) return 'ready';
   if (SETUP_CHECKS.misplaced(result)) return 'position';
   if (result.thresholds && !result.thresholds.adapted) return 'calibrating';
   return 'ready';
+}
+
+/** Names for the gate's body parts, for the browser's own coach card. */
+const PART_TEXT = { body: 'your body', head: 'head', shoulders: 'shoulders', arms: 'arms', hips: 'hips', legs: 'legs' };
+
+/**
+ * Run the visibility gate on this frame and tell the app when what it says
+ * changes: whether counting may start, which parts are out of frame, and how
+ * far through the second of holding still it is (in quarters, so a frame
+ * that changes nothing sends nothing).
+ */
+function updateGate(pose, now) {
+  if (!gate) return;
+  gateState = gate.push(pose, now);
+  const progress = Math.floor(gateState.progress * 4) / 4;
+  const key = gateState.ready + '|' + gateState.missing.join(',') + '|' + progress;
+  if (key === gateSent) return;
+  gateSent = key;
+  send({ type: 'visibility', ready: gateState.ready, missing: gateState.missing, progress: progress });
 }
 
 /** Debounced so a single dropped frame does not flash a setup warning. */
@@ -3110,7 +3330,11 @@ function updateCoach(pose, result, now) {
     return;
   }
 
-  const help = state === 'noPose' ? NO_POSE_HELP : SETUP_HELP[state];
+  let help = state === 'noPose' ? NO_POSE_HELP : SETUP_HELP[state];
+  if (state === 'outOfFrame' && !gateState.ready && gateState.missing.length) {
+    help = ['Not in frame: ' + gateState.missing.map((p) => PART_TEXT[p] || p).join(', '),
+      (help || SETUP_HELP.outOfFrame)[1]];
+  }
   if (!help) {
     coachEl.classList.add('hidden');
     return;
@@ -3271,8 +3495,13 @@ function tick() {
     const raw = detection && detection.landmarks && detection.landmarks[0];
     const pose = raw ? fromMediaPipe(raw) : null;
 
-    if (paused) {
-      draw(pose, !!pose);
+    // The gate watches even while paused: the countdown before a set is
+    // exactly when the user is getting into frame.
+    updateGate(pose, now);
+
+    if (paused || !gateState.ready) {
+      if (!gateState.ready) updateCoach(pose, null, now);
+      draw(pose, gateState.ready && !!pose);
     } else {
       const result = pose
         ? analyzer.push(pose, now)
@@ -3351,6 +3580,7 @@ async function start() {
     analyzer = createAnalyzer(PAGE_EXERCISE, {
       aspect: (videoEl.videoWidth || 640) / (videoEl.videoHeight || 480),
     });
+    gate = createExerciseGate(PAGE_EXERCISE);
 
     setStatus(null);
     // `exercise` is what this page counts, not what was asked for: the app
@@ -3360,6 +3590,7 @@ async function start() {
       phase: 'ready',
       exercise: analyzer.exercise,
       version: PAGE_PROTOCOL_VERSION,
+      gate: true,
     });
 
     // Inside the app the WebView sits behind the app's own counter, so the HUD
@@ -3391,6 +3622,11 @@ function handleCommand(rawData) {
   if (msg.type === 'pause') paused = true;
   else if (msg.type === 'resume') paused = false;
   else if (msg.type === 'reset') analyzer && analyzer.reset();
+  // Back to waiting for the whole body, e.g. a new set after the user walked off.
+  else if (msg.type === 'regate') {
+    if (gate) gate.reset();
+    gateSent = '';
+  }
   else if (msg.type === 'mirror') {
     videoEl.classList.toggle('mirrored', !!msg.value);
     canvasEl.classList.toggle('mirrored', !!msg.value);

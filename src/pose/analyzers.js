@@ -46,6 +46,7 @@ import {
   createWallSitAnalyzer,
 } from './holdAnalyzers';
 import { ISSUES } from './repEngine';
+import { createVisibilityGate } from './visibility';
 
 /**
  * One way in to every pose analyser: pick by exercise id.
@@ -151,6 +152,78 @@ export const POSE_HOLD_IDS = ['armcircles', 'wallsit', 'plank', 'sideplank', 'ho
 /** The exercise an analyser will actually count for this id: unknown or missing is a push-up. */
 export function poseExerciseId(exerciseId) {
   return POSE_EXERCISE_IDS.includes(exerciseId) ? exerciseId : 'pushup';
+}
+
+// --- what each exercise needs the camera to see --------------------------------
+// The joints each analyser reads, as groups for the visibility gate
+// (./visibility). Counting waits until all of them have been in view for a
+// second, and until then the user is told which body part is missing.
+const need = (joints, sides) => ({ joints, sides });
+const ARM_SIDE = need(['Shoulder', 'Elbow', 'Wrist'], 'either');
+const ARMS_BOTH = need(['Shoulder', 'Elbow', 'Wrist'], 'both');
+const HIPS = need(['Hip'], 'any');
+const TORSO = need(['Shoulder', 'Hip'], 'any');
+const LEG_SIDE = need(['Hip', 'Knee', 'Ankle'], 'either');
+const LEGS_BOTH = need(['Hip', 'Knee', 'Ankle'], 'both');
+const BODY_LINE = need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'any');
+
+const PUSHUP_NEEDS = [ARM_SIDE, need(['Hip', 'Knee'], 'any')];
+const SQUAT_NEEDS = [LEG_SIDE, need(['Shoulder'], 'any')];
+const LYING_NEEDS = [need(['Shoulder', 'Hip', 'Ankle'], 'any')];
+
+export const POSE_NEEDS = {
+  pushup: PUSHUP_NEEDS,
+  squat: SQUAT_NEEDS,
+  situp: LYING_NEEDS,
+  jumpingjack: [need(['Shoulder', 'Elbow', 'Hip'], 'both')],
+
+  kneepushup: PUSHUP_NEEDS,
+  widepushup: PUSHUP_NEEDS,
+  diamondpushup: PUSHUP_NEEDS,
+  inclinepushup: PUSHUP_NEEDS,
+  declinepushup: PUSHUP_NEEDS,
+  dip: [ARM_SIDE, HIPS],
+
+  pikepushup: [ARM_SIDE, need(['Hip', 'Knee'], 'any')],
+  shoulderpress: [ARMS_BOTH, HIPS],
+  lateralraise: [ARMS_BOTH, HIPS],
+  frontraise: [ARM_SIDE, HIPS],
+  bicepcurl: [ARM_SIDE, HIPS],
+  armcircles: [need(['Shoulder', 'Elbow'], 'both'), HIPS],
+
+  sumosquat: SQUAT_NEEDS,
+  lunge: SQUAT_NEEDS,
+  sidelunge: SQUAT_NEEDS,
+  splitsquat: SQUAT_NEEDS,
+  wallsit: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+  glutebridge: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+  singlelegbridge: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+  donkeykick: [need(['Shoulder', 'Hip', 'Knee'], 'either')],
+  firehydrant: [need(['Shoulder', 'Hip', 'Knee'], 'either')],
+  goodmorning: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+
+  crunch: LYING_NEEDS,
+  legraise: LYING_NEEDS,
+  bicyclecrunch: [TORSO, need(['Hip', 'Knee'], 'both')],
+  mountainclimber: [TORSO, need(['Hip', 'Knee'], 'both')],
+  russiantwist: [TORSO, need(['Wrist'], 'any')],
+  plank: [BODY_LINE],
+  sideplank: [BODY_LINE],
+  hollowhold: [need(['Shoulder', 'Elbow', 'Hip', 'Knee'], 'any')],
+  superman: [need(['Shoulder', 'Elbow', 'Hip', 'Knee'], 'any')],
+
+  highknees: [TORSO, LEGS_BOTH],
+  buttkicks: [TORSO, LEGS_BOTH],
+  burpee: [BODY_LINE],
+};
+
+/**
+ * A fresh visibility gate for this exercise (unknown or missing: a push-up).
+ * @param {string} exerciseId
+ * @param {object} [options]  overrides for the gate's defaults
+ */
+export function createExerciseGate(exerciseId, options) {
+  return createVisibilityGate(POSE_NEEDS[poseExerciseId(exerciseId)], options);
 }
 
 /**
