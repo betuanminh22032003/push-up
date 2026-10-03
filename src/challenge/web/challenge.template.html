@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex" />
+<title>Hít Đất AI — Thách đấu</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #0A0A0B; color: #F5F5F7; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; display: flex; justify-content: center;
+    padding: calc(24px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  main { width: 100%; max-width: 440px; }
+  header { display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-weight: 800; letter-spacing: 2px; font-size: 18px; }
+  .lang { background: none; border: 1px solid #26262C; color: #8A8A93; border-radius: 999px; padding: 6px 12px; font-size: 13px; }
+  .card {
+    margin-top: 24px; padding: 24px 20px; border-radius: 20px;
+    background: #131316; border: 1px solid #26262C; text-align: center;
+  }
+  h1 { font-size: 24px; margin: 0; }
+  .icon { font-size: 48px; margin-top: 16px; }
+  .exercise { font-size: 17px; font-weight: 600; margin-top: 4px; }
+  .score { font-size: 88px; font-weight: 200; color: #4ADE80; line-height: 1.1; }
+  .goal { color: #8A8A93; font-size: 15px; line-height: 1.5; }
+  .date { color: #55555E; font-size: 12px; margin-top: 8px; }
+  .button {
+    display: block; width: 100%; margin-top: 20px; padding: 16px; border-radius: 999px;
+    background: #4ADE80; color: #0A0A0B; font-size: 16px; font-weight: 700;
+    text-align: center; text-decoration: none; border: 0;
+  }
+  .button.secondary { background: #1C1C21; color: #F5F5F7; border: 1px solid #26262C; margin-top: 10px; }
+  .note { color: #8A8A93; font-size: 13px; line-height: 1.5; margin-top: 16px; }
+  .small { color: #55555E; font-size: 12px; line-height: 1.5; margin-top: 24px; }
+  .error h1 { color: #F87171; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="brand">HÍT ĐẤT AI</span>
+    <button class="lang" id="lang" type="button">English</button>
+  </header>
+
+  <section class="card" id="challenge" hidden>
+    <h1 id="title"></h1>
+    <div class="icon" id="icon"></div>
+    <div class="exercise" id="exercise"></div>
+    <div class="score" id="score"></div>
+    <div class="goal" id="goal"></div>
+    <div class="date" id="date"></div>
+  </section>
+
+  <section class="card error" id="invalid" hidden>
+    <h1 id="invalidTitle"></h1>
+    <p class="goal" id="invalidBody"></p>
+  </section>
+
+  <a class="button" id="open" href="#"></a>
+  <a class="button secondary" id="store" href="#"></a>
+  <p class="note" id="howto"></p>
+  <p class="note" id="rule"></p>
+  <p class="small" id="privacy"></p>
+</main>
+
+<script>
+/* ------------------------------------------------------------------------
+ * Injected by scripts/build-challenge-page.mjs: src/challenge/codec.js
+ * verbatim, and the exercises' names and icons from the app's own tables.
+ * DO NOT EDIT the injected block: edit those files and rebuild.
+ * --------------------------------------------------------------------- */
+/* __CHALLENGE_CORE__ */
+
+/* ------------------------------------------------------------------------
+ * Page. Everything happens here, in the browser: the challenge is in the
+ * part of the URL after #, which is never sent to the server, and this page
+ * sends nothing anywhere.
+ * --------------------------------------------------------------------- */
+const TEXT = {
+  vi: {
+    switchTo: 'English',
+    title: '{name} thách đấu bạn!',
+    someone: 'Một người bạn',
+    goalReps: 'cái trong {seconds} giây. Bạn làm nhiều hơn được không?',
+    goalHold: 'giây giữ tư thế. Bạn giữ lâu hơn được không?',
+    open: 'Mở trong app',
+    store: 'Tải Hít Đất AI trên Google Play',
+    howtoAndroid: 'Đã cài app? Bấm "Mở trong app". Chưa cài thì nút sẽ đưa bạn tới Google Play.',
+    howtoOther: 'Hít Đất AI hiện có trên Android. Mở link này trên điện thoại Android để nhận thách đấu.',
+    rule: 'Thách đấu chỉ tính khi đếm bằng camera. Camera xử lý ngay trên máy, không tải video lên đâu cả.',
+    privacy: 'Trang này không thu thập dữ liệu. Thông tin thách đấu nằm sau dấu # của link nên không được gửi lên máy chủ. Điểm không được kiểm chứng — đây là trò chơi giữa bạn bè.',
+    invalidTitle: 'Link thách đấu bị lỗi',
+    invalidBody: 'Link có thể bị cắt mất một đoạn khi gửi qua tin nhắn. Hãy nhờ bạn gửi lại.',
+  },
+  en: {
+    switchTo: 'Tiếng Việt',
+    title: '{name} challenges you!',
+    someone: 'A friend',
+    goalReps: 'reps in {seconds} seconds. Can you do more?',
+    goalHold: 'seconds held. Can you hold longer?',
+    open: 'Open in the app',
+    store: 'Get Hít Đất AI on Google Play',
+    howtoAndroid: 'Have the app? Tap "Open in the app". If not, the button takes you to Google Play.',
+    howtoOther: 'Hít Đất AI is on Android. Open this link on an Android phone to take the challenge.',
+    rule: 'Challenges are counted by the camera only. Video is processed on the phone and never uploaded.',
+    privacy: 'This page collects nothing. The challenge lives after the # in the link, which is never sent to the server. Scores are not verified; it is a game between friends.',
+    invalidTitle: 'This challenge link is damaged',
+    invalidBody: 'Messaging apps sometimes cut links short. Ask your friend to send it again.',
+  },
+};
+
+const fill = (text, params) => text.replace(/\{(\w+)\}/g, (m, k) => (k in params ? String(params[k]) : m));
+const $ = (id) => document.getElementById(id);
+
+let token = location.hash.replace(/^#/, '');
+try {
+  token = decodeURIComponent(token);
+} catch (e) {
+  /* a stray % in a mangled link: decodeChallenge rejects it below */
+}
+const decoded = decodeChallenge(token);
+const android = /Android/i.test(navigator.userAgent);
+let lang = /^vi\b/i.test(navigator.language || '') ? 'vi' : (navigator.language ? 'en' : 'vi');
+
+function render() {
+  const T = TEXT[lang];
+  document.documentElement.lang = lang;
+  $('lang').textContent = T.switchTo;
+  $('store').textContent = T.store;
+  $('store').href = PLAY_STORE_URL;
+  $('rule').textContent = T.rule;
+  $('privacy').textContent = T.privacy;
+
+  if (!decoded.ok) {
+    $('invalid').hidden = false;
+    $('invalidTitle').textContent = T.invalidTitle;
+    $('invalidBody').textContent = T.invalidBody;
+    $('open').hidden = true;
+    $('howto').hidden = true;
+    return;
+  }
+
+  const c = decoded.challenge;
+  const known = EXERCISE_NAMES[c.exerciseId];
+  $('challenge').hidden = false;
+  $('title').textContent = fill(T.title, { name: c.name || T.someone });
+  $('icon').textContent = known ? known.icon : '🏋️';
+  $('exercise').textContent = known ? known[lang] : c.exerciseId;
+  $('score').textContent = c.score;
+  $('goal').textContent = c.format === 'hold' ? T.goalHold : fill(T.goalReps, { seconds: c.durationSeconds });
+  $('date').textContent = new Date(c.at).toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-GB');
+
+  $('open').textContent = T.open;
+  // On Android, an intent:// link opens the app if it is installed and
+  // falls back to the Play Store if not. Elsewhere the app scheme is the
+  // best there is.
+  $('open').href = android ? challengeIntentUrl(token) : challengeAppUrl(token);
+  $('howto').textContent = android ? T.howtoAndroid : T.howtoOther;
+}
+
+$('lang').addEventListener('click', () => {
+  lang = lang === 'vi' ? 'en' : 'vi';
+  render();
+});
+render();
+</script>
+</body>
+</html>

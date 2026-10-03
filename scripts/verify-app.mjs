@@ -37,7 +37,8 @@ const achievements = await bundle(
 const stats = await bundle(timeSrc, stripImport(read('src/utils/stats.js'), './time'));
 const strings = await bundle(
   read('src/i18n/exerciseStrings.js'),
-  stripImport(read('src/i18n/strings.js'), './exerciseStrings'),
+  read('src/i18n/featureStrings.js'),
+  stripImport(stripImport(read('src/i18n/strings.js'), './exerciseStrings'), './featureStrings'),
 );
 const blocker = await bundle(read('src/blocker/blockerLogic.js'));
 const store = await asModule(
