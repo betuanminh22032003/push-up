@@ -29,6 +29,8 @@
  *          is how a push-up is described: arms straight down whatever the
  *          body's tilt. Only the pitch is undone; use it with roll 0.
  *   lift   metres off the floor (a jump)
+ *   pointed  toes pointed along the shin instead of the foot at a right
+ *          angle to it: kneeling on the shins, legs held in the air
  */
 
 const BONES = {
@@ -45,6 +47,9 @@ const BONES = {
 };
 
 const DEG = Math.PI / 180;
+
+/** Ankle height over the floor with the foot flat. */
+const HEEL = 0.065;
 
 // --- small vector maths ----------------------------------------------------
 
@@ -86,6 +91,7 @@ const STAND = {
   rLeg: [0, 4, 0, 4],
   world: null,
   lift: 0,
+  pointed: false,
 };
 
 const pose = (p = {}) => ({ ...STAND, ...p });
@@ -119,7 +125,9 @@ export function solvePose(p) {
   const up = turn(chestFrame, [0, 1, 0]);
   const neck = add(pelvis, scale(up, BONES.torso));
   const head = add(neck, scale(up, BONES.neck));
-  const j = { pelvis, neck, head };
+  // A point in front of the face: which way the head looks, for the renderer.
+  const face = add(head, turn(chestFrame, [0, 0, 0.1]));
+  const j = { pelvis, neck, head, face };
 
   for (const [name, s] of [['L', 1], ['R', -1]]) {
     const arm = p[`${name === 'L' ? 'l' : 'r'}Arm`];
@@ -131,8 +139,11 @@ export function solvePose(p) {
     const shinLocal = boneDir(leg[2] + legPitch, leg[3], s);
     const knee = add(hip, scale(turn(pelvisFrame, boneDir(leg[0] + legPitch, leg[1], s)), BONES.thigh));
     const ankle = add(knee, scale(turn(pelvisFrame, shinLocal), BONES.shin));
-    // The foot sits at a right angle to the shin, in the leg's own plane.
-    const footLocal = [shinLocal[0], shinLocal[2], -shinLocal[1]];
+    // The foot sits at a right angle to the shin, in the leg's own plane, or
+    // carries on along it with the toes pointed (kneeling, legs in the air).
+    const footLocal = p.pointed
+      ? unit(add(shinLocal, scale([shinLocal[0], shinLocal[2], -shinLocal[1]], 0.35)))
+      : [shinLocal[0], shinLocal[2], -shinLocal[1]];
     const toe = add(ankle, scale(turn(pelvisFrame, footLocal), BONES.foot));
     Object.assign(j, {
       [`shoulder${name}`]: shoulder,
@@ -145,9 +156,13 @@ export function solvePose(p) {
     });
   }
 
-  // Rest on the floor: the lowest point (the head counts by its underside).
+  // Rest on the floor: the lowest point. The head counts by its underside and
+  // an ankle by the heel below it.
   let low = j.head[1] - BONES.head;
-  for (const [k, v] of Object.entries(j)) if (k !== 'head') low = Math.min(low, v[1]);
+  for (const [k, v] of Object.entries(j)) {
+    if (k === 'head' || k === 'face') continue;
+    low = Math.min(low, k.startsWith('ankle') ? v[1] - HEEL : v[1]);
+  }
   const dy = (p.lift || 0) - low;
   for (const k of Object.keys(j)) j[k] = [j[k][0], j[k][1] + dy, j[k][2]];
   return j;
@@ -179,21 +194,33 @@ const ARMS_DOWN = [0, 12, 0, 12];
 const PUSH_TOP = pose({ rot: [72, 0, 0], world: 'arms', ...both(ARMS_DOWN) });
 const PUSH_LOW = pose({ rot: [84, 0, 0], world: 'arms', ...both([-80, 40, 0, 10]) });
 const ON_BACK_KNEES_UP = { rot: [-90, 0, 0], world: 'legs', ...legs([135, 6, 40, 6]) };
-const QUADRUPED = { rot: [78, 0, 0], world: 'all', ...both([0, 8, 0, 8]), ...legs([0, 8, -90, 8]) };
-const HANDS_ON_HEAD = [10, 125, 150, -70];
+const QUADRUPED = { rot: [78, 0, 0], world: 'all', pointed: true, ...both([0, 8, 0, 8]), ...legs([0, 8, -90, 8]) };
+// Elbows out wide, fingertips at the temples.
+const HANDS_ON_HEAD = [180, 60, 0, -88];
 const DUMBBELLS = ['dumbbells'];
 
-/** Every exercise: poses, the loop through them ([pose index, ms]), props, camera. */
+const HANDS = ['handL', 'handR'];
+const FEET = ['ankleL', 'ankleR'];
+
+/**
+ * Every exercise: poses, the loop through them ([pose index, ms]), props,
+ * camera angle, the joint that stays put (anchor) and the hands or feet that
+ * stay planted where the loop starts (plant).
+ */
 const DEMOS = {
-  pushup: { poses: [PUSH_TOP, PUSH_LOW], yaw: 70 },
+  pushup: { poses: [PUSH_TOP, PUSH_LOW], anchor: 'ankleL', plant: [...HANDS, ...FEET], yaw: 70 },
   kneepushup: {
+    plant: HANDS,
+    anchor: 'kneeL',
     poses: [
-      pose({ rot: [54, 0, 0], world: 'arms', ...both(ARMS_DOWN), ...legs([0, 4, -70, 4]) }),
-      pose({ rot: [74, 0, 0], world: 'arms', ...both([-80, 40, 0, 10]), ...legs([0, 4, -70, 4]) }),
+      pose({ rot: [54, 0, 0], world: 'arms', pointed: true, ...both(ARMS_DOWN), ...legs([0, 4, -70, 4]) }),
+      pose({ rot: [74, 0, 0], world: 'arms', pointed: true, ...both([-80, 40, 0, 10]), ...legs([0, 4, -70, 4]) }),
     ],
     yaw: 70,
   },
   widepushup: {
+    plant: [...HANDS, ...FEET],
+    anchor: 'ankleL',
     poses: [
       pose({ rot: [72, 0, 0], world: 'arms', ...both([0, 35, 0, 30]) }),
       pose({ rot: [84, 0, 0], world: 'arms', ...both([-55, 65, 0, 28]) }),
@@ -201,6 +228,8 @@ const DEMOS = {
     yaw: 55,
   },
   diamondpushup: {
+    plant: [...HANDS, ...FEET],
+    anchor: 'ankleL',
     poses: [
       pose({ rot: [72, 0, 0], world: 'arms', ...both([0, -14, 0, -14]) }),
       pose({ rot: [84, 0, 0], world: 'arms', ...both([-85, 12, 15, -40]) }),
@@ -208,6 +237,8 @@ const DEMOS = {
     yaw: 55,
   },
   inclinepushup: {
+    plant: [...HANDS, ...FEET],
+    anchor: 'ankleL',
     poses: [
       pose({ rot: [50, 0, 0], world: 'arms', ...both(ARMS_DOWN) }),
       pose({ rot: [62, 0, 0], world: 'arms', ...both([-80, 40, 0, 10]) }),
@@ -216,6 +247,8 @@ const DEMOS = {
     yaw: 70,
   },
   declinepushup: {
+    plant: HANDS,
+    anchor: 'handL',
     poses: [
       pose({ rot: [92, 0, 0], world: 'arms', ...both(ARMS_DOWN) }),
       pose({ rot: [104, 0, 0], world: 'arms', ...both([-80, 40, 0, 10]) }),
@@ -224,6 +257,7 @@ const DEMOS = {
     yaw: 70,
   },
   dip: {
+    plant: [...HANDS, ...FEET],
     poses: [
       pose({ world: 'all', ...both([-12, 10, -12, 10]), ...legs([75, 8, 0, 8]) }),
       pose({ world: 'all', ...both([-75, 12, 0, 8]), ...legs([115, 8, 0, 8]) }),
@@ -233,6 +267,7 @@ const DEMOS = {
     yaw: 60,
   },
   pikepushup: {
+    plant: [...HANDS, ...FEET],
     poses: [
       pose({ rot: [135, 0, 0], ...both([180, 10, 180, 10]), ...legs([90, 4, 90, 4]) }),
       pose({ rot: [150, 0, 0], world: 'arms', ...both([-50, 35, 5, 10]), ...legs([105, 4, 105, 4]) }),
@@ -261,6 +296,7 @@ const DEMOS = {
   },
 
   squat: {
+    plant: FEET,
     poses: [
       pose(),
       pose({ rot: [35, 0, 0], world: 'all', ...both([85, 10, 85, 10]), ...legs([85, 12, -25, 10]) }),
@@ -269,6 +305,7 @@ const DEMOS = {
     yaw: 55,
   },
   sumosquat: {
+    plant: FEET,
     poses: [
       pose(legs([0, 22, 0, 22])),
       pose({ rot: [18, 0, 0], world: 'legs', ...both([30, 20, 150, -70]), ...legs([60, 50, -5, 28]) }),
@@ -285,6 +322,7 @@ const DEMOS = {
     return { poses: [pose(legs([0, 10, 0, 10])), left, mirror(left)], loop: [[1, 800], [0, 700], [2, 800], [0, 700]], yaw: 15 };
   })(),
   splitsquat: {
+    plant: FEET,
     poses: [
       pose({ world: 'legs', lLeg: [28, 4, -8, 4], rLeg: [-22, 4, -45, 4] }),
       pose({ world: 'legs', lLeg: [85, 4, 0, 4], rLeg: [-18, 4, -82, 4] }),
@@ -292,6 +330,7 @@ const DEMOS = {
     yaw: 80,
   },
   wallsit: {
+    plant: FEET,
     poses: [
       pose({ world: 'legs', ...both([0, 10, 0, 10]), ...legs([90, 8, 0, 8]) }),
       pose({ world: 'legs', spine: [2, 0, 0], ...both([0, 12, 0, 12]), ...legs([90, 8, 0, 8]) }),
@@ -301,6 +340,7 @@ const DEMOS = {
     yaw: 60,
   },
   glutebridge: {
+    plant: FEET,
     poses: [
       pose({ ...ON_BACK_KNEES_UP, world: 'all', ...both([90, 15, 90, 15]) }),
       pose({ rot: [-125, 0, 0], world: 'all', ...both([90, 15, 90, 15]), ...legs([100, 6, 22, 6]) }),
@@ -309,6 +349,7 @@ const DEMOS = {
     yaw: 75,
   },
   singlelegbridge: {
+    plant: ['ankleL'],
     poses: [
       pose({ ...ON_BACK_KNEES_UP, world: 'all', ...both([90, 15, 90, 15]), rLeg: [125, 6, 125, 6] }),
       pose({ rot: [-125, 0, 0], world: 'all', ...both([90, 15, 90, 15]), lLeg: [100, 6, 22, 6], rLeg: [93, 6, 93, 6] }),
@@ -317,17 +358,20 @@ const DEMOS = {
     yaw: 75,
   },
   donkeykick: {
-    poses: [pose(QUADRUPED), pose({ ...QUADRUPED, rLeg: [-90, 8, 180, 8] })],
+    plant: HANDS,
+    poses: [pose(QUADRUPED), pose({ ...QUADRUPED, rLeg: [-90, 8, -180, 8] })],
     anchor: 'handL',
     yaw: 80,
   },
   firehydrant: {
+    plant: HANDS,
     poses: [pose(QUADRUPED), pose({ ...QUADRUPED, rLeg: [0, 75, -90, 0] })],
     anchor: 'handL',
     // From behind, where the leg swinging out to the side shows.
     yaw: 160,
   },
   goodmorning: {
+    plant: FEET,
     poses: [
       pose(both(HANDS_ON_HEAD)),
       pose({ rot: [78, 0, 0], world: 'legs', ...both(HANDS_ON_HEAD), ...legs([12, 6, -8, 6]) }),
@@ -337,6 +381,7 @@ const DEMOS = {
   },
 
   situp: {
+    plant: FEET,
     poses: [
       pose({ ...ON_BACK_KNEES_UP, ...both([0, 14, 0, 14]) }),
       pose({ ...ON_BACK_KNEES_UP, spine: [80, 0, 0], ...both([80, 10, 80, 10]) }),
@@ -345,6 +390,7 @@ const DEMOS = {
     yaw: 75,
   },
   crunch: {
+    plant: FEET,
     poses: [
       pose({ ...ON_BACK_KNEES_UP, ...both([25, 12, 25, 12]) }),
       pose({ ...ON_BACK_KNEES_UP, spine: [32, 0, 0], ...both([30, 12, 30, 12]) }),
@@ -354,8 +400,8 @@ const DEMOS = {
   },
   legraise: {
     poses: [
-      pose({ rot: [-90, 0, 0], ...both([0, 15, 0, 15]), ...legs([8, 4, 8, 4]) }),
-      pose({ rot: [-90, 0, 0], ...both([0, 15, 0, 15]), ...legs([88, 4, 88, 4]) }),
+      pose({ pointed: true, rot: [-90, 0, 0], ...both([0, 15, 0, 15]), ...legs([8, 4, 8, 4]) }),
+      pose({ pointed: true, rot: [-90, 0, 0], ...both([0, 15, 0, 15]), ...legs([88, 4, 88, 4]) }),
     ],
     anchor: 'head',
     yaw: 80,
@@ -364,8 +410,7 @@ const DEMOS = {
     const left = pose({
       rot: [-90, 0, 0],
       spine: [32, 32, 0],
-      // Fingertips at the temples, elbows wide.
-      ...both([150, 75, 215, -20]),
+      ...both(HANDS_ON_HEAD),
       lLeg: [100, 4, 10, 4],
       rLeg: [32, 4, 32, 4],
     });
@@ -373,7 +418,7 @@ const DEMOS = {
   })(),
   mountainclimber: (() => {
     const left = pose({ ...PUSH_TOP, lLeg: [115, 4, 12, 4] });
-    return { poses: [PUSH_TOP, left, mirror(left)], loop: [[1, 300], [2, 300]], anchor: 'handL', yaw: 75 };
+    return { poses: [PUSH_TOP, left, mirror(left)], loop: [[1, 300], [2, 300]], anchor: 'handL', plant: HANDS, yaw: 75 };
   })(),
   russiantwist: (() => {
     const left = pose({
@@ -403,16 +448,16 @@ const DEMOS = {
   },
   hollowhold: {
     poses: [
-      pose({ rot: [-90, 0, 0], spine: [25, 0, 0], ...both([170, 12, 170, 12]), ...legs([25, 3, 25, 3]) }),
-      pose({ rot: [-90, 0, 0], spine: [27, 0, 0], ...both([168, 12, 168, 12]), ...legs([27, 3, 27, 3]) }),
+      pose({ pointed: true, rot: [-90, 0, 0], spine: [25, 0, 0], ...both([170, 12, 170, 12]), ...legs([25, 3, 25, 3]) }),
+      pose({ pointed: true, rot: [-90, 0, 0], spine: [27, 0, 0], ...both([168, 12, 168, 12]), ...legs([27, 3, 27, 3]) }),
     ],
     loop: [[1, 1600], [0, 1600]],
     yaw: 75,
   },
   superman: {
     poses: [
-      pose({ rot: [90, 0, 0], ...both([180, 14, 180, 14]), ...legs([0, 5, 0, 5]) }),
-      pose({ rot: [90, 0, 0], spine: [-18, 0, 0], ...both([198, 14, 198, 14]), ...legs([-16, 5, -16, 5]) }),
+      pose({ pointed: true, rot: [90, 0, 0], ...both([180, 14, 180, 14]), ...legs([0, 5, 0, 5]) }),
+      pose({ pointed: true, rot: [90, 0, 0], spine: [-18, 0, 0], ...both([198, 14, 198, 14]), ...legs([-16, 5, -16, 5]) }),
     ],
     loop: [[1, 900], [1, 1200], [0, 900]],
     yaw: 75,
@@ -454,6 +499,7 @@ export function getDemo(exerciseId) {
     loop,
     period: loop.reduce((sum, [, ms]) => sum + ms, 0),
     anchor: demo.anchor || null,
+    plant: demo.plant || [],
     props: demo.props || [],
     yaw: demo.yaw ?? 45,
   };
@@ -476,6 +522,7 @@ function blend(a, b, t) {
     lLeg: lerpList(a.lLeg, b.lLeg, t),
     rLeg: lerpList(a.rLeg, b.rLeg, t),
     world: a.world,
+    pointed: a.pointed,
     lift: lerp(a.lift || 0, b.lift || 0, t),
   };
 }
@@ -507,7 +554,91 @@ export function framesAt(demo, ms) {
     elapsed += dur;
     from = to;
   }
-  return place(demo, joints);
+  return settle(demo, place(demo, joints));
+}
+
+/** The loop's first frame as posed, before anything is planted: the plant targets. */
+const starts = new WeakMap();
+function startFrame(demo) {
+  if (!starts.has(demo)) {
+    const first = demo.loop[demo.loop.length - 1][0];
+    starts.set(demo, place(demo, solvePose(demo.poses[first])));
+  }
+  return starts.get(demo);
+}
+
+/**
+ * What the angles alone get wrong. Planted hands and feet (`plant`) stay
+ * where the first frame put them, the arm or leg bending to reach them (two-
+ * bone IK, the elbow or knee kept on the side the pose bends it), so a
+ * push-up's hands and a squat's feet do not slide. Then feet near the floor
+ * under a fairly upright shin are laid flat instead of pointing their toes
+ * into it.
+ */
+function settle(demo, joints) {
+  const j = { ...joints };
+  if (demo.plant.length) {
+    const start = startFrame(demo);
+    for (const end of demo.plant) {
+      const side = end.slice(-1);
+      if (end.startsWith('hand')) {
+        const [elbow, hand] = reach(j[`shoulder${side}`], j[`elbow${side}`], start[end], BONES.upperArm, BONES.forearm);
+        j[`elbow${side}`] = elbow;
+        j[`hand${side}`] = hand;
+      } else {
+        const foot = sub(j[`toe${side}`], j[`ankle${side}`]);
+        const [knee, ankle] = reach(j[`hip${side}`], j[`knee${side}`], start[end], BONES.thigh, BONES.shin);
+        j[`knee${side}`] = knee;
+        j[`ankle${side}`] = ankle;
+        j[`toe${side}`] = add(ankle, foot);
+      }
+    }
+  }
+  for (const side of ['L', 'R']) flattenFoot(j, side);
+  return j;
+}
+
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const norm = (a) => Math.hypot(a[0], a[1], a[2]);
+const unit = (a) => {
+  const n = norm(a);
+  return n < 1e-9 ? [0, 0, 0] : scale(a, 1 / n);
+};
+
+/** Two-bone IK: [middle joint, end] for a chain from `root` reaching `target`. */
+function reach(root, poleHint, target, l1, l2) {
+  const toTarget = sub(target, root);
+  const dist = Math.min(Math.max(norm(toTarget), Math.abs(l1 - l2) + 1e-3), l1 + l2 - 1e-4);
+  const u = unit(toTarget);
+  const a = (l1 * l1 - l2 * l2 + dist * dist) / (2 * dist);
+  const h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
+  // Bend towards where the pose had the elbow or knee.
+  const pole = sub(poleHint, root);
+  let v = unit(sub(pole, scale(u, dot(pole, u))));
+  if (norm(v) === 0) v = unit([u[1], -u[0], 0]);
+  const middle = add(add(root, scale(u, a)), scale(v, h));
+  return [middle, add(root, scale(u, dist))];
+}
+
+/** A foot on the floor under an upright-ish shin lies flat, toes ahead. */
+function flattenFoot(j, side) {
+  const ankle = j[`ankle${side}`];
+  const knee = j[`knee${side}`];
+  const shin = unit(sub(ankle, knee));
+  if (ankle[1] > HEEL + 0.08 || -shin[1] < Math.cos(60 * DEG)) return;
+  // Ahead is where the face looks; lying on the back, away from the head.
+  let ahead = sub(j.face, j.head);
+  ahead = [ahead[0], 0, ahead[2]];
+  if (norm(ahead) < 0.04) {
+    const down = sub(j.pelvis, j.neck);
+    ahead = [down[0], 0, down[2]];
+  }
+  ahead = unit(ahead);
+  if (norm(ahead) === 0) return;
+  const drop = Math.max(0, ankle[1] - 0.02);
+  const run = Math.sqrt(Math.max(0, BONES.foot * BONES.foot - drop * drop));
+  j[`toe${side}`] = [ankle[0] + ahead[0] * run, ankle[1] - drop, ankle[2] + ahead[2] * run];
 }
 
 /** Shift joints so the anchor sits where it does in the first pose. */
