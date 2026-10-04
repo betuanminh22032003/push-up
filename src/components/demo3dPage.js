@@ -19,7 +19,7 @@ import { framesAt, hasDumbbells, propBoxes, sceneBounds } from '../exercises/dem
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js';
 
 export const JOINTS = [
-  'pelvis', 'neck', 'head',
+  'pelvis', 'neck', 'head', 'face',
   'shoulderL', 'elbowL', 'handL', 'hipL', 'kneeL', 'ankleL', 'toeL',
   'shoulderR', 'elbowR', 'handR', 'hipR', 'kneeR', 'ankleR', 'toeR',
 ];
@@ -85,50 +85,79 @@ export function demoPageHtml(demo, colors, { lite = false } = {}) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
   document.body.appendChild(renderer.domElement);
 
   var scene = new THREE.Scene();
-  scene.background = new THREE.Color('${colors.surface}');
   var cx = D.bounds.center[0], cz = D.bounds.center[1];
   var size = Math.max(D.bounds.height, D.bounds.radius * 2);
-  scene.fog = new THREE.Fog('${colors.surface}', size * 2.5, size * 6);
 
-  // Light: a soft sky, a key light that casts the shadow, a cool rim from behind.
-  scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x1a1a20, 1.1));
-  var key = new THREE.DirectionalLight(0xffffff, 2.2);
-  key.position.set(cx + 2.5, 4.5, cz + 3);
+  function gradient(w, h, paint) {
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    paint(c.getContext('2d'), w, h);
+    var tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  // A studio backdrop: lighter behind the figure, darker towards the top.
+  scene.background = gradient(4, 256, function (g, w, h) {
+    var grad = g.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#0d0d10');
+    grad.addColorStop(0.55, '#1d1e24');
+    grad.addColorStop(1, '${colors.surface}');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, w, h);
+  });
+
+  // Three-point light: a warm key that casts the shadow, a cool fill, a rim.
+  scene.add(new THREE.HemisphereLight(0xe8eeff, 0x202026, 0.75));
+  var key = new THREE.DirectionalLight(0xfff1e2, 2.6);
+  key.position.set(cx + 2.2, 4.8, cz + 2.8);
   key.target.position.set(cx, 0, cz);
   key.castShadow = true;
   key.shadow.mapSize.set(${lite ? 512 : 1024}, ${lite ? 512 : 1024});
   var sc = key.shadow.camera;
   sc.left = sc.bottom = -size; sc.right = sc.top = size; sc.near = 0.5; sc.far = 12;
-  key.shadow.bias = -0.0005;
+  key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.02;
-  key.shadow.radius = 4;
+  key.shadow.radius = 5;
   scene.add(key, key.target);
-  var rim = new THREE.DirectionalLight(0x9fc4ff, 0.9);
-  rim.position.set(cx - 3, 2.5, cz - 3);
+  var fill = new THREE.DirectionalLight(0xc8dcff, 0.7);
+  fill.position.set(cx - 3, 2, cz + 2.5);
+  scene.add(fill);
+  var rim = new THREE.DirectionalLight(0xa9c8ff, 1.4);
+  rim.position.set(cx - 1.5, 3, cz - 3.5);
   scene.add(rim);
 
-  // Floor: a disc that fades into the background, with a faint ring.
+  // Floor: a pool of light under the figure fading into the dark, so there is
+  // no edge to see; it still takes the shadow.
+  var floorTex = gradient(256, 256, function (g, w, h) {
+    var grad = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    grad.addColorStop(0, 'rgba(58,60,70,1)');
+    grad.addColorStop(0.55, 'rgba(36,37,44,0.9)');
+    grad.addColorStop(1, 'rgba(19,19,22,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, w, h);
+  });
   var floor = new THREE.Mesh(
-    new THREE.CircleGeometry(size * 6, 64),
-    new THREE.MeshStandardMaterial({ color: '${colors.surfaceAlt}', roughness: 0.95 })
+    new THREE.CircleGeometry(size * 1.5, 64),
+    new THREE.MeshStandardMaterial({ map: floorTex, transparent: true, roughness: 0.9, depthWrite: false })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(cx, 0, cz);
   floor.receiveShadow = true;
   scene.add(floor);
   var ring = new THREE.Mesh(
-    new THREE.RingGeometry(D.bounds.radius * 0.98, D.bounds.radius, 64),
-    new THREE.MeshBasicMaterial({ color: '${colors.border}' })
+    new THREE.RingGeometry(D.bounds.radius * 0.985, D.bounds.radius, 96),
+    new THREE.MeshBasicMaterial({ color: '${colors.accent}', transparent: true, opacity: 0.18 })
   );
   ring.rotation.x = -Math.PI / 2;
   ring.position.set(cx, 0.002, cz);
   scene.add(ring);
 
   // Props: benches, chairs, a wall.
-  var propMat = new THREE.MeshStandardMaterial({ color: 0x4a4a55, roughness: 0.7 });
+  var propMat = new THREE.MeshStandardMaterial({ color: 0x3d3f4a, roughness: 0.6 });
   D.boxes.forEach(function (b) {
     var m = new THREE.Mesh(new THREE.BoxGeometry(b.w * 2, b.h, b.d * 2), propMat);
     m.position.set(b.x, b.h / 2, b.z);
@@ -136,16 +165,15 @@ export function demoPageHtml(demo, colors, { lite = false } = {}) {
     scene.add(m);
   });
 
-  // The mannequin: smooth capsules for the limbs, darker spheres at the joints.
-  var skin = new THREE.MeshStandardMaterial({ color: 0xe9e4dc, roughness: 0.45, metalness: 0.05 });
-  // Limbs a shade apart, so left and right still tell apart when turned; the
-  // hinge balls carry the colour.
-  var left = new THREE.MeshStandardMaterial({ color: 0xe3e6df, roughness: 0.45, metalness: 0.05 });
-  var right = new THREE.MeshStandardMaterial({ color: 0xd9dde6, roughness: 0.45, metalness: 0.05 });
-  var jointL = new THREE.MeshStandardMaterial({ color: '${colors.accent}', roughness: 0.4 });
-  var jointR = new THREE.MeshStandardMaterial({ color: 0x60a5fa, roughness: 0.4 });
-  var joint = new THREE.MeshStandardMaterial({ color: 0x6b6b76, roughness: 0.5 });
-  var weight = new THREE.MeshStandardMaterial({ color: 0x30303a, roughness: 0.35, metalness: 0.6 });
+  // --- the mannequin -------------------------------------------------------
+  // A porcelain finish; the elbow and knee hinges tell left (green) from
+  // right (blue) when it turns.
+  var skin = new THREE.MeshPhysicalMaterial({ color: 0xe9e2d7, roughness: 0.38, clearcoat: 0.35, clearcoatRoughness: 0.45 });
+  var shade = new THREE.MeshPhysicalMaterial({ color: 0xd2c9bb, roughness: 0.42, clearcoat: 0.25 });
+  var jointL = new THREE.MeshStandardMaterial({ color: 0x5ee39a, roughness: 0.35 });
+  var jointR = new THREE.MeshStandardMaterial({ color: 0x74aef7, roughness: 0.35 });
+  var visorMat = new THREE.MeshPhysicalMaterial({ color: 0x15161b, roughness: 0.15, clearcoat: 1, metalness: 0.2 });
+  var ironMat = new THREE.MeshStandardMaterial({ color: 0x2b2c33, roughness: 0.35, metalness: 0.7 });
 
   function mesh(geo, mat) {
     var m = new THREE.Mesh(geo, mat);
@@ -155,54 +183,69 @@ export function demoPageHtml(demo, colors, { lite = false } = {}) {
     scene.add(m);
     return m;
   }
-  // Bone lengths never change (the poses are angles), so each capsule is built
-  // to its bone's length once and only moved after that.
-  var F0 = D.frames[0];
-  function at0(n) { var o = JOINTS.indexOf(n) * 3; return new THREE.Vector3(F0[o], F0[o + 1], F0[o + 2]); }
-  function bone(a, b, r, mat) {
-    var len = Math.max(0.01, at0(a).distanceTo(at0(b)));
-    return { a: a, b: b, m: mesh(new THREE.CapsuleGeometry(r, len, 8, 16), mat) };
+  var SPHERE = new THREE.SphereGeometry(1, 32, 20);
+  function ball(mat) { return mesh(SPHERE, mat); }
+
+  // Limbs taper from the near joint to the far one: a unit-height cylinder,
+  // wide end at the bottom, stretched along the bone every frame.
+  function limb(a, b, rNear, rFar) {
+    return { a: a, b: b, m: mesh(new THREE.CylinderGeometry(rFar, rNear, 1, 24, 1, true), skin) };
   }
-  var bones = [
-    bone('hipL', 'kneeL', 0.072, left), bone('kneeL', 'ankleL', 0.055, left), bone('ankleL', 'toeL', 0.04, left),
-    bone('hipR', 'kneeR', 0.072, right), bone('kneeR', 'ankleR', 0.055, right), bone('ankleR', 'toeR', 0.04, right),
-    bone('shoulderL', 'elbowL', 0.05, left), bone('elbowL', 'handL', 0.042, left),
-    bone('shoulderR', 'elbowR', 0.05, right), bone('elbowR', 'handR', 0.042, right),
-    bone('neck', 'head', 0.045, skin),
-  ];
-  var balls = ['elbowL', 'elbowR', 'kneeL', 'kneeR', 'shoulderL', 'shoulderR', 'hipL', 'hipR'].map(function (n) {
-    var mat = n.indexOf('shoulder') === 0 || n.indexOf('hip') === 0 ? joint : n.slice(-1) === 'L' ? jointL : jointR;
-    // A little fatter than the bones they join, or the two surfaces flicker.
-    var r = { elb: 0.06, kne: 0.082, sho: 0.068, hip: 0.09 }[n.slice(0, 3)];
-    return { n: n, r: r, m: mesh(new THREE.SphereGeometry(1, 16, 12), mat) };
+  var limbs = [];
+  var joints = [];
+  ['L', 'R'].forEach(function (side) {
+    var hinge = side === 'L' ? jointL : jointR;
+    limbs.push(
+      limb('shoulder' + side, 'elbow' + side, 0.054, 0.041),
+      limb('elbow' + side, 'hand' + side, 0.04, 0.029),
+      limb('hip' + side, 'knee' + side, 0.08, 0.054),
+      limb('knee' + side, 'ankle' + side, 0.053, 0.035)
+    );
+    joints.push(
+      { n: 'shoulder' + side, r: 0.064, m: ball(skin) },
+      { n: 'elbow' + side, r: 0.045, m: ball(hinge) },
+      { n: 'knee' + side, r: 0.059, m: ball(hinge) },
+      { n: 'ankle' + side, r: 0.038, m: ball(shade) },
+      { n: 'hip' + side, r: 0.078, m: ball(skin) }
+    );
   });
-  var hands = ['handL', 'handR'].map(function (n) {
-    return { n: n, m: mesh(new THREE.SphereGeometry(0.048, 16, 12), skin) };
-  });
-  var head = mesh(new THREE.SphereGeometry(1, 32, 24), skin);
-  var chest = mesh(new THREE.SphereGeometry(1, 32, 24), skin);
-  var belly = mesh(new THREE.SphereGeometry(1, 32, 24), skin);
-  var bells = D.dumbbells ? ['handL', 'handR'].map(function (n) {
-    return { n: n, m: mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.26, 16), weight) };
+  var neckM = mesh(new THREE.CylinderGeometry(0.042, 0.05, 1, 20, 1, true), skin);
+  var head = ball(skin), visor = ball(visorMat);
+  var chest = ball(skin), waist = ball(shade), hips = ball(skin);
+  var hands = ['L', 'R'].map(function (side) { return { s: side, m: ball(skin) }; });
+  var feet = ['L', 'R'].map(function (side) { return { s: side, m: ball(skin) }; });
+  var bells = D.dumbbells ? ['L', 'R'].map(function (side) {
+    return {
+      s: side,
+      bar: mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.2, 12), ironMat),
+      a: mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.045, 24), ironMat),
+      b: mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.045, 24), ironMat),
+    };
   }) : [];
 
   var P = {};
   JOINTS.forEach(function (n) { P[n] = new THREE.Vector3(); });
-  var up = new THREE.Vector3(), side = new THREE.Vector3(), fwd = new THREE.Vector3();
+  var bx = new THREE.Vector3(), by = new THREE.Vector3(), bz = new THREE.Vector3();
   var basis = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  function V(x, y, z) { return new THREE.Vector3(x || 0, y || 0, z || 0); }
 
-  // Place a mesh at 'at' with local y along 'y', local x near 'x', scaled by (sx, sy, sz).
+  // Place a mesh at 'at', local y along 'y' and local x as near 'x' as can be.
   function orient(m, at, y, x, sx, sy, sz) {
-    up.copy(y).normalize();
-    side.copy(x).addScaledVector(up, -x.dot(up));
-    if (side.lengthSq() < 1e-6) side.set(1, 0, 0).addScaledVector(up, -up.x);
-    side.normalize();
-    fwd.crossVectors(side, up);
-    basis.makeBasis(side, up, fwd);
+    by.copy(y).normalize();
+    bx.copy(x).addScaledVector(by, -x.dot(by));
+    if (bx.lengthSq() < 1e-6) bx.set(1, 0, 0).addScaledVector(by, -by.x);
+    if (bx.lengthSq() < 1e-6) bx.set(0, 0, 1);
+    bx.normalize();
+    bz.crossVectors(bx, by);
+    basis.makeBasis(bx, by, bz);
     q.setFromRotationMatrix(basis);
-    s.set(sx, sy, sz);
-    m.matrix.compose(at, q, s);
+    m.matrix.compose(at, q, s.set(sx, sy, sz));
   }
+  // The same, with local z (the front) towards 'z'.
+  function face(m, at, y, z, sx, sy, sz) {
+    orient(m, at, y, V().crossVectors(y, z), sx, sy, sz);
+  }
+  function horizontal(v) { return V(v.x, 0, v.z); }
 
   function pose(t) {
     var n = D.frames.length;
@@ -216,34 +259,69 @@ export function demoPageHtml(demo, colors, { lite = false } = {}) {
         a[o + 2] + (b[o + 2] - a[o + 2]) * k
       );
     }
-    var shoulderLine = P.shoulderL.clone().sub(P.shoulderR);
-    bones.forEach(function (bn) {
-      var A = P[bn.a], B = P[bn.b];
-      orient(bn.m, A.clone().add(B).multiplyScalar(0.5), B.clone().sub(A), shoulderLine, 1, 1, 1);
-    });
-    balls.forEach(function (bl) {
-      bl.m.matrix.compose(P[bl.n], q.identity(), s.set(bl.r, bl.r, bl.r));
-    });
-    hands.forEach(function (h) { h.m.matrix.compose(P[h.n], q.identity(), s.set(1, 1, 1)); });
+    var spine = V().subVectors(P.neck, P.pelvis);
+    var shoulders = V().subVectors(P.shoulderL, P.shoulderR);
+    var hipLine = V().subVectors(P.hipL, P.hipR);
+    var look = V().subVectors(P.face, P.head);
 
-    var spine = P.neck.clone().sub(P.pelvis);
-    var hipLine = P.hipL.clone().sub(P.hipR);
-    // Chest: an ellipsoid between the shoulders, a little below the neck.
-    var chestAt = P.pelvis.clone().addScaledVector(spine, 0.68);
-    orient(chest, chestAt, spine, shoulderLine, 0.17, 0.21, 0.11);
-    // Belly and hips: a narrower ellipsoid above the pelvis.
-    var bellyAt = P.pelvis.clone().addScaledVector(spine, 0.2);
-    orient(belly, bellyAt, spine, hipLine, 0.14, 0.17, 0.1);
-    orient(head, P.head, spine, shoulderLine, 0.095, 0.115, 0.1);
+    limbs.forEach(function (l) {
+      var A = P[l.a], B = P[l.b];
+      var d = V().subVectors(B, A);
+      orient(l.m, V().addVectors(A, B).multiplyScalar(0.5), d, shoulders, 1, d.length(), 1);
+    });
+    joints.forEach(function (jt) { jt.m.matrix.compose(P[jt.n], q.identity(), s.set(jt.r, jt.r, jt.r)); });
+
+    // Trunk: hips, a narrower waist, a broad chest, each square to the body.
+    orient(hips, V().copy(P.pelvis).addScaledVector(spine, 0.05), spine, hipLine, 0.165, 0.12, 0.11);
+    orient(waist, V().copy(P.pelvis).addScaledVector(spine, 0.33), spine, V().addVectors(hipLine, shoulders), 0.125, 0.15, 0.092);
+    orient(chest, V().copy(P.pelvis).addScaledVector(spine, 0.7), spine, shoulders, 0.175, 0.2, 0.112);
+    var headUp = V().subVectors(P.head, P.neck);
+    orient(neckM, V().copy(P.neck).addScaledVector(headUp, 0.35), headUp, shoulders, 1, headUp.length() * 0.9, 1);
+    face(head, P.head, headUp, look, 0.088, 0.112, 0.1);
+    // The visor shows which way the face looks.
+    var lookN = look.clone().normalize(), upN = headUp.clone().normalize();
+    face(visor, V().copy(P.head).addScaledVector(lookN, 0.072).addScaledVector(upN, 0.018), headUp, look, 0.066, 0.034, 0.036);
+
+    hands.forEach(function (h) {
+      var hand = P['hand' + h.s];
+      var dir = V().subVectors(hand, P['elbow' + h.s]).normalize();
+      var onFloor = hand.y < 0.07;
+      // On the floor a hand lies flat, fingers ahead; elsewhere it carries on the forearm.
+      if (onFloor) {
+        var ahead = horizontal(look);
+        if (ahead.lengthSq() < 0.002) ahead = horizontal(spine);
+        if (ahead.lengthSq() > 1e-6) dir = ahead.normalize();
+      }
+      var at = V().copy(hand).addScaledVector(dir, 0.045);
+      if (onFloor) at.y = Math.max(at.y, 0.022);
+      orient(h.m, at, dir, shoulders, 0.04, 0.072, 0.024);
+    });
+    feet.forEach(function (ft) {
+      var ankle = P['ankle' + ft.s];
+      var dir = V().subVectors(P['toe' + ft.s], ankle);
+      var len = dir.length();
+      dir.normalize();
+      var at = V().copy(ankle).addScaledVector(dir, len * 0.42);
+      // The sole sits a little below the line from ankle to toe.
+      var down = V().crossVectors(dir, V().crossVectors(V(0, 1, 0), dir));
+      if (down.y > 0) down.negate();
+      if (down.lengthSq() > 1e-6) at.addScaledVector(down.normalize(), 0.018);
+      orient(ft.m, at, dir, hipLine, 0.046, len * 0.68, 0.034);
+    });
     bells.forEach(function (bl) {
-      orient(bl.m, P[bl.n], shoulderLine, spine, 1, 1, 1);
+      var hand = P['hand' + bl.s];
+      var axis = shoulders.clone().normalize();
+      var grip = V().copy(hand).addScaledVector(V().subVectors(hand, P['elbow' + bl.s]).normalize(), 0.03);
+      orient(bl.bar, grip, axis, spine, 1, 1, 1);
+      orient(bl.a, V().copy(grip).addScaledVector(axis, 0.09), axis, spine, 1, 1, 1);
+      orient(bl.b, V().copy(grip).addScaledVector(axis, -0.09), axis, spine, 1, 1, 1);
     });
   }
 
   // Camera: sways around the exercise's best angle; a drag turns it by hand.
   var camera = new THREE.PerspectiveCamera(32, 1, 0.05, 50);
   var elev = 14 * Math.PI / 180;
-  var targetY = D.bounds.height * 0.42;
+  var targetY = D.bounds.height / 2;
   var manualYaw = null, dragX = 0, dragYaw = 0, currentYaw = D.yaw;
   var el = renderer.domElement;
   var dragging = false;
@@ -262,11 +340,12 @@ export function demoPageHtml(demo, colors, { lite = false } = {}) {
     var w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // Far enough back that the whole loop fits whichever way it is turned.
-    var halfFov = (camera.fov * Math.PI / 180) / 2;
-    var needV = (D.bounds.height * 0.62 + 0.15) / Math.tan(halfFov);
-    var needH = (D.bounds.radius + 0.15) / (Math.tan(halfFov) * camera.aspect);
-    camera.userData.dist = Math.max(needV, needH) + D.bounds.radius * 0.7;
+    // Far enough back that the sphere around the whole loop fits the narrower
+    // way of the view: then no turn of the camera can cut the figure off.
+    var halfV = (camera.fov * Math.PI / 180) / 2;
+    var halfH = Math.atan(Math.tan(halfV) * camera.aspect);
+    var r = Math.hypot(D.bounds.radius, D.bounds.height / 2);
+    camera.userData.dist = (r * 1.04) / Math.sin(Math.min(halfV, halfH));
     camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize);
