@@ -45,8 +45,12 @@ export function demoFrames(demo) {
   };
 }
 
-/** The whole page for one exercise. `colors` are the app's theme tokens. */
-export function demoPageHtml(demo, colors) {
+/**
+ * The whole page for one exercise. `colors` are the app's theme tokens.
+ * `lite` is for the small figure shown during a set, next to the camera's own
+ * page: fewer pixels and a coarser shadow, so pose detection keeps its frames.
+ */
+export function demoPageHtml(demo, colors, { lite = false } = {}) {
   const data = JSON.stringify(demoFrames(demo));
   return `<!doctype html>
 <html><head>
@@ -76,7 +80,7 @@ export function demoPageHtml(demo, colors) {
   window.setSpeed = function (x) { speed = x; };
 
   var renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ${lite ? 1.25 : 2}));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -95,7 +99,7 @@ export function demoPageHtml(demo, colors) {
   key.position.set(cx + 2.5, 4.5, cz + 3);
   key.target.position.set(cx, 0, cz);
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.mapSize.set(${lite ? 512 : 1024}, ${lite ? 512 : 1024});
   var sc = key.shadow.camera;
   sc.left = sc.bottom = -size; sc.right = sc.top = size; sc.near = 0.5; sc.far = 12;
   key.shadow.bias = -0.0005;

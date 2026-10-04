@@ -20,12 +20,13 @@ const READY_TIMEOUT_MS = 10000;
  * @param {number} width
  * @param {number} height
  * @param {number} [speed]  1 normal, below 1 slow motion
+ * @param {boolean} [lite]  lighter rendering, for the small figure during a set
  */
-export function ExerciseDemo3D({ exerciseId, width, height, speed = 1 }) {
+export function ExerciseDemo3D({ exerciseId, width, height, speed = 1, lite = false }) {
   const t = useT();
   const ref = useRef(null);
   const [state, setState] = useState('loading'); // 'loading' | 'ready' | 'failed'
-  const html = useMemo(() => demoPageHtml(getDemo(exerciseId), colors), [exerciseId]);
+  const html = useMemo(() => demoPageHtml(getDemo(exerciseId), colors, { lite }), [exerciseId, lite]);
 
   useEffect(() => {
     setState('loading');

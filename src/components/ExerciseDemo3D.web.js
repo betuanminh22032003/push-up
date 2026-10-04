@@ -10,11 +10,11 @@ import { ExerciseDemo } from './ExerciseDemo';
 const READY_TIMEOUT_MS = 10000;
 
 /** The web build's twin of ./ExerciseDemo3D: the same page, in an iframe. */
-export function ExerciseDemo3D({ exerciseId, width, height, speed = 1 }) {
+export function ExerciseDemo3D({ exerciseId, width, height, speed = 1, lite = false }) {
   const t = useT();
   const ref = useRef(null);
   const [state, setState] = useState('loading');
-  const html = useMemo(() => demoPageHtml(getDemo(exerciseId), colors), [exerciseId]);
+  const html = useMemo(() => demoPageHtml(getDemo(exerciseId), colors, { lite }), [exerciseId, lite]);
 
   useEffect(() => {
     setState('loading');

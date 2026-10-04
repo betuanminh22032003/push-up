@@ -208,3 +208,103 @@ const styles = StyleSheet.create({
   cross: { width: 22, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.danger, marginTop: 2 },
   breathe: { fontSize: 13, color: colors.textDim, marginTop: spacing.xs },
 });
+
+/**
+ * The guide while working out: a small 3D figure in a corner of the stage, to
+ * copy the movement without leaving the set, or a pill that opens it. Counting
+ * goes on underneath. "Details" asks the parent for the full sheet (which
+ * pauses the set first, see WorkoutScreen).
+ *
+ * @param {string}   exerciseId
+ * @param {boolean}  open        figure shown (true) or just the pill
+ * @param {Function} onToggle    called with the new `open`
+ * @param {Function} onDetails   open the full guide
+ * @param {boolean}  [upNext]    label it as the next exercise (between sets)
+ */
+export function GuideDock({ exerciseId, open, onToggle, onDetails, upNext = false, style }) {
+  const t = useT();
+  const exercise = getExercise(exerciseId);
+  const name = t(`exercise.${exercise.id}`);
+
+  if (!open) {
+    return (
+      <Pressable
+        onPress={() => onToggle(true)}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('guide.open', { name })}
+        style={({ pressed }) => [dockStyles.dockPill, pressed && styles.pressed, style]}
+      >
+        <Text style={dockStyles.dockPillText}>▶ {t('guide.button')}</Text>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={[dockStyles.dock, style]}>
+      <View style={dockStyles.dockHead}>
+        <Text style={dockStyles.dockName} numberOfLines={1}>
+          {upNext ? `${t('guide.upNext')} · ` : ''}
+          {exercise.icon} {name}
+        </Text>
+        <Pressable
+          onPress={() => onToggle(false)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t('guide.hide')}
+        >
+          <Text style={dockStyles.dockClose}>×</Text>
+        </Pressable>
+      </View>
+      <ExerciseDemo3D exerciseId={exercise.id} width={DOCK_W} height={DOCK_H} lite />
+      <Pressable
+        onPress={onDetails}
+        accessibilityRole="button"
+        accessibilityLabel={t('guide.open', { name })}
+        style={({ pressed }) => [dockStyles.dockDetails, pressed && styles.pressed]}
+      >
+        <Text style={dockStyles.dockDetailsText}>{t('guide.details')} ⤢</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const DOCK_W = 148;
+const DOCK_H = 150;
+
+const dockStyles = StyleSheet.create({
+  dockPill: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(10,10,11,0.75)',
+  },
+  dockPillText: { fontSize: 13, fontWeight: '700', color: colors.accent },
+  dock: {
+    width: DOCK_W,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  dockHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingLeft: spacing.sm,
+    paddingRight: 6,
+    paddingVertical: 4,
+  },
+  dockName: { flex: 1, fontSize: 11, fontWeight: '600', color: colors.text },
+  dockClose: { fontSize: 20, lineHeight: 20, color: colors.textDim, paddingHorizontal: 2 },
+  dockDetails: {
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  dockDetailsText: { fontSize: 12, fontWeight: '600', color: colors.accent },
+});

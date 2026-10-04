@@ -7,7 +7,7 @@ import { newlyUnlocked, unlockedAchievements } from '../achievements/achievement
 import { creditFor, earnsTime, formatAmount, hasWayToBlock, isSetUp } from '../blocker/blockerLogic';
 import { Button } from '../components/Button';
 import { CameraSetupGuide } from '../components/CameraSetupGuide';
-import { ExerciseGuideButton } from '../components/ExerciseGuide';
+import { ExerciseGuideButton, ExerciseGuideSheet, GuideDock } from '../components/ExerciseGuide';
 import { ExerciseLibraryButton } from '../components/ExerciseLibrary';
 import { MiscountModal } from '../components/MiscountModal';
 import { StatTile } from '../components/StatTile';
@@ -173,6 +173,13 @@ export function WorkoutScreen({
   const [guide, setGuide] = useState(null);
   // The last camera session, while its "Miscounted?" form is open.
   const [miscount, setMiscount] = useState(null);
+  // The small how-to figure on the stage: shown during sets once asked for,
+  // and on its own between sets (it is the next exercise then), until hidden.
+  const [dockOpen, setDockOpen] = useState(false);
+  const [restDockOpen, setRestDockOpen] = useState(true);
+  // The full guide, opened from the figure; a set running then waits for it.
+  const [guideSheet, setGuideSheet] = useState(false);
+  const resumeAfterGuideRef = useRef(false);
 
   const [source, setSource] = useState(null);
   const [sourceConfig, setSourceConfig] = useState(null);
@@ -680,6 +687,30 @@ export function WorkoutScreen({
     activate();
   }, [source, controlFeedback, activate]);
 
+  /**
+   * The full guide from the figure on the stage. Reading it mid-set is not
+   * doing reps, so a running set pauses for it and carries on once it closes:
+   * no trip through Pause and back.
+   */
+  const openGuideSheet = useCallback(() => {
+    if (status === 'active') {
+      resumeAfterGuideRef.current = true;
+      pause();
+    }
+    setGuideSheet(true);
+  }, [status, pause]);
+
+  const closeGuideSheet = useCallback(() => {
+    setGuideSheet(false);
+    if (resumeAfterGuideRef.current && status === 'paused') resume();
+    resumeAfterGuideRef.current = false;
+  }, [status, resume]);
+
+  // Each rest shows the next exercise again, even if the last one was hidden.
+  useEffect(() => {
+    if (status === 'rest') setRestDockOpen(true);
+  }, [status]);
+
   const nextSet = useCallback(() => {
     controlFeedback();
     beginSet();
@@ -826,6 +857,8 @@ export function WorkoutScreen({
       ? t('workout.nextExercise', { exercise: `${exercise.icon} ${t(`exercise.${exercise.id}`)}` })
       : null;
   const summaryCount = summary && isHold(summary.exerciseId) && summary.exercises === 1;
+  // Not with the phone in a pocket (nobody sees it), nor while the camera starts.
+  const showDock = running && status !== 'calibrating' && !pocketLock;
 
   return (
     <View
@@ -902,6 +935,7 @@ export function WorkoutScreen({
         Touch and pointer handlers both fire immediately, and the detector
         ignores repeated same-state transitions, so double delivery is harmless.
       */}
+      <View style={styles.stageWrap}>
       <View
         style={[styles.stage, tapActive && styles.stageArmed, isNear && styles.stageNear]}
         testID="rep-stage"
@@ -1032,13 +1066,6 @@ export function WorkoutScreen({
                     })}
                   </Text>
                   {nextUp ? <Text style={styles.subline}>{nextUp}</Text> : null}
-                  {planSets ? (
-                    <ExerciseGuideButton
-                      exerciseId={exercise.id}
-                      label={`▶ ${t('guide.button')} ${exercise.icon}`}
-                      style={styles.restGuide}
-                    />
-                  ) : null}
                   <Text style={styles.stageHint}>
                     {planSets ? t('workout.nextIn') : t('workout.restHint')}
                   </Text>
@@ -1081,6 +1108,23 @@ export function WorkoutScreen({
           </View>
         ) : null}
       </View>
+
+        {/*
+          A sibling of the stage, not a child: a press on it must not reach the
+          stage's touch handlers, which would count it as a tapped rep.
+        */}
+        {showDock ? (
+          <GuideDock
+            exerciseId={exercise.id}
+            open={status === 'rest' ? restDockOpen : dockOpen}
+            onToggle={status === 'rest' ? setRestDockOpen : setDockOpen}
+            onDetails={openGuideSheet}
+            upNext={!!nextUp}
+            style={[styles.dock, { top: spacing.md + (poseActive ? 52 : spacing.sm) }]}
+          />
+        ) : null}
+      </View>
+      <ExerciseGuideSheet visible={guideSheet} exerciseId={exercise.id} onClose={closeGuideSheet} />
 
       <Text
         style={[styles.notice, notice?.tone === 'warn' && styles.noticeWarn]}
@@ -1423,7 +1467,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  restGuide: { marginTop: spacing.sm, paddingVertical: spacing.xs },
+  stageWrap: { flex: 1 },
+  dock: { position: 'absolute', right: spacing.sm },
   planCancel: { fontSize: 13, color: colors.textFaint, marginTop: spacing.sm },
 
   sourceRow: {
