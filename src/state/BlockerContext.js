@@ -7,9 +7,9 @@ import {
   EMPTY_STATE,
   ICON_PX,
   creditFor,
+  earnsTime,
   effectiveSites,
   formatAmount,
-  isSetUp,
   looksStalled,
   normalizeApps,
   normalizeDomain,
@@ -172,8 +172,8 @@ export function BlockerProvider({ children }) {
   );
 
   /**
-   * Turn a saved workout into fun time. Only while the blocker is set up:
-   * banking hours before it is switched on would defeat it on day one.
+   * Turn a saved workout into fun time, once apps or sites are chosen, even
+   * while blocking is switched off (see earnsTime).
    * `weight` is the exercise's `creditWeight`; see creditFor.
    * @returns {Promise<number>} seconds credited (0 when nothing was)
    */
@@ -181,7 +181,7 @@ export function BlockerProvider({ children }) {
     async (reps, weight = 1) => {
       if (!NativeBlocker) return 0;
       try {
-        if (!isSetUp(await read())) return 0;
+        if (!earnsTime(await read())) return 0;
         const seconds = creditFor(reps, rate, weight);
         if (seconds <= 0) return 0;
         const next = accept(normalizeState(await NativeBlocker.addCredit(seconds)));

@@ -112,9 +112,20 @@ export function normalizeState(raw) {
   };
 }
 
-/** Set up to block: switched on with at least one app or site. Only then do reps earn time. */
+/** Set up to block: switched on with at least one app or site. */
 export function isSetUp(state) {
   return state.enabled && (state.blocked.length > 0 || state.sites.length > 0);
+}
+
+/**
+ * Whether a workout banks fun time: once at least one app or site is chosen,
+ * switched on or not. Pausing the blocker must not throw away the reps done
+ * meanwhile; the balance only drains while blocking is on, so it waits. Before
+ * anything is chosen nothing is banked, or hours earned before the blocker
+ * existed would defeat it on day one.
+ */
+export function earnsTime(state) {
+  return state.blocked.length > 0 || state.sites.length > 0;
 }
 
 /**

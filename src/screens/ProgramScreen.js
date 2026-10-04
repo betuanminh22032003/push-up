@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '../components/Button';
+import { ExerciseGuideButton } from '../components/ExerciseGuide';
 import { ExercisePicker } from '../components/ExercisePicker';
 import { ProgressBar } from '../components/ProgressBar';
 import { getExercise } from '../exercises/exercises';
@@ -248,6 +249,7 @@ export function ProgramScreen({ onStartPlan }) {
                               {t(`exercise.${e.id}.cue`)}
                             </Text>
                           </View>
+                          <ExerciseGuideButton exerciseId={e.id} compact />
                           <Text style={styles.itemTarget}>
                             {t(item.hold ? 'program.targetHold' : 'program.targetReps', {
                               sets: item.sets,

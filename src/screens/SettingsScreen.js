@@ -240,6 +240,13 @@ export function SettingsScreen({ onShowOnboarding }) {
             label={t('settings.voice')}
           />
         </Row>
+        <Row title={t('settings.coachVoice')} body={t('settings.coachVoiceBody')}>
+          <Toggle
+            value={settings.coachVoiceEnabled !== false}
+            onChange={(coachVoiceEnabled) => updateSettings({ coachVoiceEnabled })}
+            label={t('settings.coachVoice')}
+          />
+        </Row>
         <Row title={t('settings.sound')}>
           <Toggle
             value={settings.soundEnabled}

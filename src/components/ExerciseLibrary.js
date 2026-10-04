@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BODY_PARTS, exercisesFor, getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
 import { colors, radius, spacing, type } from '../theme/theme';
+import { ExerciseGuideButton } from './ExerciseGuide';
 import { ExercisePicker } from './ExercisePicker';
 
 /**
@@ -19,6 +20,9 @@ import { ExercisePicker } from './ExercisePicker';
  * @param {string}   selected  id of the chosen exercise
  * @param {Function} onSelect  called with the id picked in the sheet
  * @param {boolean}  [disabled]
+ *
+ * Beside it, a button opens how to do the chosen exercise; each row of the
+ * sheet has its own.
  */
 export function ExerciseLibraryButton({ selected, onSelect, disabled, style }) {
   const t = useT();
@@ -26,13 +30,13 @@ export function ExerciseLibraryButton({ selected, onSelect, disabled, style }) {
   const exercise = getExercise(selected);
 
   return (
-    <>
+    <View style={[styles.buttonRow, style]}>
       <Pressable
         onPress={() => setOpen(true)}
         disabled={disabled}
         accessibilityRole="button"
         accessibilityLabel={`${t(`exercise.${exercise.id}`)}. ${t('picker.change')}`}
-        style={({ pressed }) => [styles.button, pressed && styles.pressed, style]}
+        style={({ pressed }) => [styles.button, styles.grow, pressed && styles.pressed]}
       >
         <Text style={styles.buttonIcon}>{exercise.icon}</Text>
         <View style={styles.grow}>
@@ -45,6 +49,7 @@ export function ExerciseLibraryButton({ selected, onSelect, disabled, style }) {
         </View>
         <Text style={styles.buttonChange}>{t('picker.change')} ▾</Text>
       </Pressable>
+      <ExerciseGuideButton exerciseId={exercise.id} />
       <ExerciseLibrarySheet
         visible={open}
         selected={selected}
@@ -54,7 +59,7 @@ export function ExerciseLibraryButton({ selected, onSelect, disabled, style }) {
         }}
         onClose={() => setOpen(false)}
       />
-    </>
+    </View>
   );
 }
 
@@ -127,6 +132,7 @@ export function ExerciseLibrarySheet({ visible, selected, onSelect, onClose }) {
                       {t(`exercise.${item.id}.cue`)}
                     </Text>
                   </View>
+                  <ExerciseGuideButton exerciseId={item.id} compact />
                 </Pressable>
               );
             }}
@@ -141,6 +147,7 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   pressed: { opacity: 0.7 },
 
+  buttonRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm },
   button: {
     flexDirection: 'row',
     alignItems: 'center',

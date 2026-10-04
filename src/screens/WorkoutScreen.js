@@ -4,9 +4,10 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { newlyUnlocked, unlockedAchievements } from '../achievements/achievements';
-import { creditFor, formatAmount, hasWayToBlock, isSetUp } from '../blocker/blockerLogic';
+import { creditFor, earnsTime, formatAmount, hasWayToBlock, isSetUp } from '../blocker/blockerLogic';
 import { Button } from '../components/Button';
 import { CameraSetupGuide } from '../components/CameraSetupGuide';
+import { ExerciseGuideButton } from '../components/ExerciseGuide';
 import { ExerciseLibraryButton } from '../components/ExerciseLibrary';
 import { MiscountModal } from '../components/MiscountModal';
 import { StatTile } from '../components/StatTile';
@@ -143,9 +144,9 @@ export function WorkoutScreen({
   const insets = useSafeAreaInsets();
   const { settings, updateSettings } = useSettings();
   const { state: blocker, rate: blockerRate, creditReps, serviceStalled } = useBlocker();
-  const earning = isSetUp(blocker);
+  const earning = earnsTime(blocker);
   // Set up, but no way to block is switched on, or it stopped: nothing is blocked.
-  const blockerOff = earning && (!hasWayToBlock(blocker) || serviceStalled);
+  const blockerOff = isSetUp(blocker) && (!hasWayToBlock(blocker) || serviceStalled);
   const {
     sessions,
     stats,
@@ -230,7 +231,7 @@ export function WorkoutScreen({
   const timerStatus =
     status === 'active' ? 'active' : status === 'paused' || resuming ? 'paused' : 'idle';
   const { elapsedSeconds, readElapsedMs, reset: resetTimer } = useWorkoutTimer(timerStatus);
-  const { repFeedback, controlFeedback, tickFeedback, goFeedback, doneFeedback } = useFeedback(
+  const { repFeedback, controlFeedback, tickFeedback, goFeedback, doneFeedback, sayCoach } = useFeedback(
     settings,
     speechTag,
   );
@@ -341,6 +342,14 @@ export function WorkoutScreen({
 
     if (next !== undefined) setCoach((prev) => (prev === next ? prev : next));
   }, [coachKeys]);
+
+  // Each new piece of advice is also said out loud: on the floor, mid push-up,
+  // nobody reads the screen. sayCoach keeps it from nagging.
+  useEffect(() => {
+    if (coach && status === 'active') sayCoach(t(coach));
+    // Only a new message speaks; a status change alone must not repeat one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coach]);
 
   // --- workout lifecycle ----------------------------------------------------
   const closeRest = useCallback(() => {
@@ -1023,6 +1032,13 @@ export function WorkoutScreen({
                     })}
                   </Text>
                   {nextUp ? <Text style={styles.subline}>{nextUp}</Text> : null}
+                  {planSets ? (
+                    <ExerciseGuideButton
+                      exerciseId={exercise.id}
+                      label={`▶ ${t('guide.button')} ${exercise.icon}`}
+                      style={styles.restGuide}
+                    />
+                  ) : null}
                   <Text style={styles.stageHint}>
                     {planSets ? t('workout.nextIn') : t('workout.restHint')}
                   </Text>
@@ -1089,6 +1105,15 @@ export function WorkoutScreen({
           <Text style={styles.planRest}>
             {t('program.rest', { seconds: activePlan.restSeconds })}
           </Text>
+          <View style={styles.planGuides}>
+            {[...new Set(activePlan.items.map((item) => item.exerciseId))].map((id) => (
+              <ExerciseGuideButton
+                key={id}
+                exerciseId={id}
+                label={`${getExercise(id).icon} ${t('guide.button')}`}
+              />
+            ))}
+          </View>
           <Pressable onPress={() => onClearPlan?.()} hitSlop={8} accessibilityRole="button">
             <Text style={styles.planCancel}>{t('btn.cancelPlan')}</Text>
           </Pressable>
@@ -1391,6 +1416,14 @@ const styles = StyleSheet.create({
   planCard: { alignItems: 'center', marginBottom: spacing.md },
   planSets: { fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'center' },
   planRest: { fontSize: 13, color: colors.textDim, marginTop: 2 },
+  planGuides: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  restGuide: { marginTop: spacing.sm, paddingVertical: spacing.xs },
   planCancel: { fontSize: 13, color: colors.textFaint, marginTop: spacing.sm },
 
   sourceRow: {

@@ -9,6 +9,7 @@
 
 import { EXERCISE_STRINGS } from './exerciseStrings';
 import { FEATURE_STRINGS } from './featureStrings';
+import { GUIDE_STRINGS } from './guideStrings';
 
 export const LANGUAGES = ['en', 'vi'];
 
@@ -1101,8 +1102,8 @@ const vi = {
 };
 
 export const STRINGS = {
-  en: { ...en, ...EXERCISE_STRINGS.en, ...FEATURE_STRINGS.en },
-  vi: { ...vi, ...EXERCISE_STRINGS.vi, ...FEATURE_STRINGS.vi },
+  en: { ...en, ...EXERCISE_STRINGS.en, ...FEATURE_STRINGS.en, ...GUIDE_STRINGS.en },
+  vi: { ...vi, ...EXERCISE_STRINGS.vi, ...FEATURE_STRINGS.vi, ...GUIDE_STRINGS.vi },
 };
 
 /**

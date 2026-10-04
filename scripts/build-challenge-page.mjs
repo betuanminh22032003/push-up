@@ -21,7 +21,8 @@ const exercises = await bundle(read('src/exercises/exercises.js'));
 const strings = await bundle(
   read('src/i18n/exerciseStrings.js'),
   read('src/i18n/featureStrings.js'),
-  stripImport(stripImport(read('src/i18n/strings.js'), './exerciseStrings'), './featureStrings'),
+  read('src/i18n/guideStrings.js'),
+  stripImport(stripImport(stripImport(read('src/i18n/strings.js'), './exerciseStrings'), './featureStrings'), './guideStrings'),
 );
 
 const names = Object.fromEntries(

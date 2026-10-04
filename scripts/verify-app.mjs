@@ -38,7 +38,8 @@ const stats = await bundle(timeSrc, stripImport(read('src/utils/stats.js'), './t
 const strings = await bundle(
   read('src/i18n/exerciseStrings.js'),
   read('src/i18n/featureStrings.js'),
-  stripImport(stripImport(read('src/i18n/strings.js'), './exerciseStrings'), './featureStrings'),
+  read('src/i18n/guideStrings.js'),
+  stripImport(stripImport(stripImport(read('src/i18n/strings.js'), './exerciseStrings'), './featureStrings'), './guideStrings'),
 );
 const blocker = await bundle(read('src/blocker/blockerLogic.js'));
 const store = await asModule(
@@ -92,6 +93,7 @@ const {
   EMPTY_STATE,
   normalizeState,
   isSetUp,
+  earnsTime,
   isBlocking,
   wasSwitchedOff,
   watcherReady,
@@ -749,12 +751,15 @@ await check('native state is normalised, junk included', () => {
   assert.equal(normalizeState({ developerOptions: 1 }).developerOptions, false);
 });
 
-await check('reps only earn once the blocker is set up', () => {
+await check('reps only earn once apps or sites are chosen', () => {
   const on = { ...EMPTY_STATE, enabled: true, blocked: ['a'] };
   assert.equal(isSetUp({ ...on, blocked: [] }), false);
   assert.equal(isSetUp({ ...on, enabled: false }), false);
   assert.equal(isSetUp(on), true);
   assert.equal(isSetUp({ ...on, blocked: [], sites: ['vnexpress.net'] }), true, 'sites alone count');
+  assert.equal(earnsTime({ ...on, enabled: false }), true, 'switched off still banks time');
+  assert.equal(earnsTime({ ...EMPTY_STATE, enabled: true }), false, 'nothing chosen banks nothing');
+  assert.equal(earnsTime({ ...EMPTY_STATE, sites: ['vnexpress.net'] }), true);
   assert.equal(isBlocking({ ...on, serviceEnabled: true }), false, 'enabled but not bound yet');
   assert.equal(isBlocking({ ...on, serviceEnabled: true, serviceRunning: true }), true);
 });
