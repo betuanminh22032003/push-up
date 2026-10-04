@@ -39,6 +39,9 @@ import { formatDuration } from '../utils/time';
 
 const KEEP_AWAKE_TAG = 'pupg-workout';
 
+/** How often a cue that still stands is offered to the voice again (it spaces repeats itself). */
+const CUE_REPEAT_CHECK_MS = 3000;
+
 /** How long a coaching message stays up after the frame that produced it. */
 const COACH_STICKY_MS = 2200;
 
@@ -350,13 +353,6 @@ export function WorkoutScreen({
     if (next !== undefined) setCoach((prev) => (prev === next ? prev : next));
   }, [coachKeys]);
 
-  // Each new piece of advice is also said out loud: on the floor, mid push-up,
-  // nobody reads the screen. sayCoach keeps it from nagging.
-  useEffect(() => {
-    if (coach && status === 'active') sayCoach(t(coach));
-    // Only a new message speaks; a status change alone must not repeat one.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coach]);
 
   // --- workout lifecycle ----------------------------------------------------
   const closeRest = useCallback(() => {
@@ -803,6 +799,44 @@ export function WorkoutScreen({
     [exercise, availableSourceIds],
   );
 
+  /**
+   * What the camera has to say, out loud: from across the room neither the
+   * form advice nor "not in frame" can be read. The camera's wish comes first
+   * (out of frame, nothing else can be judged), then the form advice. Said
+   * when it changes and again every few seconds while it stands (sayCoach
+   * spaces repeats), so a plank sagging for ten seconds hears it more than once.
+   */
+  // Above the early return below: hooks must run on every render.
+  const outOfFrame =
+    cameraOn && (status === 'countdown' || status === 'active') && visibility && !visibility.ready
+      ? visibility.missing || []
+      : [];
+  const cue = outOfFrame.length
+    ? `${t('vis.missing', { parts: outOfFrame.map((part) => t(`vis.part.${part}`)).join(', ') })}. ${t('vis.hintSpoken')}`
+    : cameraOn && coach && status === 'active'
+      ? t(coach)
+      : null;
+  useEffect(() => {
+    if (!cue) return undefined;
+    sayCoach(cue);
+    const timer = setInterval(() => sayCoach(cue), CUE_REPEAT_CHECK_MS);
+    return () => clearInterval(timer);
+  }, [cue, sayCoach]);
+
+  // Back in frame after being told to step back: say so, so nobody has to walk
+  // up to the phone to check.
+  const wasOutRef = useRef(false);
+  const inView = !!visibility?.ready;
+  useEffect(() => {
+    if (outOfFrame.length) wasOutRef.current = true;
+    else if (inView && wasOutRef.current) {
+      wasOutRef.current = false;
+      sayCoach(t('vis.readySpoken'), { force: true });
+    }
+    // outOfFrame is rebuilt every render; its length is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outOfFrame.length, inView]);
+
   if (!source) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
@@ -859,6 +893,7 @@ export function WorkoutScreen({
   const summaryCount = summary && isHold(summary.exerciseId) && summary.exercises === 1;
   // Not with the phone in a pocket (nobody sees it), nor while the camera starts.
   const showDock = running && status !== 'calibrating' && !pocketLock;
+
 
   return (
     <View
@@ -1418,14 +1453,18 @@ const styles = StyleSheet.create({
   coachPill: {
     position: 'absolute',
     bottom: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
+    left: spacing.md,
+    right: spacing.md,
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
     backgroundColor: 'rgba(10,10,11,0.82)',
     borderWidth: 1,
     borderColor: colors.warn,
   },
-  coachText: { ...type.label, color: colors.warn },
+  // Big: it is read from where the camera can see the whole body.
+  coachText: { fontSize: 24, fontWeight: '800', color: colors.warn, textAlign: 'center' },
 
   summary: { alignItems: 'center' },
   summaryTitle: { ...type.label, color: colors.accent },

@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, radius, spacing } from '../theme/theme';
 
 /**
  * What the visibility gate is waiting for, over the camera: which body parts
@@ -49,10 +49,11 @@ const styles = StyleSheet.create({
   },
   pillWarn: { borderColor: colors.warn },
   pillOk: { borderColor: colors.accent },
-  text: { ...type.body, fontWeight: '600', textAlign: 'center' },
+  // Read from a few metres away, where the camera sees the whole body.
+  text: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
   textWarn: { color: colors.warn },
   textOk: { color: colors.accent },
-  sub: { fontSize: 12, color: colors.textDim, marginTop: 2, textAlign: 'center' },
+  sub: { fontSize: 15, color: colors.textDim, marginTop: 4, textAlign: 'center' },
   bar: {
     alignSelf: 'stretch',
     height: 4,

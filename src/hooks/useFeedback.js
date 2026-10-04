@@ -107,15 +107,16 @@ export function useFeedback(
    * from the floor where the screen cannot be read. Its own switch, apart from
    * the rep count. Not too often: the camera reports the same fault frame
    * after frame, so a message waits COACH_GAP_MS after any other and
-   * COACH_REPEAT_MS before it is said again.
+   * COACH_REPEAT_MS before it is said again. `force` skips both, for news
+   * that must not wait (back in frame).
    */
   const sayCoach = useCallback(
-    (text) => {
+    (text, { force = false } = {}) => {
       if (!coachVoiceEnabled || !text) return;
       const now = Date.now();
       const last = coachSaidRef.current;
-      if (now - last.at < COACH_GAP_MS) return;
-      if (text === last.text && now - last.at < COACH_REPEAT_MS) return;
+      if (!force && now - last.at < COACH_GAP_MS) return;
+      if (!force && text === last.text && now - last.at < COACH_REPEAT_MS) return;
       coachSaidRef.current = { at: now, text };
       try {
         Speech.stop();
