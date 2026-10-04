@@ -36,7 +36,8 @@ const setup = await bundle(exercisesSrc, stripImport(read('src/exercises/cameraS
 const strings = await bundle(
   read('src/i18n/exerciseStrings.js'),
   read('src/i18n/featureStrings.js'),
-  stripImport(stripImport(read('src/i18n/strings.js'), './exerciseStrings'), './featureStrings'),
+  read('src/i18n/guideStrings.js'),
+  stripImport(stripImport(stripImport(read('src/i18n/strings.js'), './exerciseStrings'), './featureStrings'), './guideStrings'),
 );
 
 /** The pose modules in the page's order, as verify-pose loads them. */

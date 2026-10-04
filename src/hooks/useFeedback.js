@@ -3,6 +3,10 @@ import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
+/** Least time between two spoken form mistakes, and before the same one again. */
+const COACH_GAP_MS = 2500;
+const COACH_REPEAT_MS = 6000;
+
 const SOUNDS = {
   rep: require('../../assets/rep.wav'),
   tick: require('../../assets/tick.wav'),
@@ -18,14 +22,16 @@ const SOUNDS = {
  * reps cannot stack players or drop a click. Every call is fire-and-forget —
  * feedback must never be able to block or fail a rep count.
  *
- * @param {object}  settings   soundEnabled / hapticsEnabled / voiceEnabled
+ * @param {object}  settings   soundEnabled / hapticsEnabled / voiceEnabled /
+ *                             coachVoiceEnabled
  * @param {string}  speechTag  BCP 47 tag for the voice, e.g. 'vi-VN'
  */
 export function useFeedback(
-  { soundEnabled = true, hapticsEnabled = true, voiceEnabled = true } = {},
+  { soundEnabled = true, hapticsEnabled = true, voiceEnabled = true, coachVoiceEnabled = true } = {},
   speechTag = 'en-US',
 ) {
   const playersRef = useRef({});
+  const coachSaidRef = useRef({ at: 0, text: null });
 
   useEffect(() => {
     let created = {};
@@ -96,6 +102,31 @@ export function useFeedback(
     [voiceEnabled, speechTag],
   );
 
+  /**
+   * Say a form mistake out loud ("Keep your body straight"), so it is heard
+   * from the floor where the screen cannot be read. Its own switch, apart from
+   * the rep count. Not too often: the camera reports the same fault frame
+   * after frame, so a message waits COACH_GAP_MS after any other and
+   * COACH_REPEAT_MS before it is said again.
+   */
+  const sayCoach = useCallback(
+    (text) => {
+      if (!coachVoiceEnabled || !text) return;
+      const now = Date.now();
+      const last = coachSaidRef.current;
+      if (now - last.at < COACH_GAP_MS) return;
+      if (text === last.text && now - last.at < COACH_REPEAT_MS) return;
+      coachSaidRef.current = { at: now, text };
+      try {
+        Speech.stop();
+        Speech.speak(String(text), { language: speechTag, rate: 1.05 });
+      } catch {
+        /* no TTS engine */
+      }
+    },
+    [coachVoiceEnabled, speechTag],
+  );
+
   const repFeedback = useCallback(
     (count) => {
       if (hapticsEnabled) {
@@ -143,5 +174,5 @@ export function useFeedback(
     [play, hapticsEnabled, say],
   );
 
-  return { repFeedback, controlFeedback, tickFeedback, goFeedback, doneFeedback, say };
+  return { repFeedback, controlFeedback, tickFeedback, goFeedback, doneFeedback, say, sayCoach };
 }

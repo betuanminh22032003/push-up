@@ -165,6 +165,7 @@ export const DEFAULT_SETTINGS = {
   soundEnabled: true,
   hapticsEnabled: true,
   voiceEnabled: true,
+  coachVoiceEnabled: true, // say form mistakes the camera sees out loud
   countdownSeconds: 5,
   restSeconds: 60,
   dailyGoal: 50,
