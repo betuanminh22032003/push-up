@@ -1,18 +1,20 @@
 # Hít Đất AI
 
-Hands-free workout counter for Android (Expo / React Native): push-ups, squats,
-sit-ups and jumping jacks. Dark, minimal, pure `StyleSheet`, no navigation library.
+Hands-free workout counter for Android (Expo / React Native): 38 exercises, from
+push-ups, squats and lunges to burpees and holds such as the plank. Dark, minimal,
+pure `StyleSheet`, no navigation library.
 
-Counts reps with the camera, the light sensor, the phone's own movement or a tap;
-runs sets with a countdown and a rest timer; speaks the count; follows a 4-week
-training schedule; tracks a daily goal, streaks, records and achievements; and locks
-the apps you choose until your reps earn you time on them. English and Vietnamese.
-Everything stays on the device.
+Counts reps with the camera, or without it with the light sensor, the phone's own
+movement, a tap or (for holds) a stopwatch; runs sets with a countdown and a rest
+timer; speaks the count and the form advice; follows a 4-week training schedule;
+tracks a daily goal, streaks, records and achievements; and locks the apps you choose
+until your reps earn you time on them. English and Vietnamese. Everything stays on
+the device.
 
 Release-readiness extras, all without a backend:
 
-- **Backup / restore** (Settings): every `pupg:*` key the app owns, as a versioned
-  JSON file (`src/backup/`), out through the share sheet and back in through the
+- **Backup / restore** (Settings): every `pupg:*` key the app owns but the local error
+  log, as a versioned JSON file (`src/backup/`), out through the share sheet and back in through the
   document picker, with a preview and a merge-or-replace choice.
 - **Camera setup card and visibility gate**: each exercise declares the joints it
   needs (`POSE_NEEDS` in `src/pose/analyzers.js`); counting waits until they have
@@ -75,9 +77,20 @@ night in Vietnam.
 
 ### Exercises (`src/exercises/exercises.js`)
 
-One table says everything that differs between exercises: which sources can count
-it, how much fun time a rep earns, the fastest believable cadence and the motion
-rule. Screens, stats and the pose page read from it, so a new exercise starts there.
+One table says everything that differs between exercises: reps or a hold (counted in
+seconds of good form), the body parts it trains, where the camera goes, which sources
+can count it, how much fun time a rep (or a second held) earns, the fastest believable
+cadence and the motion rule. Screens, stats, the schedule and the pose page read from
+it, so a new exercise starts there; each one has a camera analyser with the same id
+(`src/pose/analyzers.js`).
+
+There are 38: the four below, push-up variations (knee, wide, diamond, incline,
+decline, pike), dips, presses, raises and curls, squat and lunge variations, bridges,
+kicks and hydrants, crunches, leg raises, mountain climbers, high knees, butt kicks,
+burpees, and six holds (plank, side plank, hollow hold, superman, wall sit, arm
+circles). Beyond the four, rep exercises count with the camera or a tap (push-up
+variations done over the phone also with the light sensor), and holds with the camera
+or a stopwatch. The first four:
 
 | Exercise | Sources, best first | How a rep counts | Fun time per rep |
 | --- | --- | --- | --- |
@@ -86,12 +99,12 @@ rule. Screens, stats and the pose page read from it, so a new exercise starts th
 | 🧘 Sit-ups | `ai`, `motion`, `tap` | Camera: up from lying on the back, seen side-on. Motion: phone flat on the chest, the torso tilts 45° and back under 20°. Tap: touch on the way up. | ½ × rate |
 | 🤸 Jumping jacks | `ai`, `motion`, `tap` | Camera: both arms all the way up while standing, facing the phone. Motion: phone held in one hand, the arm swings 100° and back under 50°. Tap: thumb on the screen. | ¼ × rate |
 
-The exercise is picked with chips on the workout tab, between workouts only, and each
-exercise remembers its own source; the idle hint says where to put the phone for that
-pair. The fun-time weights keep the blocker honest: a jumping jack is far less work
-than a push-up, and paying the same would make it trivial to cheat. The 6-week program
-and its max test stay push-ups (their levels are push-up numbers): while one is loaded
-the tab counts push-ups and hides the picker.
+The exercise is picked from a library sheet on the workout tab (filtered by body part,
+each with a how-to guide and a 3D figure), between workouts only, and each exercise
+remembers its own source; the idle hint says where to put the phone for that pair. The
+fun-time weights keep the blocker honest: a jumping jack is far less work than a
+push-up, and paying the same would make it trivial to cheat. A schedule day names the
+exercise of every set, so while one is loaded the tab hides the picker.
 
 ### Counting
 
@@ -108,7 +121,9 @@ completed reps, not attempts. Four sources feed the same detector
 
 Two guards protect the sensor and tap paths (`src/hooks/useRepDetector.js`): a dip
 must last 80 ms to count, and two reps cannot be closer than the exercise's
-`minRepMs` — 500 ms, but 350 ms for jumping jacks, which a brisk set does in 0.6 s.
+`minRepMs` — 500 ms, but 350 ms for jumping jacks, which a brisk set does in 0.6 s, and
+250 ms for alternating-leg exercises such as high knees. A set that has ended takes no
+more reps, from any source.
 
 ### Workout flow
 
@@ -121,29 +136,42 @@ idle → [calibrating] → countdown → active ⇄ paused → rest → countdow
   phone sits when counting starts, so with it there is always at least 3 s, before
   resuming a paused set too: Start and Resume are pressed with the phone in hand.
 - **Sets and rest.** *Done* ends a set and starts the rest timer. In a free workout
-  the next set waits for you; in a program day it starts by itself, with the countdown
-  as warning. *Finish workout* saves everything.
+  the next set waits for you; on a schedule day it starts by itself, with the countdown
+  as warning. *Finish workout* saves everything, once: the screen shows *Saving* with
+  no controls until the write is done. A schedule day saves one session per exercise,
+  tied together by a `workoutId`, so it counts as one workout.
+- **Leaving the app** mid-set pauses the set; opening the full how-to guide pauses a
+  running set, and the rest and countdown clocks start again once it closes.
 - **Voice count** speaks each rep number (expo-speech, in the app language), plus
   "go", "rest", "last set" and "workout complete".
 - **Summary** after saving: total, exercise, sets, time, and a share button.
 
-### Program (`src/program/program.js`)
+### Training schedule (`src/program/program.js`)
 
-A one-set max test picks one of five levels. Each level defines 18 workouts (six weeks
-of three), five sets each, whose targets grow per day; the last set is always "at
-least N, then max". Rest is 60 s in weeks 1–2, 90 s in 3–4, 120 s in 5–6. The program
-is a pure function of `(level, day)`, so only progress is stored. It is a push-up
-program, and the tab says so.
+Four weeks at one of three levels (beginner, intermediate, advanced). Each week has
+five training days and two rest days — push, legs, core, rest, pull, cardio, rest — so
+every muscle group is worked, with exercises the camera can count. A day lists its
+exercises with sets and a target per set (reps, or seconds for a hold); every later
+week asks for 10% more of week 1's targets. Rest between sets is 60, 45 or 40 s by
+level. The schedule is a pure function of `(level, week, day)`, so only progress is
+stored; the next day is the first one not done, so a missed day moves the week along
+rather than failing it. Restarting, or moving up a level after finishing, keeps the
+badges the run earned (`pupg:earned:v1`).
 
 ### Progress
 
-Daily goal with a progress bar on the home screen; every exercise counts toward it.
-Streak of consecutive local days with reps. Weekly chart, records (best set, best day,
-longest streak), 21 achievements derived from history (never stored, so they stay
-honest when a session is deleted), and the full session list, each row with its
-exercise. The rep and set achievements count push-ups, as their copy says; the
-session, streak, time-of-day and program ones count every exercise; four more are for
-100 squats, 100 sit-ups, 200 jumping jacks and trying all four.
+Daily goal with a progress bar on the home screen; every rep exercise counts toward
+it, holds (timed in seconds) do not. Streak of consecutive local days with reps;
+"today", the goal, the streak and the chart move on at midnight even while the app
+stays open (`src/hooks/useDayKey.js`). Chart of the last 7 days, records (best set,
+best day, longest streak), 25 achievements derived from history, and the full session
+list, each row with its exercise. Achievements are recomputed rather than stored, so
+deleting a session honestly takes away a badge it earned; the one exception is
+schedule runs that were restarted, whose program badges are kept as counts. The rep
+and set achievements count push-ups, as their copy says; the workout, streak,
+time-of-day and program ones count every exercise; the rest are for 100 squats, 100
+sit-ups, 200 jumping jacks, trying the classic four, trying 10 and 25 exercises, and
+5 minutes of holds.
 
 Once the history holds more than one exercise, a filter (All or one exercise) narrows
 the tiles, the chart, the records and the list. The goal bar and line only show under
@@ -151,9 +179,11 @@ All, since the goal counts every exercise; achievements are never filtered.
 
 ### Settings
 
-Daily goal, countdown, rest, sound, vibration, voice, daily reminder (local
-notification, inexact alarm — no special permission), language (auto / en / vi),
-how-it-works, delete all data, privacy policy link.
+Daily goal, countdown, rest, sound, vibration, voice count and spoken form advice,
+daily reminder (local notification, inexact alarm — no special permission; cancelled
+whenever settings say off, a restored backup included), language (auto / en / vi),
+challenge name, backup and restore, feedback report, how-it-works, delete all data,
+privacy policy link.
 
 ## App blocker (Android)
 
@@ -166,9 +196,12 @@ second, with a small countdown on top; leaving it, turning the screen off or loc
 phone stops the meter. At zero it is covered by a block screen whose buttons lead to a
 workout or the home screen — never back into the app.
 
-Reps count only once the blocker is set up (switched on, at least one app or site), so
-hours cannot be banked before it bites, and a discarded workout earns nothing, exactly as
-it records nothing.
+Reps earn time once at least one app or site is chosen, switched on or not: pausing
+the blocker must not throw away the reps done meanwhile, and the balance only drains
+while blocking is on. Before anything is chosen nothing is banked, so hours cannot be
+saved up before it bites; a discarded workout earns nothing, exactly as it records
+nothing. The balance is capped at 24 hours, and a workout reports only what it really
+added.
 
 Two ways to see what is on screen, whichever permissions the user grants:
 
@@ -181,6 +214,12 @@ Two ways to see what is on screen, whichever permissions the user grants:
   it so a lost pause cannot keep an app "open"), then starts the block screen, which that
   permission allows from the background. Where an OEM build still drops the start, the block
   screen goes up as an overlay (`Cover`), and from there the real one opens.
+  **Known gap:** Android pauses, but does not stop, an app that goes into
+  picture-in-picture (and, on Android 7–9, the unfocused side of split screen), and a
+  paused app counts as off screen here. So in this mode a blocked app's PiP video is
+  neither metered nor blocked. Counting paused-but-not-stopped activities as on screen
+  would close it, but needs care (the block screen itself pauses the app under it) and a
+  device to test on.
 - **Accessibility** (`BlockerService`): also websites and picture-in-picture, as below.
 
 Both hand what they see to the same `Enforcer` (meter, countdown, block screen,
@@ -318,7 +357,14 @@ the page has drifted.
 
 The WebView loads `POSE_PAGE_URL?exercise=<id>`, and the page counts that exercise. Its
 `ready` message says what it is counting: `{ type: 'status', phase: 'ready', exercise,
-version: 2 }`. A page that answers without `exercise` is an older published version that
+version: 4, gate: true }`. Protocol 3 added the visibility gate; 4 adds a `code` on
+errors (`denied`, `busy`, `cameraEnded`, `load`, `inference`, `camera`), which the app
+turns into a message in the user's language, `repCompleted` on frames, and
+`?delegate=cpu`, which the app asks for after the GPU delegate took the page's renderer
+down. Inside the app the page's own status text stays hidden. When something fails the
+stage offers *Try again*, which loads the page afresh, and a page that never starts the
+camera (25 s) or the model (90 s) is given up on with a reason; in the background the
+page is unloaded, since Android takes the camera away, and loaded again on return. A page that answers without `exercise` is an older published version that
 can only count push-ups: for push-ups it is accepted (it counts them correctly), for any
 other exercise `PoseStage` shows *pose.outdated* (switch to another mode, such as Tap, for now)
 instead of silently counting push-ups. So does a page that answers with another exercise.
@@ -336,11 +382,18 @@ only with Motion or Tap.
 
 ## Storage
 
-AsyncStorage, three keys, all read defensively (corrupt data → empty, never a crash):
+AsyncStorage, every key read defensively (corrupt data → empty, never a crash). A
+write to the history never builds on a failed read: the save fails instead of writing
+over what could not be read, and a value that does not parse is first copied to
+`pupg:unreadable:v1`.
 
-- `pupg:sessions:v1` — `[{ id, timestamp, totalReps, durationSeconds, sourceId, exerciseId?, sets?, restSeconds?, program? }]`, newest first. A single-set workout is stored without `sets`, and a push-up workout without `exerciseId`, exactly as the first version stored everything; a session without one reads as push-ups.
+- `pupg:sessions:v1` — `[{ id, timestamp, totalReps, durationSeconds, sourceId, exerciseId?, sets?, restSeconds?, program?, workoutId? }]`, newest first. A single-set workout is stored without `sets`, and a push-up workout without `exerciseId`, exactly as the first version stored everything; a session without one reads as push-ups. A hold's `totalReps` is seconds. Sessions saved by one multi-exercise workout share a `workoutId`.
 - `pupg:settings:v1` — goal, countdown, rest, sound, haptics, voice, language, reminder, onboarding flag, blocker rate and sites, the exercise (`exerciseId`, default `'pushup'`) and the source chosen for each (`sourceIds: { [exerciseId]: sourceId }`). The older single `sourceId` stays, as the push-up fallback.
-- `pupg:program:v1` — `{ level, testReps, startedAt, completedDays: { [day]: timestamp } }` or absent.
+- `pupg:schedule:v1` — `{ level, startedAt, completed: { ['week-day']: timestamp } }` or absent.
+- `pupg:earned:v1` — `{ days, weeks, complete }`: program badges of schedule runs that were restarted or levelled up from.
+- `pupg:program:v1` — the old 6-week push-up program's progress, only read for the badges it earned.
+- `pupg:challenges:v1`, `pupg:miscounts:v1` — challenges sent and received, "Miscounted?" notes.
+- `pupg:errors:v1` — the local error log (last 20); not in backups.
 
 The app blocker keeps its state natively, in SharedPreferences, because its service
 runs while the app is closed: blocked packages and domains, balance, on/off, countdown on/off, when the service last connected.
@@ -386,7 +439,8 @@ store/                        Play listing, graphics, screenshots, checklist
 
 | Script | What |
 | --- | --- |
-| `npm run verify` | 203 assertions in plain Node: time/streaks/storage, the four pose analysers, the motion source's tilt rule, program/achievements/exercises/strings/blocker rules, and the pose page drift check |
+| `npm run verify` | 300 assertions in plain Node: time/streaks/storage, every pose analyser and the visibility gate, the motion source's tilt rule, schedule/achievements/exercises/strings/blocker rules, backup, diagnostics and challenge links, and the drift checks for `docs/pose.html` and `docs/challenge.html` |
+| `npm run build:challenge` | regenerate `docs/challenge.html` from `src/challenge/` |
 | `npm run build:pose` | regenerate `docs/pose.html` from `src/pose/` |
 | `npm run build:sounds` | regenerate the cue WAVs |
 | `npm run build:brand` | regenerate icons, splash, notification icon, Play icon and feature graphic (Python + Pillow) |

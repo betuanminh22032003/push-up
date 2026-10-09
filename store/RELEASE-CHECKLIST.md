@@ -5,11 +5,20 @@ Chỉ cần Node, tài khoản Expo (miễn phí) và tài khoản Google Play D
 
 ## 0. Trước khi build
 
-- [ ] `npm run verify` xanh (95 assertion).
-- [ ] `npm run build:pose` rồi commit `docs/pose.html` nếu có sửa `src/pose/`.
+- [ ] `npm run verify` xanh (300 assertion, cùng hai bước kiểm tra `docs/pose.html` và
+      `docs/challenge.html` khớp với code).
+- [ ] `npm run build:pose` / `npm run build:challenge` rồi commit `docs/` nếu có sửa
+      `src/pose/` hoặc `src/challenge/`.
+- [ ] **Merge vào `master` trước khi phát hành**: điện thoại tải trang nhận diện từ GitHub
+      Pages của `master`. Trang mới (giao thức 4) gửi mã lỗi để app báo lỗi bằng tiếng Việt,
+      báo `repCompleted` và chạy được bằng CPU khi GPU làm sập; app vẫn chạy với trang cũ,
+      nhưng chỉ báo lỗi chung chung.
 - [ ] GitHub Pages đang bật cho nhánh `master`, thư mục `/docs`. Mở thử:
       - https://betuanminh22032003.github.io/push-up/pose.html (xin quyền camera là đúng)
-      - https://betuanminh22032003.github.io/push-up/privacy.html
+      - https://betuanminh22032003.github.io/push-up/challenge.html (báo link không hợp lệ là đúng)
+      - https://betuanminh22032003.github.io/push-up/privacy.html (ngày hiệu lực 09/10/2026)
+- [ ] Test JUnit của module chặn app (`modules/app-blocker/android/src/test`) chạy xanh
+      (Android Studio: `testDebugUnitTest`).
 - [ ] `npx expo-doctor` không báo lỗi.
 
 ## 1. EAS một lần duy nhất
@@ -33,13 +42,26 @@ Tải APK từ link EAS in ra, cài lên điện thoại Android thật và ki�
 - [ ] Splash tối, icon đúng, không có viền trắng.
 - [ ] Nội dung không bị thanh trạng thái / thanh điều hướng che (edge-to-edge).
 - [ ] Camera AI: bấm Bắt đầu → hộp thoại quyền camera → camera lên → tải mô hình → đếm được.
+- [ ] Camera AI, từ chối quyền: khung báo "Cần quyền camera" với nút "Cho phép camera"; từ chối
+      hẳn thì nút thành "Mở cài đặt"; cấp quyền trong Cài đặt rồi quay lại thì camera tự lên.
+- [ ] Camera AI, mất mạng (bật chế độ máy bay rồi bắt đầu): có lỗi tiếng Việt và nút "Thử lại";
+      bật mạng lại, bấm Thử lại thì đếm được, không cần kết thúc buổi tập.
+- [ ] Camera AI, đang tập thì bấm Home rồi mở lại: set đang tạm dừng, camera tự lên lại,
+      bấm Tiếp tục đếm tiếp.
+- [ ] Bấm "Xong" hai lần thật nhanh ở set cuối của ngày lịch tập: chỉ lưu một lần (Tiến độ và
+      thời gian giải trí chỉ cộng một lần).
+- [ ] Đang chơi thách đấu thì bấm Back: kết quả được tính và hiện, không bị mất.
 - [ ] Chế độ Cảm biến hiện trên máy có cảm biến ánh sáng, hiệu chỉnh được.
 - [ ] Đếm ngược có tiếng tick, giọng đọc số (Google TTS phải có tiếng Việt nếu chọn vi).
 - [ ] Nhắc tập: bật → hỏi quyền thông báo → đúng giờ có thông báo (kể cả sau khi khởi động lại máy).
 - [ ] Nút Back của Android: đang tập → tạm dừng; ở tab khác → về tab Tập; ở tab Tập → thoát.
 - [ ] Đổi ngôn ngữ trong Cài đặt, mọi màn hình đổi theo.
+- [ ] Chặn app không cần Trợ năng (Android 13+): hộp thoại giải thích → Đồng ý → hỏi quyền
+      thông báo → Truy cập dữ liệu sử dụng → Hiển thị trên ứng dụng khác; khi đang chặn có
+      thông báo thường trực "đang chặn".
 - [ ] Chặn app, bật quyền: tab Chặn app → Bật → hộp thoại giải thích → Đồng ý → Cài đặt Trợ
-      năng → bật mục "Hít Đất AI". APK cài ngoài Play trên Android 13+ sẽ bị xám / báo "Cài đặt
+      năng → bật mục "Hít Đất AI". Mô tả của mục này phải nói đúng: kiểm tra app đang mở, tên
+      miền trong trình duyệt, có thể bấm Quay lại / về màn hình chính / đóng hình-trong-hình. APK cài ngoài Play trên Android 13+ sẽ bị xám / báo "Cài đặt
       bị hạn chế": Thông tin ứng dụng → ⋮ → Cho phép cài đặt bị hạn chế, rồi bật lại. (Bản cài từ
       Play không bị.)
 - [ ] Chặn app, hết giờ: chọn một app (vd. YouTube), số phút đang 00:00 → mở app đó → màn hình
@@ -70,6 +92,12 @@ Tải APK từ link EAS in ra, cài lên điện thoại Android thật và ki�
    - Ads: No · App access: no restrictions · Content rating: điền IARC, trả lời No hết → Everyone
    - Target audience: 18+ · News: No · Data safety: không thu thập, không chia sẻ (xem `listing.md`)
    - Health: fitness app, không phải thiết bị y tế.
+   - **Foreground service** (bắt buộc vì dịch vụ chặn dùng `specialUse`): App content →
+     Foreground service permissions → Special use, dán mô tả trong `listing.md` (mục
+     *Foreground service declaration*), kèm video: tab Chặn app → hộp thoại giải thích → cấp hai
+     quyền → thông báo → mở app bị chặn → màn hình chặn.
+   - **Permissions**: so danh sách quyền của file `.aab` (App bundle explorer) với mục
+     *Permissions declaration* trong `listing.md` trước khi khai báo.
    - **Accessibility API** (bắt buộc vì có tính năng chặn app): khai báo app **không phải** công cụ
      trợ năng, dán mô tả trong `listing.md` (mục *Accessibility API declaration*), kèm một video
      ngắn quay màn hình: tab Chặn app → hộp thoại giải thích → bật dịch vụ → mở app bị chặn →
@@ -102,6 +130,10 @@ Các lần sau, có thể nộp thẳng từ máy:
 - [ ] Theo dõi Android vitals (crash, ANR) trong Play Console tuần đầu.
 
 ## Rủi ro cần biết
+
+- Chặn app bằng "Truy cập dữ liệu sử dụng" (không Trợ năng) chưa tính được cửa sổ
+  hình-trong-hình: app bị chặn chạy video PiP thì không bị trừ giờ và không bị chặn (xem README,
+  mục *Known gap*). Cách Trợ năng không bị. Sửa cần thử kỹ trên máy thật.
 
 - Tên cũ "PUPG" (quá gần "PUBG" của Krafton) đã đổi thành **Hít Đất AI**, package
   `com.betuanminh.hitdat`, trước lần upload đầu. Package không đổi được sau khi đã lên Play.

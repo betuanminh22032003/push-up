@@ -146,7 +146,7 @@ Play asks whether the app **collects** or **shares** user data, where "collect" 
 | Question | Answer | Why |
 | --- | --- | --- |
 | Does your app collect or share any of the required user data types? | **No** | Workouts, schedule, settings, challenges, miscount notes and the error log are stored only on the device. The app has no backend, no analytics SDK and no crash-reporting SDK. |
-| Is all user data encrypted in transit? | n/a (nothing collected) | The only network traffic the app makes itself is downloading static files: the pose detector page (GitHub Pages), the MediaPipe library (jsDelivr) and the model (Google Cloud Storage). |
+| Is all user data encrypted in transit? | n/a (nothing collected) | The only network traffic the app makes itself is downloading static files over HTTPS: the pose detector page (GitHub Pages), the MediaPipe library (jsDelivr), the model (Google Cloud Storage) and three.js for the how-to guide's 3D figure (jsDelivr). |
 | Do you provide a way for users to request deletion? | n/a | "Delete all data" in Settings wipes local storage, including challenges, miscount notes and the error log. |
 
 ### What stays on the device, and what the user may share
@@ -164,10 +164,10 @@ Camera: the camera is used only on device for live pose estimation; frames are n
 
 ## Permissions declaration
 
-The manifest requests only:
+The manifest requests only the permissions below. Before pasting this, check the built `.aab` (Play Console → App bundle explorer → Permissions): libraries can merge in more, and the list must match.
 
 - `CAMERA` — AI camera mode (runtime permission, requested on first use)
-- `POST_NOTIFICATIONS` — daily reminder (runtime, requested when enabled); it also shows the app blocker's notification
+- `POST_NOTIFICATIONS` — daily reminder (runtime, requested when the reminder is switched on) and the app blocker's ongoing notification (requested when the user agrees to the usage-access disclosure)
 - `RECEIVE_BOOT_COMPLETED` — expo-notifications re-schedules the reminder after a reboot, and the app blocker restarts its watcher
 - `PACKAGE_USAGE_STATS` — app blocker: which app is in front. Special access the user grants in Settings → Usage access, after an in-app explanation
 - `SYSTEM_ALERT_WINDOW` — app blocker: opens the block screen from the background and draws the countdown. Special access the user grants
@@ -188,7 +188,7 @@ The app blocker (`modules/app-blocker`) works either way the user chooses: usage
 Play Console → App content → Foreground service permissions → **Special use** (`FOREGROUND_SERVICE_SPECIAL_USE`, subtype in the manifest: "App blocker").
 
 ```
-Hít Đất AI is a push-up counter with an optional app blocker for digital wellbeing: the user picks apps they want to limit, and those stay blocked until the user earns time by doing push-ups.
+Hít Đất AI is a workout counter with an optional app blocker for digital wellbeing: the user picks apps they want to limit, and those stay blocked until the user earns time by working out (push-ups, squats and other exercises).
 
 The special-use foreground service runs only while the user has switched blocking on, chosen at least one app and granted usage access and "display over other apps". While the screen is on, it reads the usage events (UsageStatsManager) twice a second to know which app is in the foreground, so it can count the user's earned time down while a blocked app is open and cover the app with a block screen once that time is used up. It has to keep running while the user is in other apps, which is the whole point, and no other foreground service type describes this: it is not media, location, a data sync, a connected device or a user-initiated transfer.
 
@@ -202,7 +202,7 @@ Attach a short screen recording: the Blocker tab → the disclosure → granting
 Play Console → App content → Accessibility API. The app is **not** an accessibility tool (`isAccessibilityTool="false"`).
 
 ```
-Hít Đất AI is a push-up counter with an optional app blocker for digital wellbeing. The user picks apps and websites they want to limit (for example social media); they stay blocked until the user earns time by doing push-ups, and the earned time counts down while they use them.
+Hít Đất AI is a workout counter with an optional app blocker for digital wellbeing. The user picks apps and websites they want to limit (for example social media); they stay blocked until the user earns time by working out, and the earned time counts down while they use them.
 
 The AccessibilityService is used only to detect what the user has on screen: the package name of each visible application window (from window-state and window-change events, plus a once-a-second check while the screen is on), and, in web browsers, the domain shown in the address bar, which is compared with the user's list of blocked websites. This is what lets the app show its block screen over a blocked app or site and meter the earned time. It reads no other screen text or input, keeps no usage or browsing history, and sends no data off the device. The only actions it performs are pressing Back (to leave a blocked website), returning to the home screen, and closing a picture-in-picture window of a blocked app, all only when the user's earned time has run out.
 
