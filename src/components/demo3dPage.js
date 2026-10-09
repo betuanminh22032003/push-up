@@ -8,6 +8,13 @@
  * caches it after the first time. If it cannot load, the page says so and the
  * app falls back to the flat figure.
  *
+ * The figure is a rigged human (MODEL_URL, a skinned mesh with a full
+ * skeleton, CC0, from Mesh2Motion / Quaternius), posed every frame by turning
+ * its bones toward the demo's joints: each upper arm, forearm, thigh, shin and
+ * foot points where the stick figure's does, the pelvis turns with the hips
+ * and the spine and neck follow the back. If the model cannot load, the page
+ * draws its own porcelain mannequin from the same joints instead.
+ *
  * Messages to the app: {type:'ready'} once drawing, {type:'error'} on failure.
  * The app calls window.setSpeed(x) for slow motion.
  *
@@ -16,7 +23,9 @@
 
 import { framesAt, hasDumbbells, propBoxes, sceneBounds } from '../exercises/demoPoses';
 
-const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js';
+const THREE_BASE = 'https://cdn.jsdelivr.net/npm/three@0.159.0';
+/** Published from docs/models/ by GitHub Pages, like the pose page. */
+export const MODEL_URL = 'https://betuanminh22032003.github.io/push-up/models/human.glb';
 
 export const JOINTS = [
   'pelvis', 'neck', 'head', 'face',
@@ -70,10 +79,9 @@ export function demoPageHtml(demo, colors, { lite = false } = {}) {
   }
   window.onerror = function () { send({ type: 'error' }); };
 </script>
-<script src="${THREE_URL}" onerror="send({type:'error'})"></script>
+<script type="importmap">{"imports":{"three":"${THREE_BASE}/build/three.module.js","three/addons/":"${THREE_BASE}/examples/jsm/"}}</script>
 <script>
-(function () {
-  if (!window.THREE) { send({ type: 'error' }); return; }
+function start(THREE, GLTFLoader) {
   var D = ${data};
   var JOINTS = ${JSON.stringify(JOINTS)};
   var speed = 1;
@@ -368,8 +376,127 @@ export function demoPageHtml(demo, colors, { lite = false } = {}) {
     if (!sent) { sent = true; send({ type: 'ready' }); }
     requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
-})();
+
+  // --- the human ---------------------------------------------------------------
+  // Bone -> [descendant it is aimed by, from joint, to joint], parents first.
+  var AIMS = [
+    ['spine_01', 'neck_01', 'pelvis', 'neck'],
+    ['neck_01', 'head_leaf', 'neck', 'head'],
+    ['upperarm_l', 'lowerarm_l', 'shoulderL', 'elbowL'],
+    ['lowerarm_l', 'hand_l', 'elbowL', 'handL'],
+    ['upperarm_r', 'lowerarm_r', 'shoulderR', 'elbowR'],
+    ['lowerarm_r', 'hand_r', 'elbowR', 'handR'],
+    ['thigh_l', 'calf_l', 'hipL', 'kneeL'],
+    ['calf_l', 'foot_l', 'kneeL', 'ankleL'],
+    ['foot_l', 'ball_l', 'ankleL', 'toeL'],
+    ['thigh_r', 'calf_r', 'hipR', 'kneeR'],
+    ['calf_r', 'foot_r', 'kneeR', 'ankleR'],
+    ['foot_r', 'ball_r', 'ankleR', 'toeR'],
+  ];
+  // Where the body meets the floor, model bone against demo joint.
+  var CONTACTS = [['foot_l', 'ankleL'], ['foot_r', 'ankleR'], ['ball_l', 'toeL'], ['ball_r', 'toeR'], ['hand_l', 'handL'], ['hand_r', 'handR']];
+  var human = null, bones = {}, rest = {}, restPelvisWorld = null;
+  var tA = new THREE.Vector3(), tB = new THREE.Vector3(), tD = new THREE.Vector3();
+  var qA = new THREE.Quaternion(), qB = new THREE.Quaternion(), qC = new THREE.Quaternion();
+  var mB = new THREE.Matrix4();
+
+  function setupHuman(gltf) {
+    human = gltf.scene;
+    human.traverse(function (o) {
+      if (o.isBone) bones[o.name] = o;
+      if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
+    });
+    for (var i = 0; i < AIMS.length; i++) if (!bones[AIMS[i][0]] || !bones[AIMS[i][1]]) throw new Error('rig');
+    Object.keys(bones).forEach(function (n) { rest[n] = bones[n].quaternion.clone(); });
+    human.updateMatrixWorld(true);
+    // Same leg length as the demo's figure, so the joints line up.
+    var w = function (n) { return bones[n].getWorldPosition(new THREE.Vector3()); };
+    var modelLeg = w('thigh_l').distanceTo(w('calf_l')) + w('calf_l').distanceTo(w('foot_l'));
+    basePose(0);
+    var demoLeg = P.hipL.distanceTo(P.kneeL) + P.kneeL.distanceTo(P.ankleL);
+    human.scale.setScalar(demoLeg / modelLeg);
+    human.updateMatrixWorld(true);
+    restPelvisWorld = bones.pelvis.getWorldQuaternion(new THREE.Quaternion());
+    scene.add(human);
+    // The mannequin made of shapes steps aside; the dumbbells stay.
+    limbs.forEach(function (l) { l.m.visible = false; });
+    joints.forEach(function (j) { j.m.visible = false; });
+    hands.concat(feet).forEach(function (h) { h.m.visible = false; });
+    [neckM, head, visor, chest, waist, hips].forEach(function (m) { m.visible = false; });
+  }
+
+  // Turn bone 'name' (from its rest pose) so that its descendant lies along from -> to.
+  function aim(name, child, from, to) {
+    var b = bones[name];
+    b.quaternion.copy(rest[name]);
+    b.updateMatrixWorld(true);
+    var dir = tD.subVectors(to, from);
+    if (dir.lengthSq() < 1e-10) return;
+    dir.normalize();
+    var cur = bones[child].getWorldPosition(tB).sub(b.getWorldPosition(tA)).normalize();
+    qA.setFromUnitVectors(cur, dir).multiply(b.getWorldQuaternion(qB));
+    b.quaternion.copy(b.parent.getWorldQuaternion(qC).invert().multiply(qA));
+    b.updateMatrixWorld(true);
+  }
+
+  function poseHuman() {
+    human.position.set(0, 0, 0);
+    human.updateMatrixWorld(true);
+    // Pelvis: at the demo's pelvis, turned so the hips and the back match.
+    var pel = bones.pelvis;
+    pel.quaternion.copy(rest.pelvis);
+    pel.position.copy(pel.parent.worldToLocal(P.pelvis.clone()));
+    var up = V().subVectors(P.neck, P.pelvis).normalize();
+    var side = V().subVectors(P.hipL, P.hipR);
+    side.addScaledVector(up, -side.dot(up));
+    if (side.lengthSq() < 1e-8) side.set(1, 0, 0);
+    side.normalize();
+    mB.makeBasis(side, up, V().crossVectors(side, up));
+    qA.setFromRotationMatrix(mB).multiply(restPelvisWorld);
+    pel.quaternion.copy(pel.parent.getWorldQuaternion(qC).invert().multiply(qA));
+    pel.updateMatrixWorld(true);
+    for (var i = 0; i < AIMS.length; i++) aim(AIMS[i][0], AIMS[i][1], P[AIMS[i][2]], P[AIMS[i][3]]);
+    // A hand on the floor lies flat, fingers ahead, as the mannequin's did.
+    ['l', 'r'].forEach(function (side) {
+      var hand = P[side === 'l' ? 'handL' : 'handR'];
+      if (hand.y >= 0.07) return;
+      var ahead = horizontal(V().subVectors(P.face, P.head));
+      if (ahead.lengthSq() < 0.002) ahead = horizontal(V().subVectors(P.neck, P.pelvis));
+      if (ahead.lengthSq() < 1e-6) return;
+      aim('hand_' + side, 'middle_01_' + side, hand, V().copy(hand).add(ahead.normalize()));
+    });
+    // Bone lengths differ a little from the demo's: settle the body onto the
+    // floor where the demo touches it.
+    var low = Infinity, demoLow = Infinity;
+    for (var k = 0; k < CONTACTS.length; k++) {
+      var y = bones[CONTACTS[k][0]].getWorldPosition(tA).y;
+      var dy = P[CONTACTS[k][1]].y;
+      if (dy < demoLow) { demoLow = dy; low = y; }
+    }
+    human.position.y = demoLow - low;
+  }
+
+  var basePose = pose;
+  pose = function (t) {
+    basePose(t);
+    if (human) poseHuman();
+  };
+
+  // The human is worth a short wait; past it, or on any failure, the mannequin.
+  var begun = false;
+  function begin() { if (!begun) { begun = true; requestAnimationFrame(frame); } }
+  var wait = setTimeout(begin, 12000);
+  new GLTFLoader().load('${MODEL_URL}', function (gltf) {
+    try { setupHuman(gltf); } catch (e) { human = null; }
+    clearTimeout(wait);
+    begin();
+  }, undefined, function () { clearTimeout(wait); begin(); });
+}
+</script>
+<script type="module">
+Promise.all([import('three'), import('three/addons/loaders/GLTFLoader.js')])
+  .then(function (m) { start(m[0], m[1].GLTFLoader); })
+  .catch(function () { send({ type: 'error' }); });
 </script>
 </body></html>`;
 }

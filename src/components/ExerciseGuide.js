@@ -4,8 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 import { ExerciseDemo3D } from './ExerciseDemo3D';
+import { ExerciseGlyph } from './ExerciseGlyph';
+import { Icon } from './Icon';
 
 /**
  * "How to do it" for one exercise: the 3D mannequin doing it, the steps, and the
@@ -30,7 +32,7 @@ export function ExerciseGuideSheet({ visible, exerciseId, onClose }) {
         <Pressable style={styles.dismiss} onPress={onClose} accessibilityLabel={t('common.close')} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
           <View style={styles.header}>
-            <Text style={styles.icon}>{exercise.icon}</Text>
+            <ExerciseGlyph exerciseId={exercise.id} size={44} />
             <View style={styles.grow}>
               <Text style={styles.kicker}>{t('guide.title')}</Text>
               <Text style={styles.title} numberOfLines={1}>
@@ -38,7 +40,7 @@ export function ExerciseGuideSheet({ visible, exerciseId, onClose }) {
               </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t('common.close')}>
-              <Text style={styles.close}>×</Text>
+              <Icon name="close" size={26} color={colors.textDim} />
             </Pressable>
           </View>
 
@@ -48,7 +50,10 @@ export function ExerciseGuideSheet({ visible, exerciseId, onClose }) {
                 <ExerciseDemo3D exerciseId={exercise.id} width={stageW} height={stageH} speed={slow ? 0.4 : 1} />
               ) : null}
               <View style={styles.stageBar}>
-                <Text style={styles.dragHint}>↔ {t('guide.drag')}</Text>
+                <View style={styles.inline}>
+                  <Icon name="swap-horizontal" size={14} color={colors.textDim} />
+                  <Text style={styles.dragHint}>{t('guide.drag')}</Text>
+                </View>
                 <Pressable
                   onPress={() => setSlow((s) => !s)}
                   accessibilityRole="switch"
@@ -57,9 +62,12 @@ export function ExerciseGuideSheet({ visible, exerciseId, onClose }) {
                   hitSlop={8}
                   style={({ pressed }) => [styles.speed, slow && styles.speedOn, pressed && styles.pressed]}
                 >
-                  <Text style={[styles.speedText, slow && styles.speedTextOn]}>
-                    {slow ? `🐢 ${t('guide.slow')}` : `▶ ${t('guide.normal')}`}
-                  </Text>
+                  <View style={styles.inline}>
+                    <Icon name={slow ? 'speedometer-outline' : 'play'} size={13} color={slow ? colors.warn : colors.textDim} />
+                    <Text style={[styles.speedText, slow && styles.speedTextOn]}>
+                      {slow ? t('guide.slow') : t('guide.normal')}
+                    </Text>
+                  </View>
                 </Pressable>
               </View>
             </View>
@@ -77,12 +85,15 @@ export function ExerciseGuideSheet({ visible, exerciseId, onClose }) {
                 <Text style={styles.stepText}>{step}</Text>
               </View>
             ))}
-            <Text style={styles.breathe}>💨 {t(hold ? 'guide.breatheHold' : 'guide.breatheReps')}</Text>
+            <View style={[styles.inline, styles.breatheRow]}>
+              <Icon name="pulse" size={15} color={colors.textDim} />
+              <Text style={styles.breathe}>{t(hold ? 'guide.breatheHold' : 'guide.breatheReps')}</Text>
+            </View>
 
             <Text style={styles.section}>{t('guide.mistakes')}</Text>
             {lines(`guide.${exercise.id}.mistakes`).map((m, i) => (
               <View key={i} style={styles.step}>
-                <Text style={styles.cross}>✕</Text>
+                <Icon name="close" size={16} color={colors.danger} style={styles.cross} />
                 <Text style={styles.stepText}>{m}</Text>
               </View>
             ))}
@@ -110,7 +121,7 @@ export function ExerciseGuideButton({ exerciseId, compact = false, label, style 
         style={({ pressed }) => [compact ? styles.compact : styles.button, pressed && styles.pressed, style]}
       >
         <Text style={compact ? styles.compactText : styles.buttonText}>
-          {compact ? '?' : label ?? `▶ ${t('guide.button')}`}
+          {compact ? '?' : label ?? t('guide.button')}
         </Text>
       </Pressable>
       <ExerciseGuideSheet visible={open} exerciseId={exerciseId} onClose={() => setOpen(false)} />
@@ -120,6 +131,8 @@ export function ExerciseGuideButton({ exerciseId, compact = false, label, style 
 
 const styles = StyleSheet.create({
   grow: { flex: 1 },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  breatheRow: { marginTop: spacing.sm },
   pressed: { opacity: 0.7 },
 
   button: {
@@ -127,11 +140,9 @@ const styles = StyleSheet.create({
     minHeight: 32,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.accentSoft,
   },
-  buttonText: { fontSize: 13, fontWeight: '700', color: colors.accent },
+  buttonText: { fontSize: 13, ...font('700'), color: colors.accent },
   compact: {
     width: 28,
     height: 28,
@@ -141,33 +152,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accent,
   },
-  compactText: { fontSize: 14, fontWeight: '700', color: colors.accent },
+  compactText: { fontSize: 14, ...font('700'), color: colors.accent },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   dismiss: { flex: 1 },
   sheet: {
     maxHeight: '92%',
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-  icon: { fontSize: 30 },
   kicker: { ...type.label, color: colors.accent },
   title: { ...type.title, color: colors.text },
-  close: { fontSize: 30, lineHeight: 32, color: colors.textDim, paddingHorizontal: spacing.sm },
+  close: { ...font('400'), fontSize: 30, lineHeight: 32, color: colors.textDim, paddingHorizontal: spacing.sm },
   scroll: { flexGrow: 0 },
   scrollContent: { paddingBottom: spacing.md },
 
   stage: {
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   stageBar: {
@@ -179,7 +185,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  dragHint: { fontSize: 12, color: colors.textDim },
+  dragHint: { ...font('400'), fontSize: 12, color: colors.textDim },
   speed: {
     paddingVertical: 4,
     paddingHorizontal: spacing.sm,
@@ -188,10 +194,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   speedOn: { borderColor: colors.warn },
-  speedText: { fontSize: 12, color: colors.textDim },
-  speedTextOn: { color: colors.warn, fontWeight: '600' },
+  speedText: { ...font('400'), fontSize: 12, color: colors.textDim },
+  speedTextOn: { color: colors.warn, ...font('600') },
 
-  meta: { fontSize: 12, color: colors.accent, marginTop: spacing.sm },
+  meta: { ...font('400'), fontSize: 12, color: colors.accent, marginTop: spacing.sm },
   section: { ...type.label, color: colors.textDim, marginTop: spacing.md, marginBottom: spacing.sm },
   step: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.sm },
   stepNum: {
@@ -203,10 +209,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 1,
   },
-  stepNumText: { fontSize: 12, fontWeight: '700', color: colors.text },
-  stepText: { flex: 1, fontSize: 15, lineHeight: 21, color: colors.text },
-  cross: { width: 22, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.danger, marginTop: 2 },
-  breathe: { fontSize: 13, color: colors.textDim, marginTop: spacing.xs },
+  stepNumText: { fontSize: 12, ...font('700'), color: colors.text },
+  stepText: { ...font('400'), flex: 1, fontSize: 15, lineHeight: 21, color: colors.text },
+  cross: { width: 22, textAlign: 'center', fontSize: 14, ...font('700'), color: colors.danger, marginTop: 2 },
+  breathe: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: spacing.xs },
 });
 
 /**
@@ -235,7 +241,10 @@ export function GuideDock({ exerciseId, open, onToggle, onDetails, upNext = fals
         accessibilityLabel={t('guide.open', { name })}
         style={({ pressed }) => [dockStyles.dockPill, pressed && styles.pressed, style]}
       >
-        <Text style={dockStyles.dockPillText}>▶ {t('guide.button')}</Text>
+        <View style={styles.inline}>
+          <Icon name="play" size={12} color={colors.accent} />
+          <Text style={dockStyles.dockPillText}>{t('guide.button')}</Text>
+        </View>
       </Pressable>
     );
   }
@@ -245,7 +254,7 @@ export function GuideDock({ exerciseId, open, onToggle, onDetails, upNext = fals
       <View style={dockStyles.dockHead}>
         <Text style={dockStyles.dockName} numberOfLines={1}>
           {upNext ? `${t('guide.upNext')} · ` : ''}
-          {exercise.icon} {name}
+          {name}
         </Text>
         <Pressable
           onPress={() => onToggle(false)}
@@ -282,12 +291,10 @@ const dockStyles = StyleSheet.create({
     borderColor: colors.accent,
     backgroundColor: 'rgba(10,10,11,0.75)',
   },
-  dockPillText: { fontSize: 13, fontWeight: '700', color: colors.accent },
+  dockPillText: { fontSize: 13, ...font('700'), color: colors.accent },
   dock: {
     width: DOCK_W,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },
@@ -299,13 +306,13 @@ const dockStyles = StyleSheet.create({
     paddingRight: 6,
     paddingVertical: 4,
   },
-  dockName: { flex: 1, fontSize: 11, fontWeight: '600', color: colors.text },
-  dockClose: { fontSize: 20, lineHeight: 20, color: colors.textDim, paddingHorizontal: 2 },
+  dockName: { flex: 1, fontSize: 11, ...font('600'), color: colors.text },
+  dockClose: { ...font('400'), fontSize: 20, lineHeight: 20, color: colors.textDim, paddingHorizontal: 2 },
   dockDetails: {
     alignItems: 'center',
     paddingVertical: 6,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  dockDetailsText: { fontSize: 12, fontWeight: '600', color: colors.accent },
+  dockDetailsText: { fontSize: 12, ...font('600'), color: colors.accent },
 });

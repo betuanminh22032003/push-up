@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, spacing } from '../theme/theme';
+import { colors, font, radius, spacing } from '../theme/theme';
+import { Icon } from './Icon';
 
 /**
  * Bottom tabs. Plain Pressables rather than a navigation library: five
@@ -23,7 +24,13 @@ export function TabBar({ tabs, activeId, onSelect }) {
             accessibilityLabel={tab.label}
             style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
           >
-            <Text style={[styles.icon, active && styles.iconActive]}>{tab.icon}</Text>
+            <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
+              <Icon
+                name={active ? tab.icon : `${tab.icon}-outline`}
+                size={21}
+                color={active ? colors.accent : colors.textFaint}
+              />
+            </View>
             <Text
               style={[styles.label, active && styles.labelActive]}
               numberOfLines={1}
@@ -42,15 +49,22 @@ export function TabBar({ tabs, activeId, onSelect }) {
 const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
     paddingTop: spacing.sm,
   },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: spacing.xs },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 2 },
   pressed: { opacity: 0.6 },
-  icon: { fontSize: 20, color: colors.textFaint },
-  iconActive: { color: colors.accent },
-  label: { fontSize: 11, fontWeight: '600', color: colors.textFaint, marginTop: 2 },
-  labelActive: { color: colors.text },
+  // The selected tab's icon sits on a soft pill of the brand colour.
+  iconWrap: {
+    width: 56,
+    height: 30,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapActive: { backgroundColor: colors.accentSoft },
+  label: { fontSize: 11, ...font('500'), color: colors.textFaint, marginTop: 3 },
+  labelActive: { color: colors.text, ...font('700') },
 });

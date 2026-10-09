@@ -15,7 +15,8 @@ import { AppIcon } from './AppIcon';
 import { Button } from './Button';
 import { filterApps, isSuggested } from '../blocker/blockerLogic';
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
+import { Icon } from './Icon';
 
 /**
  * Full-screen list of installed apps to tick. The selection stays local until
@@ -76,7 +77,7 @@ export function AppPickerModal({ visible, apps, loading, selected, onSave, onClo
           {app.label}
         </Text>
         <View style={[styles.check, on && styles.checkOn]}>
-          {on ? <Text style={styles.checkMark}>✓</Text> : null}
+          {on ? <Icon name="checkmark" size={16} color={colors.bg} /> : null}
         </View>
       </Pressable>
     );
@@ -144,8 +145,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   title: { ...type.title, color: colors.text, flex: 1 },
-  cancel: { fontSize: 15, color: colors.textDim },
+  cancel: { ...font('400'), fontSize: 15, color: colors.textDim },
   search: {
+    ...font('400'),
     marginHorizontal: spacing.lg,
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.md,
@@ -166,7 +168,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   pressed: { opacity: 0.6 },
-  label: { flex: 1, fontSize: 15, color: colors.text },
+  label: { ...font('400'), flex: 1, fontSize: 15, color: colors.text },
   check: {
     width: 26,
     height: 26,
@@ -177,7 +179,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkOn: { borderColor: colors.accent, backgroundColor: colors.accent },
-  checkMark: { fontSize: 14, fontWeight: '800', color: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   hint: { ...type.body, color: colors.textDim, textAlign: 'center', marginTop: spacing.lg },
   footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md },

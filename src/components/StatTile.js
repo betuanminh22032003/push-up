@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ProgressBar } from './ProgressBar';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 
 /**
  * @param {object}  props
@@ -33,17 +33,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
+    paddingHorizontal: spacing.md,
   },
-  label: { ...type.label, color: colors.textFaint, textTransform: 'uppercase' },
+  label: { ...type.label, color: colors.textDim },
   valueRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: spacing.xs },
   value: { ...type.stat, color: colors.text },
   valueHighlight: { color: colors.accent },
-  suffix: { fontSize: 13, color: colors.textDim, marginLeft: 3 },
-  progress: { width: '100%', marginTop: spacing.sm, alignItems: 'center' },
-  caption: { fontSize: 10, color: colors.textFaint, marginTop: 4 },
+  suffix: { ...font('400'), fontSize: 13, color: colors.textDim, marginLeft: 3 },
+  progress: { width: '100%', marginTop: spacing.sm },
+  caption: { ...font('400'), fontSize: 10, color: colors.textFaint, marginTop: 4 },
 });

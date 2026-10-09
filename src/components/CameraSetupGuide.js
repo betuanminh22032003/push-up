@@ -3,8 +3,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { cameraSetupFor } from '../exercises/cameraSetup';
 import { getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 import { Button } from './Button';
+import { Icon } from './Icon';
 
 /**
  * The card shown before the camera counts: where the phone goes for this
@@ -32,13 +33,14 @@ export function CameraSetupGuide({ exerciseId, onStart, startLabel, onCancel, ca
   return (
     <View style={styles.card}>
       <Text style={styles.title}>
-        {exercise.icon} {t('setup.title', { exercise: t(`exercise.${exercise.id}`) })}
+        {t('setup.title', { exercise: t(`exercise.${exercise.id}`) })}
       </Text>
       <SetupDrawing setup={setup} label={lines.join(', ')} />
       {lines.map((line, i) => (
-        <Text key={i} style={styles.line}>
-          {['📱', '↔️', '↕️'][i]}  {line}
-        </Text>
+        <View key={i} style={styles.lineRow}>
+          <Icon name={['phone-portrait-outline', 'swap-horizontal', 'swap-vertical'][i]} size={16} color={colors.accent} />
+          <Text style={[styles.line, styles.lineText]}>{line}</Text>
+        </View>
       ))}
       <Text style={styles.hint}>{t(`exercise.${exercise.id}.hint.ai`)}</Text>
       <Text style={styles.gate}>{t('setup.gate')}</Text>
@@ -123,11 +125,11 @@ function Figure({ posture, view }) {
 }
 
 const styles = StyleSheet.create({
+  lineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  lineText: { flex: 1, marginTop: 0 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
   },
   title: { ...type.title, fontSize: 18, color: colors.text },
@@ -179,10 +181,10 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: colors.textDim,
   },
-  distance: { position: 'absolute', textAlign: 'center', fontSize: 13, fontWeight: '600', color: colors.text },
+  distance: { position: 'absolute', textAlign: 'center', fontSize: 13, ...font('600'), color: colors.text },
   line: { ...type.body, color: colors.text, marginTop: spacing.xs },
-  hint: { fontSize: 13, color: colors.textDim, marginTop: spacing.md, lineHeight: 19 },
-  gate: { fontSize: 13, color: colors.accent, marginTop: spacing.sm, lineHeight: 19 },
+  hint: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: spacing.md, lineHeight: 19 },
+  gate: { ...font('400'), fontSize: 13, color: colors.accent, marginTop: spacing.sm, lineHeight: 19 },
   buttons: { flexDirection: 'row', marginTop: spacing.lg },
   grow: { flex: 1 },
   gap: { width: spacing.sm },

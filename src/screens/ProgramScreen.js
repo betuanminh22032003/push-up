@@ -25,8 +25,21 @@ import {
   weekProgress,
 } from '../program/program';
 import { useSessions } from '../state/SessionsContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
+import { ExerciseGlyph } from '../components/ExerciseGlyph';
+import { Icon } from '../components/Icon';
+
+/** A level as one, two or three rising bars, like signal strength. */
+function LevelBars({ level }) {
+  return (
+    <View style={styles.levelBars}>
+      {[8, 13, 18].map((h, i) => (
+        <View key={h} style={[styles.levelBar, { height: h }, i < level && styles.levelBarOn]} />
+      ))}
+    </View>
+  );
+}
 
 /**
  * The training schedule (lịch tập): pick a level, then a week at a time of
@@ -111,6 +124,7 @@ export function ProgramScreen({ onStartPlan }) {
               accessibilityRole="button"
               style={({ pressed }) => [styles.levelRow, pressed && styles.pressed]}
             >
+              <LevelBars level={PROGRAM_LEVELS.indexOf(id) + 1} />
               <View style={styles.grow}>
                 <Text style={styles.levelName}>{t(`program.level.${id}`)}</Text>
                 <Text style={styles.cardBody}>{t(`program.levelBody.${id}`)}</Text>
@@ -219,9 +233,11 @@ export function ProgramScreen({ onStartPlan }) {
                   style={({ pressed }) => [styles.dayHead, pressed && styles.pressed]}
                 >
                   <View style={[styles.dayBadge, isDone && styles.dayBadgeDone]}>
-                    <Text style={[styles.dayBadgeText, isDone && styles.dayBadgeTextDone]}>
-                      {isDone ? '✓' : plan.day}
-                    </Text>
+                    {isDone ? (
+                      <Icon name="checkmark" size={18} color={colors.bg} />
+                    ) : (
+                      <Text style={styles.dayBadgeText}>{plan.day}</Text>
+                    )}
                   </View>
                   <View style={styles.grow}>
                     <View style={styles.dayTitleRow}>
@@ -244,7 +260,7 @@ export function ProgramScreen({ onStartPlan }) {
                       const e = getExercise(item.exerciseId);
                       return (
                         <View key={item.exerciseId} style={styles.item}>
-                          <Text style={styles.itemIcon}>{e.icon}</Text>
+                          <ExerciseGlyph exerciseId={e.id} size={36} />
                           <View style={styles.grow}>
                             <Text style={styles.itemName}>{t(`exercise.${e.id}`)}</Text>
                             <Text style={styles.itemCue} numberOfLines={2}>
@@ -291,24 +307,22 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   title: { ...type.title, color: colors.text },
   intro: { ...type.body, color: colors.textDim, marginTop: spacing.xs, lineHeight: 21 },
-  note: { fontSize: 12, color: colors.textFaint, marginTop: spacing.md, textAlign: 'center' },
+  note: { ...font('400'), fontSize: 12, color: colors.textFaint, marginTop: spacing.md, textAlign: 'center' },
 
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.md,
     marginTop: spacing.lg,
   },
   cardRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  cardTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  cardTitle: { fontSize: 18, ...font('600'), color: colors.text },
   cardBody: { ...type.body, color: colors.textDim, marginTop: spacing.xs, lineHeight: 21 },
   cardButton: { marginTop: spacing.md },
-  progressText: { fontSize: 13, color: colors.textDim },
+  progressText: { ...font('400'), fontSize: 13, color: colors.textDim },
   progressBar: { marginTop: spacing.md },
-  complete: { fontSize: 17, fontWeight: '600', color: colors.accent, marginTop: spacing.md },
-  nextLine: { fontSize: 14, color: colors.text, marginTop: spacing.md },
+  complete: { fontSize: 17, ...font('600'), color: colors.accent, marginTop: spacing.md },
+  nextLine: { ...font('400'), fontSize: 14, color: colors.text, marginTop: spacing.md },
 
   levelRow: {
     flexDirection: 'row',
@@ -318,19 +332,31 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     marginTop: spacing.sm,
   },
-  levelName: { fontSize: 16, fontWeight: '600', color: colors.text },
-  chevron: { fontSize: 22, color: colors.textDim, paddingLeft: spacing.sm },
+  levelBars: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accentSoft,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 3,
+    paddingBottom: 13,
+    marginRight: spacing.md,
+  },
+  levelBar: { width: 5, borderRadius: 2, backgroundColor: colors.border },
+  levelBarOn: { backgroundColor: colors.accent },
+  levelName: { fontSize: 16, ...font('700'), color: colors.text },
+  chevron: { ...font('400'), fontSize: 22, color: colors.textDim, paddingLeft: spacing.sm },
 
   sectionRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  sectionLabel: { ...type.label, color: colors.textFaint, marginTop: spacing.lg, marginBottom: spacing.sm },
-  sectionMeta: { fontSize: 12, color: colors.textDim },
+  sectionLabel: { ...type.heading, color: colors.text, marginTop: spacing.lg, marginBottom: spacing.sm },
+  sectionMeta: { ...font('500'), fontSize: 13, color: colors.textDim },
   weekChips: { marginBottom: spacing.md },
 
   dayCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.lg,
     marginBottom: spacing.sm,
   },
   dayCardNext: { borderColor: colors.accent },
@@ -339,31 +365,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
   restRow: { borderStyle: 'dashed', backgroundColor: 'transparent' },
-  restTitle: { fontSize: 15, fontWeight: '600', color: colors.textDim },
+  restTitle: { fontSize: 15, ...font('600'), color: colors.textDim },
   dayBadge: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  dayBadgeDone: { backgroundColor: colors.accent, borderColor: colors.accent },
-  dayBadgeText: { fontSize: 14, fontWeight: '600', color: colors.textDim },
-  dayBadgeTextDone: { color: colors.bg },
+  dayBadgeDone: { backgroundColor: colors.accent },
+  dayBadgeText: { fontSize: 14, ...font('600'), color: colors.textDim },
   dayTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
-  dayTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
+  dayTitle: { fontSize: 15, ...font('600'), color: colors.text },
   nextTag: {
     fontSize: 10,
-    fontWeight: '600',
+    ...font('600'),
     color: colors.accent,
     borderWidth: 1,
     borderColor: colors.accentDim,
@@ -371,7 +393,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 1,
   },
-  dayMeta: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
+  dayMeta: { ...font('400'), fontSize: 12, color: colors.textFaint, marginTop: 2 },
 
   items: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   item: {
@@ -382,12 +404,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  itemIcon: { fontSize: 20, width: 28, textAlign: 'center' },
-  itemName: { fontSize: 14, fontWeight: '600', color: colors.text },
-  itemCue: { fontSize: 12, color: colors.textDim, marginTop: 1, lineHeight: 16 },
-  itemTarget: { fontSize: 15, fontWeight: '600', color: colors.accent, fontVariant: ['tabular-nums'] },
+  itemName: { fontSize: 14, ...font('600'), color: colors.text },
+  itemCue: { ...font('400'), fontSize: 12, color: colors.textDim, marginTop: 1, lineHeight: 16 },
+  itemTarget: { fontSize: 15, ...font('600'), color: colors.accent, fontVariant: ['tabular-nums'] },
   dayButton: { marginTop: spacing.sm },
 
   restart: { alignSelf: 'center', marginTop: spacing.lg, padding: spacing.sm },
-  restartText: { fontSize: 14, color: colors.danger },
+  restartText: { ...font('400'), fontSize: 14, color: colors.danger },
 });

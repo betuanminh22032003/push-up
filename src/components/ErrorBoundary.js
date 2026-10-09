@@ -7,9 +7,10 @@ import { appInfo, deviceInfo } from '../diagnostics/device';
 import { loadErrors, recordError } from '../diagnostics/errorLog';
 import { formatReport } from '../diagnostics/report';
 import { resolveLanguage, translate } from '../i18n/strings';
-import { colors, spacing, type } from '../theme/theme';
+import { colors, font, spacing, type } from '../theme/theme';
 import { shareText } from '../utils/share';
 import { Button } from './Button';
+import { Icon } from './Icon';
 
 /**
  * The last line of defence: a render error anywhere below shows a friendly
@@ -74,7 +75,7 @@ export class ErrorBoundary extends Component {
     }
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.emoji}>🩹</Text>
+        <Icon name="bandage-outline" size={44} color={colors.accent} />
         <Text style={styles.title}>{this.t('crash.title')}</Text>
         <Text style={styles.body}>{this.t('crash.body')}</Text>
         <Text style={styles.detail} numberOfLines={3}>
@@ -92,10 +93,9 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl },
-  emoji: { fontSize: 48, textAlign: 'center' },
   title: { ...type.title, color: colors.text, textAlign: 'center', marginTop: spacing.md },
   body: { ...type.body, color: colors.textDim, textAlign: 'center', marginTop: spacing.sm, lineHeight: 22 },
-  detail: { fontSize: 12, color: colors.textFaint, textAlign: 'center', marginTop: spacing.md },
+  detail: { ...font('400'), fontSize: 12, color: colors.textFaint, textAlign: 'center', marginTop: spacing.md },
   button: { marginTop: spacing.lg },
-  privacy: { fontSize: 12, color: colors.textFaint, textAlign: 'center', marginTop: spacing.lg, lineHeight: 18 },
+  privacy: { ...font('400'), fontSize: 12, color: colors.textFaint, textAlign: 'center', marginTop: spacing.lg, lineHeight: 18 },
 });

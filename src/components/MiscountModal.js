@@ -8,9 +8,10 @@ import { loadErrors } from '../diagnostics/errorLog';
 import { buildMiscount, formatReport, NOTE_MAX } from '../diagnostics/report';
 import { getExercise } from '../exercises/exercises';
 import { useI18n } from '../i18n/I18nContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 import { shareText } from '../utils/share';
 import { Button } from './Button';
+import { Icon } from './Icon';
 
 /**
  * "Miscounted?" after a camera set: the real count and an optional note,
@@ -80,7 +81,7 @@ export function MiscountModal({ session, onClose }) {
               <Text style={styles.body}>
                 {t('miscount.body', {
                   counted: session.totalReps,
-                  exercise: `${exercise.icon} ${t(`exercise.${exercise.id}`)}`,
+                  exercise: t(`exercise.${exercise.id}`),
                 })}
               </Text>
               <Text style={styles.label}>{t('miscount.real')}</Text>
@@ -117,7 +118,7 @@ export function MiscountModal({ session, onClose }) {
             </>
           )}
           <Pressable onPress={onClose} hitSlop={12} style={styles.close} accessibilityRole="button" accessibilityLabel={t('common.close')}>
-            <Text style={styles.closeText}>✕</Text>
+            <Icon name="close" size={22} color={colors.textDim} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -130,14 +131,13 @@ const styles = StyleSheet.create({
   sheet: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
   },
   title: { ...type.title, fontSize: 19, color: colors.text, paddingRight: spacing.lg },
   body: { ...type.body, color: colors.textDim, marginTop: spacing.sm, lineHeight: 21 },
-  label: { ...type.label, color: colors.textFaint, marginTop: spacing.md },
+  label: { ...type.label, fontSize: 13, color: colors.textDim, marginTop: spacing.md },
   input: {
+    ...font('400'),
     marginTop: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
@@ -149,13 +149,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   inputInvalid: { borderColor: colors.danger },
-  note: { minHeight: 64, fontSize: 15, textAlignVertical: 'top' },
-  small: { fontSize: 12, color: colors.textFaint, marginTop: spacing.md, lineHeight: 17 },
+  note: { ...font('400'), minHeight: 64, fontSize: 15, textAlignVertical: 'top' },
+  small: { ...font('400'), fontSize: 12, color: colors.textFaint, marginTop: spacing.md, lineHeight: 17 },
   row: { flexDirection: 'row', marginTop: spacing.lg },
   grow: { flex: 1 },
   gap: { width: spacing.sm },
   button: { marginTop: spacing.lg },
   buttonSmall: { marginTop: spacing.sm },
   close: { position: 'absolute', top: spacing.md, right: spacing.md },
-  closeText: { fontSize: 18, color: colors.textDim },
 });

@@ -1,6 +1,6 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '../theme/theme';
+import { colors, font } from '../theme/theme';
 
 /** An installed app's icon, or its initial on a tile when there is no icon. */
 export function AppIcon({ app, size = 36 }) {
@@ -24,5 +24,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  initial: { fontWeight: '700', color: colors.textDim },
+  initial: { ...font('700'), color: colors.textDim },
 });

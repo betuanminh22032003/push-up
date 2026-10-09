@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 
 import { getDemo } from '../exercises/demoPoses';
 import { useT } from '../i18n/I18nContext';
-import { colors } from '../theme/theme';
+import { colors, font } from '../theme/theme';
 import { demoPageHtml } from './demo3dPage';
 import { ExerciseDemo } from './ExerciseDemo';
 
@@ -75,5 +75,5 @@ export function ExerciseDemo3D({ exerciseId, width, height, speed = 1, lite = fa
 
 const styles = StyleSheet.create({
   web: { backgroundColor: colors.surface },
-  offline: { fontSize: 11, color: colors.textFaint, textAlign: 'center', paddingBottom: 4 },
+  offline: { ...font('400'), fontSize: 11, color: colors.textFaint, textAlign: 'center', paddingBottom: 4 },
 });

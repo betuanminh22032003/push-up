@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getExercise } from '../exercises/exercises';
 import { useI18n } from '../i18n/I18nContext';
-import { colors, radius, spacing } from '../theme/theme';
+import { colors, font, radius, spacing } from '../theme/theme';
 import { formatDuration, formatSessionDate } from '../utils/time';
 
 export function SessionRow({ session, onDelete }) {
@@ -44,7 +44,7 @@ export function SessionRow({ session, onDelete }) {
           {tag ? <Text style={styles.tag}>{tag}</Text> : null}
         </View>
         <Text style={styles.exercise} numberOfLines={1}>
-          {`${exercise.icon} ${t(`exercise.${exercise.id}`)}`}
+          {t(`exercise.${exercise.id}`)}
         </Text>
         <Text style={styles.sub}>{details.join(' · ')}</Text>
       </View>
@@ -68,8 +68,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
@@ -80,14 +78,14 @@ const styles = StyleSheet.create({
     borderRightColor: colors.border,
     paddingRight: spacing.sm,
   },
-  repsValue: { fontSize: 24, fontWeight: '600', color: colors.accent },
-  repsLabel: { fontSize: 10, color: colors.textFaint, letterSpacing: 1 },
+  repsValue: { fontSize: 24, ...font('600'), color: colors.accent },
+  repsLabel: { ...font('400'), fontSize: 10, color: colors.textFaint, letterSpacing: 1 },
   meta: { flex: 1, paddingLeft: spacing.md },
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  date: { fontSize: 15, fontWeight: '500', color: colors.text },
+  date: { fontSize: 15, ...font('500'), color: colors.text },
   tag: {
     fontSize: 10,
-    fontWeight: '600',
+    ...font('600'),
     color: colors.accent,
     borderWidth: 1,
     borderColor: colors.accentDim,
@@ -95,8 +93,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 1,
   },
-  exercise: { fontSize: 13, color: colors.text, marginTop: 2 },
-  sub: { fontSize: 13, color: colors.textDim, marginTop: 2 },
+  exercise: { ...font('400'), fontSize: 13, color: colors.text, marginTop: 2 },
+  sub: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: 2 },
   delete: { paddingHorizontal: spacing.sm },
-  deleteGlyph: { fontSize: 26, color: colors.textFaint, lineHeight: 28 },
+  deleteGlyph: { ...font('400'), fontSize: 26, color: colors.textFaint, lineHeight: 28 },
 });

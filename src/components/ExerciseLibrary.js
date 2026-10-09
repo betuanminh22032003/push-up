@@ -4,8 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BODY_PARTS, exercisesFor, getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 import { ExerciseGuideButton } from './ExerciseGuide';
+import { ExerciseGlyph } from './ExerciseGlyph';
 import { ExercisePicker } from './ExercisePicker';
 
 /**
@@ -38,7 +39,7 @@ export function ExerciseLibraryButton({ selected, onSelect, disabled, style }) {
         accessibilityLabel={`${t(`exercise.${exercise.id}`)}. ${t('picker.change')}`}
         style={({ pressed }) => [styles.button, styles.grow, pressed && styles.pressed]}
       >
-        <Text style={styles.buttonIcon}>{exercise.icon}</Text>
+        <ExerciseGlyph exerciseId={exercise.id} size={40} />
         <View style={styles.grow}>
           <Text style={styles.buttonName} numberOfLines={1}>
             {t(`exercise.${exercise.id}`)}
@@ -117,7 +118,7 @@ export function ExerciseLibrarySheet({ visible, selected, onSelect, onClose }) {
                   aria-checked={on}
                   style={({ pressed }) => [styles.row, on && styles.rowOn, pressed && styles.pressed]}
                 >
-                  <Text style={styles.rowIcon}>{item.icon}</Text>
+                  <ExerciseGlyph exerciseId={item.id} size={44} />
                   <View style={styles.grow}>
                     <View style={styles.rowTitleLine}>
                       <Text style={styles.rowName} numberOfLines={1}>
@@ -155,31 +156,26 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  buttonIcon: { fontSize: 24 },
-  buttonName: { fontSize: 16, fontWeight: '600', color: colors.text },
-  buttonMeta: { fontSize: 12, color: colors.textDim, marginTop: 1 },
-  buttonChange: { fontSize: 18, fontWeight: '600', color: colors.accent },
+  buttonName: { fontSize: 16, ...font('600'), color: colors.text },
+  buttonMeta: { ...font('400'), fontSize: 12, color: colors.textDim, marginTop: 1 },
+  buttonChange: { fontSize: 18, ...font('600'), color: colors.accent },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   dismiss: { flex: 1 },
   sheet: {
     maxHeight: '88%',
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
   },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
   title: { ...type.title, color: colors.text },
-  count: { fontSize: 12, color: colors.textDim, marginTop: 2 },
-  close: { fontSize: 30, lineHeight: 32, color: colors.textDim, paddingHorizontal: spacing.sm },
+  count: { ...font('400'), fontSize: 12, color: colors.textDim, marginTop: 2 },
+  close: { ...font('400'), fontSize: 30, lineHeight: 32, color: colors.textDim, paddingHorizontal: spacing.sm },
   chips: { marginBottom: spacing.sm },
   list: { flexGrow: 0 },
   listContent: { paddingBottom: spacing.md },
@@ -191,17 +187,14 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.sm,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
   },
-  rowOn: { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
-  rowIcon: { fontSize: 26, width: 34, textAlign: 'center' },
+  rowOn: { backgroundColor: colors.accentSoft },
   rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  rowName: { fontSize: 15, fontWeight: '600', color: colors.text, flexShrink: 1 },
+  rowName: { fontSize: 15, ...font('600'), color: colors.text, flexShrink: 1 },
   badge: {
     fontSize: 10,
-    fontWeight: '600',
+    ...font('600'),
     color: colors.warn,
     borderWidth: 1,
     borderColor: colors.warn,
@@ -209,6 +202,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 1,
   },
-  rowMeta: { fontSize: 12, color: colors.accent, marginTop: 2 },
-  rowCue: { fontSize: 13, color: colors.textDim, marginTop: 4, lineHeight: 18 },
+  rowMeta: { ...font('400'), fontSize: 12, color: colors.accent, marginTop: 2 },
+  rowCue: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: 4, lineHeight: 18 },
 });

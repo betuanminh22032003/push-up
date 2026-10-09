@@ -29,6 +29,8 @@ const HEIGHT = 768;
 const SCALE = 2.5; // 432 x 768 CSS px -> 1080 x 1920 image
 
 const BROWSERS = [
+  // Any other Chrome or Chromium: CHROME_PATH=/path/to/chrome npm run screenshots
+  process.env.CHROME_PATH,
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -225,7 +227,7 @@ async function captureLanguage(cdp, lang) {
   `);
   await cdp.send('Page.reload', { ignoreCache: false });
   await sleep(1500);
-  await waitFor(cdp, `document.body.innerText.includes('HÍT ĐẤT')`);
+  await waitFor(cdp, `/hít đất/i.test(document.body.innerText)`);
   await cdp.eval(HELPERS);
   await waitFor(cdp, `window.__btn(${JSON.stringify(L.go)})`);
   await sleep(600);
@@ -243,7 +245,7 @@ async function captureLanguage(cdp, lang) {
   }
 
   // Back to the workout tab and run a tap-mode set for the live screens.
-  await cdp.eval(`await window.__press(window.__tab('💪'));`);
+  await cdp.eval(`await window.__press(document.querySelectorAll('[role=tab]')[0]);`);
   await sleep(300);
   await cdp.eval(`
     await window.__press(window.__btn(${JSON.stringify(L.tap)}));
@@ -263,7 +265,7 @@ async function captureLanguage(cdp, lang) {
 }
 
 async function main() {
-  const browser = BROWSERS.find(existsSync);
+  const browser = BROWSERS.find((p) => p && existsSync(p));
   if (!browser) throw new Error('No Edge or Chrome found; edit BROWSERS in scripts/screenshots.mjs');
 
   const profile = mkdtempSync(path.join(tmpdir(), 'pupg-shots-'));
@@ -278,6 +280,8 @@ async function main() {
       '--hide-scrollbars',
       '--disable-gpu',
       '--use-fake-ui-for-media-stream',
+      // Chrome refuses to start sandboxed as root (containers, CI).
+      ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []),
       `--window-size=${WIDTH},${HEIGHT}`,
       'about:blank',
     ],
@@ -315,7 +319,7 @@ async function main() {
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
 
     await cdp.send('Page.navigate', { url: BASE_URL });
-    await waitFor(cdp, `document.body && document.body.innerText.includes('HÍT ĐẤT')`, 90000);
+    await waitFor(cdp, `document.body && /hít đất/i.test(document.body.innerText)`, 90000);
 
     rmSync(OUT_DIR, { recursive: true, force: true });
     for (const lang of Object.keys(LABELS)) await captureLanguage(cdp, lang);

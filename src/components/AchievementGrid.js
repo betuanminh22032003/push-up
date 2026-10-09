@@ -1,8 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ACHIEVEMENTS } from '../achievements/achievements';
+import { ExerciseGlyph } from './ExerciseGlyph';
+import { Icon } from './Icon';
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing } from '../theme/theme';
+import { colors, font, radius, spacing } from '../theme/theme';
 
 /** Every badge, earned ones lit and the rest dimmed with how to get them. */
 export function AchievementGrid({ unlocked }) {
@@ -19,7 +21,15 @@ export function AchievementGrid({ unlocked }) {
             accessibilityLabel={`${t(`ach.${a.id}.title`)}: ${t(`ach.${a.id}.body`)}`}
             accessibilityState={{ checked: on }}
           >
-            <Text style={[styles.icon, !on && styles.iconOff]}>{a.icon}</Text>
+            <View style={!on && styles.iconOff}>
+              {a.exercise ? (
+                <ExerciseGlyph exerciseId={a.exercise} size={36} />
+              ) : (
+                <View style={styles.iconDisc}>
+                  <Icon name={a.icon} size={19} color={colors.accent} />
+                </View>
+              )}
+            </View>
             <Text style={[styles.title, on && styles.titleOn]} numberOfLines={1}>
               {t(`ach.${a.id}.title`)}
             </Text>
@@ -40,16 +50,21 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.sm,
     alignItems: 'center',
     minHeight: 96,
   },
-  cellOn: { borderColor: colors.accentDim },
-  icon: { fontSize: 24 },
+  cellOn: { backgroundColor: colors.surfaceAlt },
+  iconDisc: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   iconOff: { opacity: 0.3 },
-  title: { fontSize: 12, fontWeight: '600', color: colors.textFaint, marginTop: spacing.xs },
+  title: { fontSize: 12, ...font('600'), color: colors.textFaint, marginTop: spacing.xs },
   titleOn: { color: colors.text },
-  body: { fontSize: 10, color: colors.textFaint, textAlign: 'center', marginTop: 2, lineHeight: 13 },
+  body: { ...font('400'), fontSize: 10, color: colors.textFaint, textAlign: 'center', marginTop: 2, lineHeight: 13 },
 });
