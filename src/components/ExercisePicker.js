@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
-import { colors, radius, spacing } from '../theme/theme';
+import { colors, font, radius, spacing } from '../theme/theme';
 
 /**
  * One row of exercise chips (icon + name), exactly one selected, read out as
@@ -106,11 +106,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
   },
-  chipOn: { borderColor: colors.accent, backgroundColor: colors.accentDim },
-  chipText: { fontSize: 13, color: colors.textDim },
-  chipTextOn: { color: colors.text, fontWeight: '600' },
+  chipOn: { backgroundColor: colors.accent },
+  chipText: { ...font('500'), fontSize: 14, color: colors.textDim },
+  chipTextOn: { color: colors.bg, ...font('700') },
 });

@@ -13,7 +13,7 @@ import { useI18n, useT } from '../i18n/I18nContext';
 import { useChallenges } from '../state/ChallengesContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
-import { colors, spacing, type } from '../theme/theme';
+import { colors, font, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { computeStats, dailyTotals } from '../utils/stats';
 import { formatDuration, formatSessionDate } from '../utils/time';
@@ -238,8 +238,8 @@ function ChallengeRow({ record }) {
 }
 
 const styles = StyleSheet.create({
-  sectionAction: { fontSize: 13, fontWeight: '600', color: colors.accent, marginTop: spacing.lg },
-  challengeEmpty: { fontSize: 13, color: colors.textFaint, lineHeight: 19 },
+  sectionAction: { fontSize: 13, ...font('600'), color: colors.accent, marginTop: spacing.lg },
+  challengeEmpty: { ...font('400'), fontSize: 13, color: colors.textFaint, lineHeight: 19 },
   challengeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -248,8 +248,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   challengeText: { flex: 1 },
-  challengeLine: { fontSize: 14, color: colors.text },
-  challengeDate: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
+  challengeLine: { ...font('400'), fontSize: 14, color: colors.text },
+  challengeDate: { ...font('400'), fontSize: 12, color: colors.textFaint, marginTop: 2 },
   challengeResult: { ...type.label, marginLeft: spacing.sm },
   result_win: { color: colors.accent },
   result_lose: { color: colors.danger },
@@ -267,14 +267,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionLabel: {
-    ...type.label,
-    color: colors.textFaint,
+    ...type.heading,
+    color: colors.text,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
-  sectionMeta: { fontSize: 12, color: colors.textDim },
+  sectionMeta: { ...font('500'), fontSize: 13, color: colors.textDim },
   empty: { alignItems: 'center', paddingVertical: spacing.xl },
-  emptyTitle: { fontSize: 17, fontWeight: '600', color: colors.textDim },
+  emptyTitle: { fontSize: 17, ...font('600'), color: colors.textDim },
   emptyBody: {
     ...type.body,
     color: colors.textFaint,

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { colors, radius, spacing } from '../theme/theme';
+import { colors, font, radius, spacing } from '../theme/theme';
 
 /**
  * @param {'primary'|'secondary'|'danger'} variant
@@ -35,11 +35,7 @@ const styles = StyleSheet.create({
     minHeight: 54,
   },
   primary: { backgroundColor: colors.accent },
-  secondary: {
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  secondary: { backgroundColor: colors.surfaceAlt },
   danger: {
     backgroundColor: 'transparent',
     borderWidth: 1,
@@ -47,7 +43,7 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.35 },
-  label: { fontSize: 16, fontWeight: '600', letterSpacing: 0.3 },
+  label: { fontSize: 17, ...font('700'), letterSpacing: 0.1, textAlign: 'center' },
   primaryLabel: { color: colors.bg },
   secondaryLabel: { color: colors.text },
   dangerLabel: { color: colors.danger },

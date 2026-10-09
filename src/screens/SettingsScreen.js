@@ -24,7 +24,7 @@ import {
 import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
-import { colors, spacing, type } from '../theme/theme';
+import { colors, font, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { formatClock } from '../utils/time';
 
@@ -445,9 +445,10 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   pressed: { opacity: 0.5 },
   title: { ...type.title, color: colors.text },
-  privacyNote: { fontSize: 13, color: colors.textDim, paddingVertical: spacing.md, lineHeight: 18 },
-  version: { fontSize: 12, color: colors.textFaint, paddingVertical: spacing.md },
+  privacyNote: { ...font('400'), fontSize: 13, color: colors.textDim, paddingVertical: spacing.md, lineHeight: 18 },
+  version: { ...font('400'), fontSize: 12, color: colors.textFaint, paddingVertical: spacing.md },
   input: {
+    ...font('400'),
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: 8,
@@ -457,20 +458,18 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
   },
-  backupNote: { fontSize: 13, color: colors.accent, paddingVertical: spacing.md, lineHeight: 18 },
+  backupNote: { ...font('400'), fontSize: 13, color: colors.accent, paddingVertical: spacing.md, lineHeight: 18 },
   backupNoteWarn: { color: colors.warn },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: spacing.lg },
   sheet: {
     backgroundColor: colors.surface,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
   },
   sheetTitle: { ...type.title, fontSize: 19, color: colors.text },
-  sheetFile: { fontSize: 12, color: colors.textFaint, marginTop: 2, marginBottom: spacing.sm },
+  sheetFile: { ...font('400'), fontSize: 12, color: colors.textFaint, marginTop: 2, marginBottom: spacing.sm },
   sheetLine: { ...type.body, color: colors.text, marginTop: spacing.xs },
-  sheetHint: { fontSize: 13, color: colors.textDim, marginTop: spacing.md, lineHeight: 19 },
+  sheetHint: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: spacing.md, lineHeight: 19 },
   sheetButton: { marginTop: spacing.lg },
   sheetButtonSmall: { marginTop: spacing.sm },
 
@@ -485,17 +484,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepGlyph: { fontSize: 20, color: colors.text, lineHeight: 24 },
+  stepGlyph: { ...font('400'), fontSize: 20, color: colors.text, lineHeight: 24 },
   stepValue: {
     minWidth: 48,
     textAlign: 'center',
     fontSize: 17,
-    fontWeight: '600',
+    ...font('600'),
     color: colors.text,
     fontVariant: ['tabular-nums'],
   },
   clockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  clockColon: { fontSize: 20, color: colors.textDim, marginHorizontal: spacing.xs },
+  clockColon: { ...font('400'), fontSize: 20, color: colors.textDim, marginHorizontal: spacing.xs },
   inlineLink: { alignSelf: 'flex-start', paddingHorizontal: spacing.md, paddingBottom: spacing.md },
-  inlineLinkText: { fontSize: 14, fontWeight: '600', color: colors.accent },
+  inlineLinkText: { fontSize: 14, ...font('600'), color: colors.accent },
 });

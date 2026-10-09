@@ -27,7 +27,7 @@ import { useBlocker } from '../state/BlockerContext';
 import { useChallenges } from '../state/ChallengesContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
-import { colors, radius, spacing, textGlow, type } from '../theme/theme';
+import { colors, font, radius, spacing, textGlow, type } from '../theme/theme';
 import { shareText } from '../utils/share';
 import { formatDuration } from '../utils/time';
 
@@ -425,14 +425,14 @@ const styles = StyleSheet.create({
   // Clear of the close button, which sits over the top right corner.
   scroll: { paddingTop: spacing.xl, paddingBottom: spacing.xl },
   close: { position: 'absolute', top: spacing.xl + spacing.md, right: spacing.lg, zIndex: 10 },
-  closeText: { fontSize: 20, color: colors.textDim },
+  closeText: { ...font('400'), fontSize: 20, color: colors.textDim },
   title: { ...type.title, color: colors.text, paddingRight: spacing.xl },
   lead: { ...type.body, color: colors.textDim, marginTop: spacing.sm, lineHeight: 21 },
-  label: { ...type.label, color: colors.textFaint, marginTop: spacing.lg, marginBottom: spacing.sm },
+  label: { ...type.label, fontSize: 13, color: colors.textDim, marginTop: spacing.lg, marginBottom: spacing.sm },
   formatText: { ...type.body, color: colors.text },
-  rule: { fontSize: 13, color: colors.textDim, marginTop: spacing.lg, lineHeight: 19 },
+  rule: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: spacing.lg, lineHeight: 19 },
   warn: { ...type.body, color: colors.warn, marginTop: spacing.lg, textAlign: 'center' },
-  small: { fontSize: 12, color: colors.textFaint, marginTop: spacing.sm, lineHeight: 17 },
+  small: { ...font('400'), fontSize: 12, color: colors.textFaint, marginTop: spacing.sm, lineHeight: 17 },
   button: { marginTop: spacing.lg },
   buttonSmall: { marginTop: spacing.sm },
   inviteCard: {
@@ -440,17 +440,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.lg,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  inviteIcon: { fontSize: 40 },
-  inviteExercise: { ...type.body, fontWeight: '600', color: colors.text, marginTop: spacing.xs },
-  inviteScore: { fontSize: 72, fontWeight: '200', color: colors.accent },
+  inviteIcon: { ...font('400'), fontSize: 40 },
+  inviteExercise: { ...type.body, ...font('600'), color: colors.text, marginTop: spacing.xs },
+  inviteScore: { fontSize: 72, ...font('200'), color: colors.accent },
   inviteGoal: { ...type.body, color: colors.textDim, textAlign: 'center', paddingHorizontal: spacing.md },
-  inviteDate: { fontSize: 12, color: colors.textFaint, marginTop: spacing.sm },
+  inviteDate: { ...font('400'), fontSize: 12, color: colors.textFaint, marginTop: spacing.sm },
   versus: { ...type.body, color: colors.text, marginTop: spacing.md },
   input: {
+    ...font('400'),
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.sm,
@@ -461,8 +460,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   runWrap: { flex: 1 },
-  runTitle: { ...type.body, fontWeight: '600', color: colors.text, textAlign: 'center' },
-  runBeat: { fontSize: 13, color: colors.accent, textAlign: 'center', marginTop: 2 },
+  runTitle: { ...type.body, ...font('600'), color: colors.text, textAlign: 'center' },
+  runBeat: { ...font('400'), fontSize: 13, color: colors.accent, textAlign: 'center', marginTop: 2 },
   stage: {
     flex: 1,
     marginTop: spacing.md,

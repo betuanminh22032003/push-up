@@ -31,7 +31,7 @@ import { useT } from '../i18n/I18nContext';
 import { requestNotificationPermission } from '../notifications/reminders';
 import { useBlocker } from '../state/BlockerContext';
 import { useSettings } from '../state/SettingsContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 import { formatDuration } from '../utils/time';
 
 /** The hold the rate note uses as its example. */
@@ -551,20 +551,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.accentDim,
     backgroundColor: colors.surface,
   },
-  balanceLabel: { ...type.label, color: colors.accent, textTransform: 'uppercase' },
+  balanceLabel: { ...type.label, fontSize: 13, color: colors.accent },
   balanceValue: {
     fontSize: 64,
-    fontWeight: '200',
+    ...font('300'),
     letterSpacing: -2,
     color: colors.text,
     marginTop: spacing.xs,
     fontVariant: ['tabular-nums'],
   },
-  status: { fontSize: 13, color: colors.textDim, textAlign: 'center' },
+  status: { ...font('400'), fontSize: 13, color: colors.textDim, textAlign: 'center' },
   statusWarn: { color: colors.warn },
   earnButton: { alignSelf: 'stretch', marginTop: spacing.lg },
 
@@ -586,15 +584,15 @@ const styles = StyleSheet.create({
     borderColor: colors.danger,
     backgroundColor: colors.surface,
   },
-  alertTitle: { fontSize: 16, fontWeight: '700', color: colors.danger },
+  alertTitle: { fontSize: 16, ...font('700'), color: colors.danger },
   alertBody: { ...type.body, color: colors.text, marginTop: spacing.xs, lineHeight: 21 },
   alertButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
   loading: { marginTop: spacing.xl },
 
-  okMark: { fontSize: 20, fontWeight: '700', color: colors.accent },
+  okMark: { fontSize: 20, ...font('700'), color: colors.accent },
   hintRow: { paddingVertical: spacing.md, gap: spacing.sm },
-  hint: { fontSize: 13, color: colors.textDim, lineHeight: 18 },
-  link: { fontSize: 13, fontWeight: '600', color: colors.accent },
+  hint: { ...font('400'), fontSize: 13, color: colors.textDim, lineHeight: 18 },
+  link: { fontSize: 13, ...font('600'), color: colors.accent },
 
   smallButton: {
     paddingVertical: spacing.sm,
@@ -607,11 +605,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  smallButtonText: { fontSize: 14, fontWeight: '700', color: colors.bg },
+  smallButtonText: { fontSize: 14, ...font('700'), color: colors.bg },
   smallButtonTextSecondary: { color: colors.text },
 
-  empty: { fontSize: 14, color: colors.textDim, paddingVertical: spacing.md },
-  sectionNote: { fontSize: 13, color: colors.textDim, lineHeight: 18, paddingTop: spacing.md },
+  empty: { ...font('400'), fontSize: 14, color: colors.textDim, paddingVertical: spacing.md },
+  sectionNote: { ...font('400'), fontSize: 13, color: colors.textDim, lineHeight: 18, paddingTop: spacing.md },
   noteWarn: { color: colors.warn },
   itemRow: {
     flexDirection: 'row',
@@ -622,8 +620,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  itemLabel: { flex: 1, fontSize: 15, color: colors.text },
-  autoTag: { fontSize: 12, color: colors.textFaint },
+  itemLabel: { ...font('400'), flex: 1, fontSize: 15, color: colors.text },
+  autoTag: { ...font('400'), fontSize: 12, color: colors.textFaint },
   remove: {
     width: 30,
     height: 30,
@@ -632,9 +630,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
   },
-  removeText: { fontSize: 13, color: colors.textDim },
+  removeText: { ...font('400'), fontSize: 13, color: colors.textDim },
   addRow: { paddingVertical: spacing.md },
-  addText: { fontSize: 15, fontWeight: '600', color: colors.accent },
+  addText: { fontSize: 15, ...font('600'), color: colors.accent },
 
   siteInputRow: {
     flexDirection: 'row',
@@ -643,6 +641,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   siteInput: {
+    ...font('400'),
     flex: 1,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -653,7 +652,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
   },
-  siteError: { fontSize: 13, color: colors.warn, paddingBottom: spacing.md },
+  siteError: { ...font('400'), fontSize: 13, color: colors.warn, paddingBottom: spacing.md },
 
   step: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.sm },
   stepNumber: {
@@ -663,15 +662,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     textAlign: 'center',
     fontSize: 12,
-    fontWeight: '700',
+    ...font('700'),
     lineHeight: 20,
     color: colors.bg,
     backgroundColor: colors.accent,
   },
-  stepText: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 20 },
+  stepText: { ...font('400'), flex: 1, fontSize: 14, color: colors.text, lineHeight: 20 },
   keepButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingVertical: spacing.md },
 
-  paragraph: { fontSize: 14, color: colors.textDim, lineHeight: 20, paddingVertical: spacing.sm },
+  paragraph: { ...font('400'), fontSize: 14, color: colors.textDim, lineHeight: 20, paddingVertical: spacing.sm },
 
   backdrop: {
     flex: 1,
@@ -683,8 +682,6 @@ const styles = StyleSheet.create({
     maxHeight: '90%',
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
   },
   dialogContent: { paddingBottom: spacing.md },

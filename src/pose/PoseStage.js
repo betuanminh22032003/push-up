@@ -5,7 +5,7 @@ import { WebView } from 'react-native-webview';
 
 import { POSE_PAGE_URL } from '../config';
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 
 /**
  * Camera pose detection on native, via a WebView running MediaPipe.
@@ -421,5 +421,5 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
   },
   actionPressed: { opacity: 0.7 },
-  actionText: { fontSize: 15, fontWeight: '700', color: colors.accent },
+  actionText: { fontSize: 15, ...font('700'), color: colors.accent },
 });

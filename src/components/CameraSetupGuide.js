@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { cameraSetupFor } from '../exercises/cameraSetup';
 import { getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 import { Button } from './Button';
 
 /**
@@ -126,8 +126,6 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
   },
   title: { ...type.title, fontSize: 18, color: colors.text },
@@ -179,10 +177,10 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: colors.textDim,
   },
-  distance: { position: 'absolute', textAlign: 'center', fontSize: 13, fontWeight: '600', color: colors.text },
+  distance: { position: 'absolute', textAlign: 'center', fontSize: 13, ...font('600'), color: colors.text },
   line: { ...type.body, color: colors.text, marginTop: spacing.xs },
-  hint: { fontSize: 13, color: colors.textDim, marginTop: spacing.md, lineHeight: 19 },
-  gate: { fontSize: 13, color: colors.accent, marginTop: spacing.sm, lineHeight: 19 },
+  hint: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: spacing.md, lineHeight: 19 },
+  gate: { ...font('400'), fontSize: 13, color: colors.accent, marginTop: spacing.sm, lineHeight: 19 },
   buttons: { flexDirection: 'row', marginTop: spacing.lg },
   grow: { flex: 1 },
   gap: { width: spacing.sm },

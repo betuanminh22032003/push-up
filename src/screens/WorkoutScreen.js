@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Modal, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  AppState,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,7 +21,7 @@ import { CameraSetupGuide } from '../components/CameraSetupGuide';
 import { DOCK_W, ExerciseGuideButton, ExerciseGuideSheet, GuideDock } from '../components/ExerciseGuide';
 import { ExerciseLibraryButton } from '../components/ExerciseLibrary';
 import { MiscountModal } from '../components/MiscountModal';
-import { StatTile } from '../components/StatTile';
+import { TodayCard } from '../components/TodayCard';
 import { VisibilityPill } from '../components/VisibilityPill';
 import {
   DEFAULT_EXERCISE_ID,
@@ -33,7 +44,7 @@ import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
 import { createSessionId } from '../storage/sessions';
-import { colors, radius, spacing, textGlow, type } from '../theme/theme';
+import { colors, font, radius, spacing, textGlow, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { shareText } from '../utils/share';
 import { formatDuration } from '../utils/time';
@@ -97,6 +108,15 @@ function groupByExercise(sets) {
     else groups.push({ exerciseId: set.exerciseId, sets: [set] });
   }
   return groups;
+}
+
+/** The home screen's greeting, by the hour. */
+function greetingKey(hour) {
+  if (hour >= 5 && hour < 11) return 'greet.morning';
+  if (hour >= 11 && hour < 13) return 'greet.noon';
+  if (hour >= 13 && hour < 18) return 'greet.afternoon';
+  if (hour >= 18 && hour < 22) return 'greet.evening';
+  return 'greet.night';
 }
 
 const STATUS_COLOR = {
@@ -1013,9 +1033,12 @@ export function WorkoutScreen({
     >
       {fullScreen ? <StatusBar hidden /> : null}
       <View style={[styles.header, fullScreen && styles.hidden]}>
-        <View>
-          <Text style={styles.brand}>HÍT ĐẤT AI</Text>
-          <Text style={styles.brandSub}>{t('brand.tagline')}</Text>
+        <View style={styles.grow}>
+          <Text style={styles.brand}>Hít Đất AI</Text>
+          {/* Between workouts a greeting for the time of day; during one, what is being done. */}
+          <Text style={styles.greeting} numberOfLines={1}>
+            {status === 'idle' ? t(greetingKey(new Date().getHours())) : t(`exercise.${exercise.id}`)}
+          </Text>
         </View>
         {planSets ? (
           <Text style={styles.headerPlan}>
@@ -1044,26 +1067,13 @@ export function WorkoutScreen({
         ) : null}
       </View>
 
-      <View style={[styles.statsRow, fullScreen && styles.hidden]}>
-        <StatTile label={t('stat.total')} value={stats.totalReps} />
-        <View style={styles.gap} />
-        <StatTile
-          label={t('stat.today')}
-          value={stats.todayReps}
-          highlight
-          progress={{
-            value: stats.todayReps,
-            max: settings.dailyGoal,
-            caption: t('stat.goal', { goal: settings.dailyGoal }),
-          }}
-        />
-        <View style={styles.gap} />
-        <StatTile
-          label={t('stat.streak')}
-          value={stats.streak}
-          suffix={stats.streak === 1 ? t('common.day') : t('common.days')}
-        />
-      </View>
+      <TodayCard
+        today={stats.todayReps}
+        goal={settings.dailyGoal}
+        streak={stats.streak}
+        total={stats.totalReps}
+        style={fullScreen && styles.hidden}
+      />
 
       {status === 'idle' && !activePlan ? (
         <ExerciseLibraryButton
@@ -1096,7 +1106,10 @@ export function WorkoutScreen({
         onPointerUp={onTouchEnd}
         onPointerCancel={onTouchEnd}
         accessible={tapActive}
-        accessibilityRole={tapActive ? 'button' : undefined}
+        // Not on the web: there the role makes it a <button> instead of a <div>,
+        // a new element whose size react-native-web then stops reporting, so
+        // the stage's content would stay scaled for the size it had at idle.
+        accessibilityRole={tapActive && Platform.OS !== 'web' ? 'button' : undefined}
         accessibilityLabel={tapActive ? `${reps} ${t('common.reps')}` : undefined}
         onLayout={onStageLayout}
       >
@@ -1198,7 +1211,7 @@ export function WorkoutScreen({
             </View>
           ) : (
             <>
-              <View style={[styles.statusPill, { borderColor: statusColor }]}>
+              <View style={styles.statusPill}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.statusText, { color: statusColor }]}>
                   {t(`status.${status}`)}
@@ -1250,9 +1263,12 @@ export function WorkoutScreen({
                   </Text>
                   {/* A hold's count is seconds with good form; the clock is all of the set. */}
                   {holdMode ? <Text style={styles.unit}>{t('common.secs')}</Text> : null}
-                  <Text style={styles.timer} allowFontScaling={false}>
-                    {formatDuration(elapsedSeconds)}
-                  </Text>
+                  {/* Between workouts there is no clock to show: 00:00 would only be noise. */}
+                  {running ? (
+                    <Text style={styles.timer} allowFontScaling={false}>
+                      {formatDuration(elapsedSeconds)}
+                    </Text>
+                  ) : null}
                   {running && planLine ? <Text style={styles.subline}>{planLine}</Text> : null}
                   {running && earning && workoutReps > 0 ? (
                     <Text style={styles.earnedLine}>
@@ -1528,19 +1544,18 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
   },
-  brand: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: 2 },
-  brandSub: { ...type.label, color: colors.textFaint, marginTop: -2, textTransform: 'uppercase' },
-  headerPlan: { ...type.label, color: colors.accent },
+  brand: { ...font('700'), fontSize: 14, color: colors.accent, letterSpacing: 0.2 },
+  greeting: { fontSize: 26, ...font('800'), color: colors.text, letterSpacing: -0.5, marginTop: 2 },
+  headerPlan: { ...type.label, color: colors.accent, marginLeft: spacing.md },
   funChip: {
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.accentDim,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.accentSoft,
+    marginLeft: spacing.md,
   },
-  funChipText: { fontSize: 14, fontWeight: '600', color: colors.text, fontVariant: ['tabular-nums'] },
-  funChipOff: { borderColor: colors.warn },
+  funChipText: { fontSize: 14, ...font('700'), color: colors.accent, fontVariant: ['tabular-nums'] },
+  funChipOff: { backgroundColor: 'rgba(251, 191, 36, 0.14)' },
   funChipTextOff: { color: colors.warn },
   earnedLine: {
     ...type.label,
@@ -1550,7 +1565,6 @@ const styles = StyleSheet.create({
     ...textGlow(1, 8),
   },
 
-  statsRow: { flexDirection: 'row' },
   exerciseRow: { marginTop: spacing.md },
   gap: { width: spacing.sm },
   grow: { flex: 1 },
@@ -1584,18 +1598,17 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fullToggleFull: { bottom: spacing.md },
-  fullToggleText: { fontSize: 22, color: colors.text, lineHeight: 26 },
+  fullToggleText: { ...font('400'), fontSize: 22, color: colors.text, lineHeight: 26 },
   stageArmed: { borderColor: colors.border, backgroundColor: colors.surface },
   stageNear: { borderColor: colors.accent, backgroundColor: colors.accentDim },
 
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
     borderRadius: radius.pill,
     paddingVertical: 5,
     paddingHorizontal: spacing.md,
-    backgroundColor: 'rgba(10,10,11,0.6)',
+    backgroundColor: 'rgba(28, 35, 31, 0.85)',
   },
   statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: spacing.sm },
   statusText: { ...type.label },
@@ -1608,10 +1621,10 @@ const styles = StyleSheet.create({
     // Keeps the count readable over a bright camera frame.
     ...textGlow(2, 12),
   },
-  counterCompact: { fontSize: 96, letterSpacing: -4 },
+  counterCompact: { ...font('400'), fontSize: 96, letterSpacing: -4 },
   restOver: {
     fontSize: 40,
-    fontWeight: '300',
+    ...font('300'),
     color: colors.text,
     marginTop: spacing.xl,
     marginBottom: spacing.lg,
@@ -1649,10 +1662,10 @@ const styles = StyleSheet.create({
   // Clear of the full-screen button in the stage's bottom left corner.
   coachPillBesideToggle: { left: spacing.sm + 44 + spacing.sm },
   // Big: it is read from where the camera can see the whole body.
-  coachText: { fontSize: 24, fontWeight: '800', color: colors.warn, textAlign: 'center' },
+  coachText: { fontSize: 24, ...font('800'), color: colors.warn, textAlign: 'center' },
 
   summary: { alignItems: 'center' },
-  summaryTitle: { ...type.label, color: colors.accent },
+  summaryTitle: { ...type.heading, color: colors.accent },
   summaryReps: { ...type.counter, color: colors.text, marginTop: spacing.sm },
   summaryMeta: { ...type.body, color: colors.textDim, marginTop: -spacing.sm },
   shareBtn: {
@@ -1660,15 +1673,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
   },
-  shareText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  shareText: { fontSize: 14, ...font('600'), color: colors.text },
   summaryLinks: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.md },
-  summaryLink: { fontSize: 13, color: colors.textDim, textDecorationLine: 'underline' },
+  summaryLink: { ...font('400'), fontSize: 13, color: colors.textDim, textDecorationLine: 'underline' },
   footerLinks: { flexDirection: 'row', gap: spacing.lg },
-  footerLink: { fontSize: 13, color: colors.textDim },
+  footerLink: { ...font('400'), fontSize: 13, color: colors.textDim },
   guideBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)' },
   guideContent: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
 
@@ -1682,8 +1693,8 @@ const styles = StyleSheet.create({
   noticeWarn: { color: colors.warn },
 
   planCard: { alignItems: 'center', marginBottom: spacing.md },
-  planSets: { fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'center' },
-  planRest: { fontSize: 13, color: colors.textDim, marginTop: 2 },
+  planSets: { fontSize: 15, ...font('600'), color: colors.text, textAlign: 'center' },
+  planRest: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: 2 },
   planGuides: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1693,7 +1704,7 @@ const styles = StyleSheet.create({
   },
   stageWrap: { flex: 1 },
   dock: { position: 'absolute', right: spacing.sm },
-  planCancel: { fontSize: 13, color: colors.textFaint, marginTop: spacing.sm },
+  planCancel: { ...font('400'), fontSize: 13, color: colors.textFaint, marginTop: spacing.sm },
 
   sourceRow: {
     flexDirection: 'row',
@@ -1705,13 +1716,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
   },
-  chipSelected: { borderColor: colors.accent, backgroundColor: colors.accentDim },
-  chipText: { fontSize: 13, color: colors.textDim },
-  chipTextSelected: { color: colors.text, fontWeight: '600' },
+  chipSelected: { backgroundColor: colors.accent },
+  chipText: { ...font('500'), fontSize: 14, color: colors.textDim },
+  chipTextSelected: { color: colors.bg, ...font('700') },
 
   controls: { flexDirection: 'row' },
   controlsFull: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
@@ -1737,7 +1746,7 @@ const styles = StyleSheet.create({
   lockButtonPressed: { borderColor: colors.accent },
   lockText: { ...type.label, color: colors.textDim },
   footer: { height: 44, alignItems: 'center', justifyContent: 'center' },
-  discard: { fontSize: 14, color: colors.danger },
+  discard: { ...font('400'), fontSize: 14, color: colors.danger },
   dots: { flexDirection: 'row', gap: spacing.sm },
   // A schedule day can run to twenty sets; they still fit one row.
   dotsDense: { gap: 5 },

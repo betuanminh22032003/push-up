@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 
 /** A labelled card of rows, as used by the settings and blocker screens. */
 export function Section({ label, children }) {
@@ -51,6 +51,8 @@ export function Toggle({ value, onChange, label, disabled }) {
       trackColor={{ false: colors.border, true: colors.accentDim }}
       thumbColor={value ? colors.accent : colors.textDim}
       ios_backgroundColor={colors.border}
+      // react-native-web colours the "on" switch with these instead.
+      {...(Platform.OS === 'web' ? { activeThumbColor: colors.accent, activeTrackColor: colors.accentDim } : null)}
     />
   );
 }
@@ -79,12 +81,10 @@ export function Chips({ options, selected, onSelect }) {
 const styles = StyleSheet.create({
   pressed: { opacity: 0.5 },
   section: { marginTop: spacing.lg },
-  sectionLabel: { ...type.label, color: colors.textFaint, marginBottom: spacing.sm },
+  sectionLabel: { ...type.heading, color: colors.text, marginBottom: spacing.sm },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
   },
   row: {
@@ -99,10 +99,10 @@ const styles = StyleSheet.create({
   rowStacked: { flexDirection: 'column', alignItems: 'stretch' },
   rowText: { flex: 1 },
   rowControlStacked: { marginTop: spacing.sm },
-  rowTitle: { fontSize: 15, fontWeight: '500', color: colors.text },
-  rowBody: { fontSize: 13, color: colors.textDim, marginTop: 2, lineHeight: 18 },
+  rowTitle: { fontSize: 15, ...font('500'), color: colors.text },
+  rowBody: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: 2, lineHeight: 18 },
   rowBodyWarn: { color: colors.warn },
-  chevron: { fontSize: 22, color: colors.textFaint },
+  chevron: { ...font('400'), fontSize: 22, color: colors.textFaint },
   danger: { color: colors.danger },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -110,11 +110,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
   },
-  chipOn: { borderColor: colors.accent, backgroundColor: colors.accentDim },
-  chipText: { fontSize: 13, color: colors.textDim },
-  chipTextOn: { color: colors.text, fontWeight: '600' },
+  chipOn: { backgroundColor: colors.accent },
+  chipText: { ...font('500'), fontSize: 14, color: colors.textDim },
+  chipTextOn: { color: colors.bg, ...font('700') },
 });

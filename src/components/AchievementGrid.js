@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { ACHIEVEMENTS } from '../achievements/achievements';
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing } from '../theme/theme';
+import { colors, font, radius, spacing } from '../theme/theme';
 
 /** Every badge, earned ones lit and the rest dimmed with how to get them. */
 export function AchievementGrid({ unlocked }) {
@@ -40,16 +40,14 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.sm,
     alignItems: 'center',
     minHeight: 96,
   },
   cellOn: { borderColor: colors.accentDim },
-  icon: { fontSize: 24 },
+  icon: { ...font('400'), fontSize: 24 },
   iconOff: { opacity: 0.3 },
-  title: { fontSize: 12, fontWeight: '600', color: colors.textFaint, marginTop: spacing.xs },
+  title: { fontSize: 12, ...font('600'), color: colors.textFaint, marginTop: spacing.xs },
   titleOn: { color: colors.text },
-  body: { fontSize: 10, color: colors.textFaint, textAlign: 'center', marginTop: 2, lineHeight: 13 },
+  body: { ...font('400'), fontSize: 10, color: colors.textFaint, textAlign: 'center', marginTop: 2, lineHeight: 13 },
 });

@@ -24,7 +24,8 @@ export function ProgressBar({ value, max, height = 6, style }) {
 }
 
 const styles = StyleSheet.create({
-  track: { width: '100%', backgroundColor: colors.border, overflow: 'hidden', borderRadius: radius.pill },
-  fill: { height: '100%', backgroundColor: colors.accentDim },
-  fillComplete: { backgroundColor: colors.accent },
+  track: { width: '100%', backgroundColor: colors.surfaceAlt, overflow: 'hidden', borderRadius: radius.pill },
+  fill: { height: '100%', backgroundColor: colors.accent },
+  // Goal reached: the warm colour, so the bar itself says "done".
+  fillComplete: { backgroundColor: colors.flame },
 });

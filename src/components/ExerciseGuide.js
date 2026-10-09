@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, font, radius, spacing, type } from '../theme/theme';
 import { ExerciseDemo3D } from './ExerciseDemo3D';
 
 /**
@@ -127,11 +127,9 @@ const styles = StyleSheet.create({
     minHeight: 32,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.accentSoft,
   },
-  buttonText: { fontSize: 13, fontWeight: '700', color: colors.accent },
+  buttonText: { fontSize: 13, ...font('700'), color: colors.accent },
   compact: {
     width: 28,
     height: 28,
@@ -141,33 +139,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accent,
   },
-  compactText: { fontSize: 14, fontWeight: '700', color: colors.accent },
+  compactText: { fontSize: 14, ...font('700'), color: colors.accent },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   dismiss: { flex: 1 },
   sheet: {
     maxHeight: '92%',
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-  icon: { fontSize: 30 },
+  icon: { ...font('400'), fontSize: 30 },
   kicker: { ...type.label, color: colors.accent },
   title: { ...type.title, color: colors.text },
-  close: { fontSize: 30, lineHeight: 32, color: colors.textDim, paddingHorizontal: spacing.sm },
+  close: { ...font('400'), fontSize: 30, lineHeight: 32, color: colors.textDim, paddingHorizontal: spacing.sm },
   scroll: { flexGrow: 0 },
   scrollContent: { paddingBottom: spacing.md },
 
   stage: {
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   stageBar: {
@@ -179,7 +173,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  dragHint: { fontSize: 12, color: colors.textDim },
+  dragHint: { ...font('400'), fontSize: 12, color: colors.textDim },
   speed: {
     paddingVertical: 4,
     paddingHorizontal: spacing.sm,
@@ -188,10 +182,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   speedOn: { borderColor: colors.warn },
-  speedText: { fontSize: 12, color: colors.textDim },
-  speedTextOn: { color: colors.warn, fontWeight: '600' },
+  speedText: { ...font('400'), fontSize: 12, color: colors.textDim },
+  speedTextOn: { color: colors.warn, ...font('600') },
 
-  meta: { fontSize: 12, color: colors.accent, marginTop: spacing.sm },
+  meta: { ...font('400'), fontSize: 12, color: colors.accent, marginTop: spacing.sm },
   section: { ...type.label, color: colors.textDim, marginTop: spacing.md, marginBottom: spacing.sm },
   step: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.sm },
   stepNum: {
@@ -203,10 +197,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 1,
   },
-  stepNumText: { fontSize: 12, fontWeight: '700', color: colors.text },
-  stepText: { flex: 1, fontSize: 15, lineHeight: 21, color: colors.text },
-  cross: { width: 22, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.danger, marginTop: 2 },
-  breathe: { fontSize: 13, color: colors.textDim, marginTop: spacing.xs },
+  stepNumText: { fontSize: 12, ...font('700'), color: colors.text },
+  stepText: { ...font('400'), flex: 1, fontSize: 15, lineHeight: 21, color: colors.text },
+  cross: { width: 22, textAlign: 'center', fontSize: 14, ...font('700'), color: colors.danger, marginTop: 2 },
+  breathe: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: spacing.xs },
 });
 
 /**
@@ -282,12 +276,10 @@ const dockStyles = StyleSheet.create({
     borderColor: colors.accent,
     backgroundColor: 'rgba(10,10,11,0.75)',
   },
-  dockPillText: { fontSize: 13, fontWeight: '700', color: colors.accent },
+  dockPillText: { fontSize: 13, ...font('700'), color: colors.accent },
   dock: {
     width: DOCK_W,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },
@@ -299,13 +291,13 @@ const dockStyles = StyleSheet.create({
     paddingRight: 6,
     paddingVertical: 4,
   },
-  dockName: { flex: 1, fontSize: 11, fontWeight: '600', color: colors.text },
-  dockClose: { fontSize: 20, lineHeight: 20, color: colors.textDim, paddingHorizontal: 2 },
+  dockName: { flex: 1, fontSize: 11, ...font('600'), color: colors.text },
+  dockClose: { ...font('400'), fontSize: 20, lineHeight: 20, color: colors.textDim, paddingHorizontal: 2 },
   dockDetails: {
     alignItems: 'center',
     paddingVertical: 6,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  dockDetailsText: { fontSize: 12, fontWeight: '600', color: colors.accent },
+  dockDetailsText: { fontSize: 12, ...font('600'), color: colors.accent },
 });

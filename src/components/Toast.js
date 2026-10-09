@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, radius, spacing } from '../theme/theme';
+import { colors, font, radius, spacing } from '../theme/theme';
 
 const SHOW_MS = 2600;
 
@@ -61,5 +61,5 @@ const styles = StyleSheet.create({
     zIndex: 10,
     elevation: 6,
   },
-  text: { fontSize: 14, fontWeight: '600', color: colors.text, textAlign: 'center' },
+  text: { fontSize: 14, ...font('600'), color: colors.text, textAlign: 'center' },
 });

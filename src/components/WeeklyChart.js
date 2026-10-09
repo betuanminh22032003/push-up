@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useT } from '../i18n/I18nContext';
-import { colors, radius, spacing } from '../theme/theme';
+import { colors, font, radius, spacing } from '../theme/theme';
 
 const CHART_HEIGHT = 120;
 
@@ -55,9 +55,7 @@ export function WeeklyChart({ days, goal }) {
 const styles = StyleSheet.create({
   wrap: {
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
   },
@@ -68,17 +66,17 @@ const styles = StyleSheet.create({
     right: 0,
     // Sits above the value labels' slot so it lines up with the bar slots.
     marginBottom: 18,
-    height: 1,
-    backgroundColor: colors.textFaint,
-    opacity: 0.6,
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.textFaint,
   },
   column: { flex: 1, alignItems: 'center' },
-  value: { fontSize: 10, color: colors.textDim, height: 14, lineHeight: 14 },
+  value: { ...font('400'), fontSize: 10, color: colors.textDim, height: 14, lineHeight: 14 },
   barSlot: { height: CHART_HEIGHT, justifyContent: 'flex-end', width: '100%', alignItems: 'center' },
-  bar: { width: '55%', borderRadius: 4, backgroundColor: colors.border },
+  bar: { width: '58%', borderRadius: 8, backgroundColor: colors.surfaceAlt },
   barFilled: { backgroundColor: colors.accentDim },
   barReached: { backgroundColor: colors.accent },
   barToday: { borderWidth: 1, borderColor: colors.accent },
-  label: { fontSize: 11, color: colors.textFaint, marginTop: spacing.xs },
-  labelToday: { color: colors.text, fontWeight: '600' },
+  label: { ...font('400'), fontSize: 11, color: colors.textFaint, marginTop: spacing.xs },
+  labelToday: { color: colors.text, ...font('600') },
 });
