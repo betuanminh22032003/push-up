@@ -220,6 +220,7 @@ export const DEFAULT_SETTINGS = {
   hapticsEnabled: true,
   voiceEnabled: true,
   coachVoiceEnabled: true, // say form mistakes the camera sees out loud
+  cameraFullScreen: false, // the camera fills the whole screen during a workout
   countdownSeconds: 5,
   restSeconds: 60,
   dailyGoal: 50,

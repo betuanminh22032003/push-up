@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Modal, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -848,6 +848,18 @@ export function WorkoutScreen({
     shareText(text);
   }, [summary, t]);
 
+  // The camera can take the whole screen: the header, the tiles and the hints
+  // step aside and only the stage and its buttons are left. Remembered.
+  const fullScreen =
+    settings.cameraFullScreen === true &&
+    !!source?.isPoseDriven &&
+    status !== 'idle' &&
+    status !== 'calibrating';
+  const toggleFullScreen = useCallback(
+    () => updateSettings({ cameraFullScreen: !fullScreen }),
+    [fullScreen, updateSettings],
+  );
+
   // The shell's back-button handling: pause a running set instead of leaving.
   // The countdown back into a paused set is still that set's pause, so back
   // there keeps it paused, as Cancel does.
@@ -855,11 +867,13 @@ export function WorkoutScreen({
     if (!controlsRef) return;
     controlsRef.current = {
       busy: status !== 'idle',
+      // Back leaves the full-screen camera before it pauses anything.
+      exitFullScreen: fullScreen ? () => updateSettings({ cameraFullScreen: false }) : null,
       pause: () => {
         if (status === 'active' || (status === 'countdown' && resuming)) pause();
       },
     };
-  }, [controlsRef, status, resuming, pause]);
+  }, [controlsRef, status, resuming, pause, fullScreen, updateSettings]);
 
   // A camera that is off has no view; the next one starts waiting afresh.
   const cameraOn = !!source?.isPoseDriven && status !== 'idle' && status !== 'calibrating';
@@ -993,9 +1007,12 @@ export function WorkoutScreen({
       style={[
         styles.screen,
         { paddingTop: insets.top, paddingBottom: running ? insets.bottom : 0 },
+        fullScreen && styles.screenFull,
+        fullScreen && { paddingBottom: insets.bottom + spacing.sm },
       ]}
     >
-      <View style={styles.header}>
+      {fullScreen ? <StatusBar hidden /> : null}
+      <View style={[styles.header, fullScreen && styles.hidden]}>
         <View>
           <Text style={styles.brand}>HÍT ĐẤT AI</Text>
           <Text style={styles.brandSub}>{t('brand.tagline')}</Text>
@@ -1027,7 +1044,7 @@ export function WorkoutScreen({
         ) : null}
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, fullScreen && styles.hidden]}>
         <StatTile label={t('stat.total')} value={stats.totalReps} />
         <View style={styles.gap} />
         <StatTile
@@ -1065,7 +1082,12 @@ export function WorkoutScreen({
       */}
       <View style={styles.stageWrap}>
       <View
-        style={[styles.stage, tapActive && styles.stageArmed, isNear && styles.stageNear]}
+        style={[
+          styles.stage,
+          tapActive && styles.stageArmed,
+          isNear && styles.stageNear,
+          fullScreen && styles.stageFull,
+        ]}
         testID="rep-stage"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
@@ -1250,7 +1272,7 @@ export function WorkoutScreen({
 
         {/* Outside the scaled content: it is pinned to the stage's bottom edge. */}
         {poseActive && coach && status === 'active' ? (
-          <View style={styles.coachPill}>
+          <View style={[styles.coachPill, styles.coachPillBesideToggle]}>
             <Text style={styles.coachText}>{t(coach)}</Text>
           </View>
         ) : null}
@@ -1260,6 +1282,23 @@ export function WorkoutScreen({
           A sibling of the stage, not a child: a press on it must not reach the
           stage's touch handlers, which would count it as a tapped rep.
         */}
+        {poseActive && !poseBlocked ? (
+          <Pressable
+            onPress={toggleFullScreen}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t(fullScreen ? 'btn.exitFullScreen' : 'btn.fullScreen')}
+            style={({ pressed }) => [
+              styles.fullToggle,
+              fullScreen && styles.fullToggleFull,
+              pressed && styles.pressedDim,
+            ]}
+          >
+            <Text style={styles.fullToggleText} allowFontScaling={false}>
+              {fullScreen ? '✕' : '⛶'}
+            </Text>
+          </Pressable>
+        ) : null}
         {showDock ? (
           <GuideDock
             exerciseId={exercise.id}
@@ -1274,7 +1313,12 @@ export function WorkoutScreen({
       <ExerciseGuideSheet visible={guideSheet} exerciseId={exercise.id} onClose={closeGuideSheet} />
 
       <Text
-        style={[styles.notice, notice?.tone === 'warn' && styles.noticeWarn]}
+        style={[
+          styles.notice,
+          notice?.tone === 'warn' && styles.noticeWarn,
+          // Full screen keeps a warning (it matters) but not the empty line.
+          fullScreen && !notice && styles.hidden,
+        ]}
         numberOfLines={3}
       >
         {notice
@@ -1332,7 +1376,7 @@ export function WorkoutScreen({
         </View>
       ) : null}
 
-      <View style={styles.controls}>
+      <View style={[styles.controls, fullScreen && styles.controlsFull]}>
         {status === 'idle' ? (
           <Button
             label={
@@ -1400,7 +1444,7 @@ export function WorkoutScreen({
         ) : null}
       </View>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, fullScreen && styles.hidden]}>
         {status === 'idle' ? (
           <View style={styles.footerLinks}>
             {source.isPoseDriven ? (
@@ -1473,6 +1517,7 @@ export function WorkoutScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
+  screenFull: { paddingTop: 0, paddingHorizontal: 0, backgroundColor: '#000' },
   centered: { alignItems: 'center', justifyContent: 'center' },
   pressedDim: { opacity: 0.6 },
 
@@ -1522,6 +1567,24 @@ const styles = StyleSheet.create({
   stageContent: { alignSelf: 'stretch', alignItems: 'center' },
   stageContentBesideDock: { paddingRight: DOCK_W + spacing.sm * 2 },
   hidden: { display: 'none' },
+  stageFull: { marginVertical: 0, borderRadius: 0, borderWidth: 0 },
+  fullToggle: {
+    position: 'absolute',
+    left: spacing.sm,
+    bottom: spacing.md + spacing.sm,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10,10,11,0.7)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    zIndex: 6,
+    elevation: 6,
+  },
+  fullToggleFull: { bottom: spacing.md },
+  fullToggleText: { fontSize: 22, color: colors.text, lineHeight: 26 },
   stageArmed: { borderColor: colors.border, backgroundColor: colors.surface },
   stageNear: { borderColor: colors.accent, backgroundColor: colors.accentDim },
 
@@ -1583,6 +1646,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.warn,
   },
+  // Clear of the full-screen button in the stage's bottom left corner.
+  coachPillBesideToggle: { left: spacing.sm + 44 + spacing.sm },
   // Big: it is read from where the camera can see the whole body.
   coachText: { fontSize: 24, fontWeight: '800', color: colors.warn, textAlign: 'center' },
 
@@ -1649,6 +1714,7 @@ const styles = StyleSheet.create({
   chipTextSelected: { color: colors.text, fontWeight: '600' },
 
   controls: { flexDirection: 'row' },
+  controlsFull: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   lock: {
     // absoluteFill: React Native 0.86 removed absoluteFillObject (see PoseStage).
     ...StyleSheet.absoluteFill,

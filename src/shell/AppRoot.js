@@ -152,6 +152,10 @@ export function AppRoot() {
         closeOnboarding();
         return true;
       }
+      if (workoutControls.current?.exitFullScreen) {
+        workoutControls.current.exitFullScreen();
+        return true;
+      }
       if (workoutControls.current?.busy) {
         // Mid-set, back means "hold on", not "leave".
         workoutControls.current.pause();
