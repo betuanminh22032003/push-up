@@ -641,7 +641,8 @@ export function WorkoutScreen({
     seconds: status === 'rest' ? restSeconds : countdownSeconds,
     // Not while the full guide is open over it: rest and the countdown start
     // again once it closes, rather than a set beginning unseen behind it.
-    active: (status === 'countdown' || status === 'rest') && !guideSheet,
+    // A free workout's rest that is already over stays over.
+    active: (status === 'countdown' || (status === 'rest' && !restOver)) && !guideSheet,
     runKey: `${status}-${setIndex}`,
     onTick: (left) => {
       if (left <= TICK_FROM) tickFeedback();
@@ -752,9 +753,14 @@ export function WorkoutScreen({
 
   // Leaving the app mid-set pauses it: the clock would run on with nobody
   // counting, and Android takes the camera away from an app in the background.
+  // Not while the camera is still covered (asking for permission, starting):
+  // Android reports its permission dialog as the background too, and nothing
+  // is being counted yet.
+  const poseBlockedRef = useRef(false);
+  poseBlockedRef.current = !!source?.isPoseDriven && poseBlocked;
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background' && statusRef.current === 'active') pause();
+      if (state === 'background' && statusRef.current === 'active' && !poseBlockedRef.current) pause();
     });
     return () => sub.remove();
   }, [pause]);

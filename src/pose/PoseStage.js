@@ -242,10 +242,11 @@ export function PoseStage({
     }
   }, []);
 
+  // Not tied to `foreground`: Android reports a system dialog (the camera
+  // permission one included) as the background, and the cover stays the
+  // cover while it is up.
   const blocking =
-    active &&
-    foreground &&
-    (!permission || !permission.granted || !!failure || outdated || (!ready && !cameraUp));
+    active && (!permission || !permission.granted || !!failure || outdated || (!ready && !cameraUp));
   useEffect(() => {
     onBlockingChange?.(blocking);
   }, [blocking, onBlockingChange]);

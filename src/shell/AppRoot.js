@@ -123,7 +123,11 @@ export function AppRoot() {
     Linking.clearInitialURL();
     if (initial) handleLinkRef.current(initial);
     // Every later link, the same one tapped again after "Later" included.
-    const sub = Linking.addEventListener('url', ({ url }) => handleLinkRef.current(url));
+    // Android also keeps each of these as the "initial" link; cleared too.
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      Linking.clearInitialURL();
+      handleLinkRef.current(url);
+    });
     return () => sub.remove();
   }, []);
 

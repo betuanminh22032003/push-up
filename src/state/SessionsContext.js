@@ -109,14 +109,16 @@ export function SessionsProvider({ children }) {
   /** Start (or restart, or change the level of) the training schedule. */
   const startSchedule = useCallback(async (level, { keepProgress = false } = {}) => {
     const prev = scheduleRef.current;
-    if (!keepProgress) await keepEarned(prev);
     const next = {
       level: normalizeLevel(level),
       startedAt: keepProgress && prev ? prev.startedAt : Date.now(),
       completed: keepProgress && prev ? prev.completed : {},
     };
+    // Swapped in before anything is awaited, so a second tap (Next level
+    // twice) finds the new run and cannot keep the old one's badges twice.
     scheduleRef.current = next;
     setSchedule(next);
+    if (!keepProgress) await keepEarned(prev);
     await saveSchedule(next);
     return next;
   }, [keepEarned]);
