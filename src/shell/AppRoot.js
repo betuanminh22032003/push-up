@@ -22,7 +22,8 @@ import { useSettings } from '../state/SettingsContext';
 import { colors } from '../theme/theme';
 
 const TAB_IDS = ['workout', 'program', 'progress', 'blocker', 'settings'];
-const TAB_ICONS = { workout: '💪', program: '📘', progress: '📈', blocker: '🔒', settings: '⚙️' };
+// Ionicons names: outline at rest, filled when the tab is open.
+const TAB_ICONS = { workout: 'barbell', program: 'calendar', progress: 'stats-chart', blocker: 'lock-closed', settings: 'settings' };
 
 configureNotifications();
 

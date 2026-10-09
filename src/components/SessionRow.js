@@ -44,7 +44,7 @@ export function SessionRow({ session, onDelete }) {
           {tag ? <Text style={styles.tag}>{tag}</Text> : null}
         </View>
         <Text style={styles.exercise} numberOfLines={1}>
-          {`${exercise.icon} ${t(`exercise.${exercise.id}`)}`}
+          {t(`exercise.${exercise.id}`)}
         </Text>
         <Text style={styles.sub}>{details.join(' · ')}</Text>
       </View>

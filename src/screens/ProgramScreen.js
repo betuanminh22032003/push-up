@@ -27,9 +27,19 @@ import {
 import { useSessions } from '../state/SessionsContext';
 import { colors, font, radius, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
+import { ExerciseGlyph } from '../components/ExerciseGlyph';
+import { Icon } from '../components/Icon';
 
-/** A face for each level: growing, strong, on fire. */
-const LEVEL_ICONS = { beginner: '🌱', intermediate: '💪', advanced: '🔥' };
+/** A level as one, two or three rising bars, like signal strength. */
+function LevelBars({ level }) {
+  return (
+    <View style={styles.levelBars}>
+      {[8, 13, 18].map((h, i) => (
+        <View key={h} style={[styles.levelBar, { height: h }, i < level && styles.levelBarOn]} />
+      ))}
+    </View>
+  );
+}
 
 /**
  * The training schedule (lịch tập): pick a level, then a week at a time of
@@ -114,9 +124,7 @@ export function ProgramScreen({ onStartPlan }) {
               accessibilityRole="button"
               style={({ pressed }) => [styles.levelRow, pressed && styles.pressed]}
             >
-              <View style={styles.levelIcon}>
-                <Text style={styles.levelIconText}>{LEVEL_ICONS[id]}</Text>
-              </View>
+              <LevelBars level={PROGRAM_LEVELS.indexOf(id) + 1} />
               <View style={styles.grow}>
                 <Text style={styles.levelName}>{t(`program.level.${id}`)}</Text>
                 <Text style={styles.cardBody}>{t(`program.levelBody.${id}`)}</Text>
@@ -225,9 +233,11 @@ export function ProgramScreen({ onStartPlan }) {
                   style={({ pressed }) => [styles.dayHead, pressed && styles.pressed]}
                 >
                   <View style={[styles.dayBadge, isDone && styles.dayBadgeDone]}>
-                    <Text style={[styles.dayBadgeText, isDone && styles.dayBadgeTextDone]}>
-                      {isDone ? '✓' : plan.day}
-                    </Text>
+                    {isDone ? (
+                      <Icon name="checkmark" size={18} color={colors.bg} />
+                    ) : (
+                      <Text style={styles.dayBadgeText}>{plan.day}</Text>
+                    )}
                   </View>
                   <View style={styles.grow}>
                     <View style={styles.dayTitleRow}>
@@ -250,7 +260,7 @@ export function ProgramScreen({ onStartPlan }) {
                       const e = getExercise(item.exerciseId);
                       return (
                         <View key={item.exerciseId} style={styles.item}>
-                          <Text style={styles.itemIcon}>{e.icon}</Text>
+                          <ExerciseGlyph exerciseId={e.id} size={36} />
                           <View style={styles.grow}>
                             <Text style={styles.itemName}>{t(`exercise.${e.id}`)}</Text>
                             <Text style={styles.itemCue} numberOfLines={2}>
@@ -322,16 +332,20 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     marginTop: spacing.sm,
   },
-  levelIcon: {
+  levelBars: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: colors.accentSoft,
-    alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     justifyContent: 'center',
+    gap: 3,
+    paddingBottom: 13,
     marginRight: spacing.md,
   },
-  levelIconText: { ...font('400'), fontSize: 22 },
+  levelBar: { width: 5, borderRadius: 2, backgroundColor: colors.border },
+  levelBarOn: { backgroundColor: colors.accent },
   levelName: { fontSize: 16, ...font('700'), color: colors.text },
   chevron: { ...font('400'), fontSize: 22, color: colors.textDim, paddingLeft: spacing.sm },
 
@@ -367,7 +381,6 @@ const styles = StyleSheet.create({
   },
   dayBadgeDone: { backgroundColor: colors.accent },
   dayBadgeText: { fontSize: 14, ...font('600'), color: colors.textDim },
-  dayBadgeTextDone: { color: colors.bg },
   dayTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   dayTitle: { fontSize: 15, ...font('600'), color: colors.text },
   nextTag: {
@@ -391,7 +404,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  itemIcon: { ...font('400'), fontSize: 20, width: 28, textAlign: 'center' },
   itemName: { fontSize: 14, ...font('600'), color: colors.text },
   itemCue: { ...font('400'), fontSize: 12, color: colors.textDim, marginTop: 1, lineHeight: 16 },
   itemTarget: { fontSize: 15, ...font('600'), color: colors.accent, fontVariant: ['tabular-nums'] },

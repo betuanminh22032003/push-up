@@ -23,7 +23,7 @@ const FEATURE_EN = {
   'setup.gate': 'Counting starts once the camera has seen every body part it needs for about a second.',
   'setup.start': 'Open camera',
   'setup.ok': 'Got it',
-  'setup.link': '📐 Where to put the phone',
+  'setup.link': 'Where to put the phone',
 
   // --- visibility gate ------------------------------------------------------
   'vis.missing': 'Not in frame: {parts}',
@@ -99,8 +99,8 @@ const FEATURE_EN = {
   'backup.previewHint': 'Merge adds the workouts this phone does not have yet. Replace makes the phone hold exactly what the backup holds.',
 
   // --- challenges ---------------------------------------------------------
-  'challenge.entry': '⚔️ Challenge',
-  'challenge.fromSummary': '⚔️ Challenge a friend',
+  'challenge.entry': 'Challenge',
+  'challenge.fromSummary': 'Challenge a friend',
   'challenge.badLink': 'That challenge link is damaged. Ask for it again.',
   'challenge.newTitle': 'New challenge',
   'challenge.newBody': 'Set a score with the camera, then send a friend the link. They try to beat it in their own app.',
@@ -119,7 +119,7 @@ const FEATURE_EN = {
   'challenge.later': 'Not now',
   'challenge.toBeat': 'To beat: {score}',
   'challenge.stop': 'Stop',
-  'challenge.outcome.win': 'You win! 🏆',
+  'challenge.outcome.win': 'You win!',
   'challenge.outcome.lose': 'So close…',
   'challenge.outcome.draw': 'A draw!',
   'challenge.resultTitle': 'Your score',
@@ -160,7 +160,7 @@ const FEATURE_VI = {
   'setup.gate': 'Máy chỉ bắt đầu đếm khi camera đã thấy đủ các phần cơ thể cần thiết trong khoảng 1 giây.',
   'setup.start': 'Mở camera',
   'setup.ok': 'Đã hiểu',
-  'setup.link': '📐 Cách đặt máy',
+  'setup.link': 'Cách đặt máy',
 
   // --- kiểm tra khung hình --------------------------------------------------
   'vis.missing': 'Chưa thấy: {parts}',
@@ -231,8 +231,8 @@ const FEATURE_VI = {
   'backup.previewHint': 'Gộp: thêm các buổi tập máy này chưa có. Thay thế: máy sẽ giữ đúng những gì trong bản sao lưu.',
 
   // --- thách đấu ------------------------------------------------------------
-  'challenge.entry': '⚔️ Thách đấu',
-  'challenge.fromSummary': '⚔️ Thách bạn bè',
+  'challenge.entry': 'Thách đấu',
+  'challenge.fromSummary': 'Thách bạn bè',
   'challenge.badLink': 'Link thách đấu bị lỗi. Hãy xin lại link khác.',
   'challenge.newTitle': 'Thách đấu mới',
   'challenge.newBody': 'Lập điểm bằng camera rồi gửi link cho bạn bè. Họ sẽ cố vượt điểm của bạn trên app của họ.',
@@ -251,7 +251,7 @@ const FEATURE_VI = {
   'challenge.later': 'Để sau',
   'challenge.toBeat': 'Cần vượt: {score}',
   'challenge.stop': 'Dừng',
-  'challenge.outcome.win': 'Bạn thắng! 🏆',
+  'challenge.outcome.win': 'Bạn thắng!',
   'challenge.outcome.lose': 'Tiếc quá…',
   'challenge.outcome.draw': 'Hoà!',
   'challenge.resultTitle': 'Điểm của bạn',

@@ -6,6 +6,7 @@ import { BODY_PARTS, exercisesFor, getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
 import { colors, font, radius, spacing, type } from '../theme/theme';
 import { ExerciseGuideButton } from './ExerciseGuide';
+import { ExerciseGlyph } from './ExerciseGlyph';
 import { ExercisePicker } from './ExercisePicker';
 
 /**
@@ -38,7 +39,7 @@ export function ExerciseLibraryButton({ selected, onSelect, disabled, style }) {
         accessibilityLabel={`${t(`exercise.${exercise.id}`)}. ${t('picker.change')}`}
         style={({ pressed }) => [styles.button, styles.grow, pressed && styles.pressed]}
       >
-        <Text style={styles.buttonIcon}>{exercise.icon}</Text>
+        <ExerciseGlyph exerciseId={exercise.id} size={40} />
         <View style={styles.grow}>
           <Text style={styles.buttonName} numberOfLines={1}>
             {t(`exercise.${exercise.id}`)}
@@ -117,7 +118,7 @@ export function ExerciseLibrarySheet({ visible, selected, onSelect, onClose }) {
                   aria-checked={on}
                   style={({ pressed }) => [styles.row, on && styles.rowOn, pressed && styles.pressed]}
                 >
-                  <Text style={styles.rowIcon}>{item.icon}</Text>
+                  <ExerciseGlyph exerciseId={item.id} size={44} />
                   <View style={styles.grow}>
                     <View style={styles.rowTitleLine}>
                       <Text style={styles.rowName} numberOfLines={1}>
@@ -157,7 +158,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surface,
   },
-  buttonIcon: { ...font('400'), fontSize: 24 },
   buttonName: { fontSize: 16, ...font('600'), color: colors.text },
   buttonMeta: { ...font('400'), fontSize: 12, color: colors.textDim, marginTop: 1 },
   buttonChange: { fontSize: 18, ...font('600'), color: colors.accent },
@@ -190,7 +190,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   rowOn: { backgroundColor: colors.accentSoft },
-  rowIcon: { ...font('400'), fontSize: 26, width: 34, textAlign: 'center' },
   rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rowName: { fontSize: 15, ...font('600'), color: colors.text, flexShrink: 1 },
   badge: {

@@ -4,6 +4,7 @@
   "main": "index.js",
   "dependencies": {
     "@expo-google-fonts/be-vietnam-pro": "^0.4.1",
+    "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.25",
     "expo-asset": "~57.0.18",

@@ -18,7 +18,7 @@ import { newlyUnlocked, unlockedAchievements } from '../achievements/achievement
 import { creditFor, earnsTime, formatAmount, hasWayToBlock, isSetUp } from '../blocker/blockerLogic';
 import { Button } from '../components/Button';
 import { CameraSetupGuide } from '../components/CameraSetupGuide';
-import { DOCK_W, ExerciseGuideButton, ExerciseGuideSheet, GuideDock } from '../components/ExerciseGuide';
+import { DOCK_W, ExerciseGuideSheet, GuideDock } from '../components/ExerciseGuide';
 import { ExerciseLibraryButton } from '../components/ExerciseLibrary';
 import { MiscountModal } from '../components/MiscountModal';
 import { TodayCard } from '../components/TodayCard';
@@ -48,6 +48,8 @@ import { colors, font, radius, spacing, textGlow, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { shareText } from '../utils/share';
 import { formatDuration } from '../utils/time';
+import { Icon } from '../components/Icon';
+import { PlanStrip } from '../components/PlanStrip';
 
 const KEEP_AWAKE_TAG = 'pupg-workout';
 
@@ -1005,13 +1007,13 @@ export function WorkoutScreen({
       : target.max
         ? t('workout.maxSet', { n: target.target })
         : t('workout.target', { n: target.target });
-    return `${exercise.icon} ${t(`exercise.${exercise.id}`)} · ${which} · ${goal}`;
+    return `${t(`exercise.${exercise.id}`)} · ${which} · ${goal}`;
   })();
   // In the rest before a different exercise, what comes next.
   const lastSet = completedSets[setsDone - 1];
   const nextUp =
     planSets && status === 'rest' && lastSet && lastSet.exerciseId !== exercise.id
-      ? t('workout.nextExercise', { exercise: `${exercise.icon} ${t(`exercise.${exercise.id}`)}` })
+      ? t('workout.nextExercise', { exercise: t(`exercise.${exercise.id}`) })
       : null;
   const summaryCount = summary && isHold(summary.exerciseId) && summary.exercises === 1;
   // Not with the phone in a pocket (nobody sees it), nor while the camera starts.
@@ -1060,8 +1062,13 @@ export function WorkoutScreen({
               pressed && styles.pressedDim,
             ]}
           >
+            <Icon
+              name={blockerOff ? 'warning-outline' : 'game-controller-outline'}
+              size={16}
+              color={blockerOff ? colors.warn : colors.accent}
+            />
             <Text style={[styles.funChipText, blockerOff && styles.funChipTextOff]}>
-              {blockerOff ? `⚠️ ${t('blocker.chipOff')}` : `🎮 ${formatDuration(blocker.balanceSeconds)}`}
+              {blockerOff ? t('blocker.chipOff') : formatDuration(blocker.balanceSeconds)}
             </Text>
           </Pressable>
         ) : null}
@@ -1160,7 +1167,7 @@ export function WorkoutScreen({
                 {[
                   summary.exercises > 1
                     ? t('workout.exercisesDone', { n: summary.exercises })
-                    : `${summaryExercise.icon} ${t(`exercise.${summaryExercise.id}`)}`,
+                    : t(`exercise.${summaryExercise.id}`),
                   summary.exercises > 1
                     ? `${summary.sets} ${t('common.sets')}`
                     : summaryCount
@@ -1310,9 +1317,7 @@ export function WorkoutScreen({
               pressed && styles.pressedDim,
             ]}
           >
-            <Text style={styles.fullToggleText} allowFontScaling={false}>
-              {fullScreen ? '✕' : '⛶'}
-            </Text>
+            <Icon name={fullScreen ? 'contract' : 'expand'} size={20} color={colors.text} />
           </Pressable>
         ) : null}
         {showDock ? (
@@ -1346,25 +1351,10 @@ export function WorkoutScreen({
 
       {status === 'idle' && planSets ? (
         <View style={styles.planCard}>
-          <Text style={styles.planSets} numberOfLines={2}>
-            {activePlan.items
-              .map((item) =>
-                `${getExercise(item.exerciseId).icon} ${item.sets}×${item.target}${item.hold ? t('common.secShort') : ''}`,
-              )
-              .join('  ')}
-          </Text>
+          <PlanStrip items={activePlan.items} style={styles.planStrip} />
           <Text style={styles.planRest}>
             {t('program.rest', { seconds: activePlan.restSeconds })}
           </Text>
-          <View style={styles.planGuides}>
-            {[...new Set(activePlan.items.map((item) => item.exerciseId))].map((id) => (
-              <ExerciseGuideButton
-                key={id}
-                exerciseId={id}
-                label={`${getExercise(id).icon} ${t('guide.button')}`}
-              />
-            ))}
-          </View>
           <Pressable onPress={() => onClearPlan?.()} hitSlop={8} accessibilityRole="button">
             <Text style={styles.planCancel}>{t('btn.cancelPlan')}</Text>
           </Pressable>
@@ -1464,12 +1454,14 @@ export function WorkoutScreen({
         {status === 'idle' ? (
           <View style={styles.footerLinks}>
             {source.isPoseDriven ? (
-              <Pressable onPress={() => setGuide('info')} hitSlop={8} accessibilityRole="button">
+              <Pressable onPress={() => setGuide('info')} hitSlop={8} accessibilityRole="button" style={styles.footerItem}>
+                <Icon name="phone-portrait-outline" size={15} color={colors.textDim} />
                 <Text style={styles.footerLink}>{t('setup.link')}</Text>
               </Pressable>
             ) : null}
             {planSets ? null : (
-              <Pressable onPress={() => onOpenChallenge?.(exercise.id)} hitSlop={8} accessibilityRole="button">
+              <Pressable onPress={() => onOpenChallenge?.(exercise.id)} hitSlop={8} accessibilityRole="button" style={styles.footerItem}>
+                <Icon name="flash-outline" size={15} color={colors.textDim} />
                 <Text style={styles.footerLink}>{t('challenge.entry')}</Text>
               </Pressable>
             )}
@@ -1553,6 +1545,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.accentSoft,
     marginLeft: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   funChipText: { fontSize: 14, ...font('700'), color: colors.accent, fontVariant: ['tabular-nums'] },
   funChipOff: { backgroundColor: 'rgba(251, 191, 36, 0.14)' },
@@ -1598,7 +1593,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fullToggleFull: { bottom: spacing.md },
-  fullToggleText: { ...font('400'), fontSize: 22, color: colors.text, lineHeight: 26 },
   stageArmed: { borderColor: colors.border, backgroundColor: colors.surface },
   stageNear: { borderColor: colors.accent, backgroundColor: colors.accentDim },
 
@@ -1679,6 +1673,7 @@ const styles = StyleSheet.create({
   summaryLinks: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.md },
   summaryLink: { ...font('400'), fontSize: 13, color: colors.textDim, textDecorationLine: 'underline' },
   footerLinks: { flexDirection: 'row', gap: spacing.lg },
+  footerItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   footerLink: { ...font('400'), fontSize: 13, color: colors.textDim },
   guideBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)' },
   guideContent: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
@@ -1693,15 +1688,8 @@ const styles = StyleSheet.create({
   noticeWarn: { color: colors.warn },
 
   planCard: { alignItems: 'center', marginBottom: spacing.md },
-  planSets: { fontSize: 15, ...font('600'), color: colors.text, textAlign: 'center' },
+  planStrip: { alignSelf: 'stretch', flexGrow: 0 },
   planRest: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: 2 },
-  planGuides: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
   stageWrap: { flex: 1 },
   dock: { position: 'absolute', right: spacing.sm },
   planCancel: { ...font('400'), fontSize: 13, color: colors.textFaint, marginTop: spacing.sm },

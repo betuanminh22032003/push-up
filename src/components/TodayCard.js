@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ProgressBar } from './ProgressBar';
 import { useT } from '../i18n/I18nContext';
 import { colors, font, radius, spacing, type } from '../theme/theme';
+import { Icon } from './Icon';
 
 /**
  * The home screen's one card about the day: reps against the goal with its
@@ -30,9 +31,8 @@ export function TodayCard({ today, goal, streak, total, style }) {
         </View>
         <View style={styles.side}>
           <View style={[styles.flame, streak > 0 && styles.flameOn]}>
-            <Text style={[styles.flameText, streak > 0 && styles.flameTextOn]}>
-              {`🔥 ${streak} ${days}`}
-            </Text>
+            <Icon name="flame" size={15} color={streak > 0 ? colors.flame : colors.textFaint} />
+            <Text style={[styles.flameText, streak > 0 && styles.flameTextOn]}>{`${streak} ${days}`}</Text>
           </View>
           <Text style={styles.total}>{`${t('stat.total')} ${total}`}</Text>
         </View>
@@ -64,6 +64,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 4,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceAlt,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   flameOn: { backgroundColor: colors.flameSoft },
   flameText: { ...font('700'), fontSize: 14, color: colors.textDim },

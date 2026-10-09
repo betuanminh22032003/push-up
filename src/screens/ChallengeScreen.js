@@ -30,6 +30,8 @@ import { useSettings } from '../state/SettingsContext';
 import { colors, font, radius, spacing, textGlow, type } from '../theme/theme';
 import { shareText } from '../utils/share';
 import { formatDuration } from '../utils/time';
+import { ExerciseGlyph } from '../components/ExerciseGlyph';
+import { Icon } from '../components/Icon';
 
 const KEEP_AWAKE_TAG = 'pupg-challenge';
 /** A hold says its count only every this many seconds, as in a workout. */
@@ -268,7 +270,7 @@ function ChallengeFlow({ request, onClose, closeRef }) {
     const formats = formatsFor(exerciseId);
     body = (
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>⚔️ {t('challenge.newTitle')}</Text>
+        <Text style={styles.title}>{t('challenge.newTitle')}</Text>
         <Text style={styles.lead}>{t('challenge.newBody')}</Text>
         <Text style={styles.label}>{t('challenge.exercise')}</Text>
         <ExerciseLibraryButton selected={exerciseId} onSelect={setExerciseId} />
@@ -282,7 +284,10 @@ function ChallengeFlow({ request, onClose, closeRef }) {
             onSelect={setDuration}
           />
         )}
-        <Text style={styles.rule}>📷 {t('challenge.rule')}</Text>
+        <View style={styles.ruleRow}>
+          <Icon name="camera-outline" size={16} color={colors.textDim} />
+          <Text style={[styles.rule, styles.ruleText]}>{t('challenge.rule')}</Text>
+        </View>
         <Button label={t('challenge.next')} onPress={() => setPhase('guide')} style={styles.button} />
         <Button label={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.buttonSmall} />
       </ScrollView>
@@ -291,9 +296,13 @@ function ChallengeFlow({ request, onClose, closeRef }) {
     const playable = isPlayable(received);
     body = (
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>⚔️ {t('challenge.inviteTitle', { name: received.name || t('challenge.someone') })}</Text>
+        <Text style={styles.title}>{t('challenge.inviteTitle', { name: received.name || t('challenge.someone') })}</Text>
         <View style={styles.inviteCard}>
-          <Text style={styles.inviteIcon}>{playable ? exercise.icon : '❓'}</Text>
+          {playable ? (
+            <ExerciseGlyph exerciseId={exercise.id} size={64} />
+          ) : (
+            <Icon name="help-circle-outline" size={56} color={colors.textDim} />
+          )}
           <Text style={styles.inviteExercise}>{playable ? exerciseName : received.exerciseId}</Text>
           <Text style={styles.inviteScore}>{received.score}</Text>
           <Text style={styles.inviteGoal}>{goalText(received)}</Text>
@@ -301,7 +310,10 @@ function ChallengeFlow({ request, onClose, closeRef }) {
         </View>
         {playable ? (
           <>
-            <Text style={styles.rule}>📷 {t('challenge.rule')}</Text>
+            <View style={styles.ruleRow}>
+          <Icon name="camera-outline" size={16} color={colors.textDim} />
+          <Text style={[styles.rule, styles.ruleText]}>{t('challenge.rule')}</Text>
+        </View>
             <Button label={t('challenge.accept')} onPress={() => setPhase('guide')} style={styles.button} />
           </>
         ) : (
@@ -326,7 +338,7 @@ function ChallengeFlow({ request, onClose, closeRef }) {
     body = (
       <View style={styles.runWrap}>
         <Text style={styles.runTitle} numberOfLines={1}>
-          {exercise.icon} {exerciseName} · {hold ? t('challenge.formatHold') : t('challenge.formatReps', { seconds: rules.durationSeconds })}
+          {exerciseName} · {hold ? t('challenge.formatHold') : t('challenge.formatReps', { seconds: rules.durationSeconds })}
         </Text>
         {received ? <Text style={styles.runBeat}>{t('challenge.toBeat', { score: received.score })}</Text> : null}
         <View style={styles.stage}>
@@ -365,7 +377,7 @@ function ChallengeFlow({ request, onClose, closeRef }) {
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>{outcome ? t(`challenge.outcome.${outcome}`) : t('challenge.resultTitle')}</Text>
         <View style={styles.inviteCard}>
-          <Text style={styles.inviteIcon}>{exercise.icon}</Text>
+          <ExerciseGlyph exerciseId={exercise.id} size={64} />
           <Text style={styles.inviteExercise}>{exerciseName}</Text>
           <Text style={styles.inviteScore}>{result?.score ?? 0}</Text>
           <Text style={styles.inviteGoal}>{hold ? t('common.secs') : t('common.reps')}</Text>
@@ -412,7 +424,7 @@ function ChallengeFlow({ request, onClose, closeRef }) {
     <View style={[styles.screen, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.md }]}>
       {phase === 'run' ? null : (
         <Pressable onPress={handleClose} hitSlop={12} style={styles.close} accessibilityRole="button" accessibilityLabel={t('common.close')}>
-          <Text style={styles.closeText}>✕</Text>
+          <Icon name="close" size={26} color={colors.textDim} />
         </Pressable>
       )}
       {body}
@@ -421,11 +433,12 @@ function ChallengeFlow({ request, onClose, closeRef }) {
 }
 
 const styles = StyleSheet.create({
+  ruleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.lg },
+  ruleText: { flex: 1, marginTop: 0 },
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
   // Clear of the close button, which sits over the top right corner.
   scroll: { paddingTop: spacing.xl, paddingBottom: spacing.xl },
   close: { position: 'absolute', top: spacing.xl + spacing.md, right: spacing.lg, zIndex: 10 },
-  closeText: { ...font('400'), fontSize: 20, color: colors.textDim },
   title: { ...type.title, color: colors.text, paddingRight: spacing.xl },
   lead: { ...type.body, color: colors.textDim, marginTop: spacing.sm, lineHeight: 21 },
   label: { ...type.label, fontSize: 13, color: colors.textDim, marginTop: spacing.lg, marginBottom: spacing.sm },
@@ -442,7 +455,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
   },
-  inviteIcon: { ...font('400'), fontSize: 40 },
   inviteExercise: { ...type.body, ...font('600'), color: colors.text, marginTop: spacing.xs },
   inviteScore: { fontSize: 72, ...font('200'), color: colors.accent },
   inviteGoal: { ...type.body, color: colors.textDim, textAlign: 'center', paddingHorizontal: spacing.md },

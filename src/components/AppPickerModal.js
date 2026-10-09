@@ -16,6 +16,7 @@ import { Button } from './Button';
 import { filterApps, isSuggested } from '../blocker/blockerLogic';
 import { useT } from '../i18n/I18nContext';
 import { colors, font, radius, spacing, type } from '../theme/theme';
+import { Icon } from './Icon';
 
 /**
  * Full-screen list of installed apps to tick. The selection stays local until
@@ -76,7 +77,7 @@ export function AppPickerModal({ visible, apps, loading, selected, onSave, onClo
           {app.label}
         </Text>
         <View style={[styles.check, on && styles.checkOn]}>
-          {on ? <Text style={styles.checkMark}>✓</Text> : null}
+          {on ? <Icon name="checkmark" size={16} color={colors.bg} /> : null}
         </View>
       </Pressable>
     );
@@ -178,7 +179,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkOn: { borderColor: colors.accent, backgroundColor: colors.accent },
-  checkMark: { fontSize: 14, ...font('800'), color: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   hint: { ...type.body, color: colors.textDim, textAlign: 'center', marginTop: spacing.lg },
   footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md },

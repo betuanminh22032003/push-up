@@ -531,10 +531,11 @@ await check('new badges are appended, so the grid keeps its order', () => {
     'hold_300',
     'program_week',
   ]);
-  const icon = (id) => ACHIEVEMENTS.find((a) => a.id === id).icon;
-  assert.equal(icon('squats_100'), getExercise('squat').icon);
-  assert.equal(icon('situps_100'), getExercise('situp').icon);
-  assert.equal(icon('jacks_200'), getExercise('jumpingjack').icon);
+  const badge = (id) => ACHIEVEMENTS.find((a) => a.id === id);
+  assert.equal(badge('squats_100').exercise, 'squat');
+  assert.equal(badge('situps_100').exercise, 'situp');
+  assert.equal(badge('jacks_200').exercise, 'jumpingjack');
+  for (const a of ACHIEVEMENTS) assert.ok(a.exercise || /^[a-z-]+$/.test(a.icon), `${a.id} has an icon name`);
 });
 
 await check('newlyUnlocked is the difference, in definition order', () => {

@@ -2,6 +2,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ICON_FONT } from './src/components/Icon';
 import { AppRoot } from './src/shell/AppRoot';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { I18nProvider } from './src/i18n/I18nContext';
@@ -25,6 +26,7 @@ const FONTS = {
   BeVietnamPro_600SemiBold: require('@expo-google-fonts/be-vietnam-pro/600SemiBold/BeVietnamPro_600SemiBold.ttf'),
   BeVietnamPro_700Bold: require('@expo-google-fonts/be-vietnam-pro/700Bold/BeVietnamPro_700Bold.ttf'),
   BeVietnamPro_800ExtraBold: require('@expo-google-fonts/be-vietnam-pro/800ExtraBold/BeVietnamPro_800ExtraBold.ttf'),
+  ...ICON_FONT,
 };
 
 export default function App() {

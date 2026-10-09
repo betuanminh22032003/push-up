@@ -4,11 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { useT } from '../i18n/I18nContext';
 import { colors, font, radius, spacing, type } from '../theme/theme';
+import { Icon } from '../components/Icon';
 
 const STEPS = [
-  { key: 's1', icon: '📷' },
-  { key: 's2', icon: '⏱️' },
-  { key: 's3', icon: '🔥' },
+  { key: 's1', icon: 'camera-outline' },
+  { key: 's2', icon: 'timer-outline' },
+  { key: 's3', icon: 'flame-outline' },
 ];
 
 /** Three cards on first launch (and from Settings): how to place the phone and what the app does. */
@@ -23,7 +24,7 @@ export function OnboardingModal({ visible, onClose }) {
           {STEPS.map((step) => (
             <View key={step.key} style={styles.card}>
               <View style={styles.iconWrap}>
-                <Text style={styles.icon}>{step.icon}</Text>
+                <Icon name={step.icon} size={22} color={colors.accent} />
               </View>
               <View style={styles.cardText}>
                 <Text style={styles.cardTitle}>{t(`onboarding.${step.key}.title`)}</Text>
@@ -61,7 +62,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  icon: { ...font('400'), fontSize: 24 },
   cardText: { flex: 1 },
   cardTitle: { fontSize: 17, ...font('600'), color: colors.text },
   cardBody: { ...type.body, color: colors.textDim, marginTop: spacing.xs, lineHeight: 21 },

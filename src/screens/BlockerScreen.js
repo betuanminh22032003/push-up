@@ -33,6 +33,7 @@ import { useBlocker } from '../state/BlockerContext';
 import { useSettings } from '../state/SettingsContext';
 import { colors, font, radius, spacing, type } from '../theme/theme';
 import { formatDuration } from '../utils/time';
+import { Icon } from '../components/Icon';
 
 /** The hold the rate note uses as its example. */
 const PLANK = getExercise('plank');
@@ -402,12 +403,12 @@ export function BlockerScreen({ onGoWorkout }) {
                 {t('blocker.ratePerExercise', {
                   list: CLASSIC_EXERCISE_IDS.map(getExercise).map(
                     (e) =>
-                      `${e.icon} ${t(`exercise.${e.id}`)} ${formatPerRep(rate * e.creditWeight, t)}`,
+                      `${t(`exercise.${e.id}`)} ${formatPerRep(rate * e.creditWeight, t)}`,
                   ).join(' · '),
                 })}
                 {/* Holds are paid by the second, which the list above cannot show. */}
                 {` ${t('blocker.ratePerHold', {
-                  name: `${PLANK.icon} ${t(`exercise.${PLANK.id}`)}`,
+                  name: t(`exercise.${PLANK.id}`),
                   amount: formatPerRep(rate * PLANK.creditWeight, t),
                 })}`}
               </Text>
@@ -480,7 +481,7 @@ function Permission({ title, body, granted, warn, onGrant }) {
   return (
     <Row title={title} body={body} bodyWarn={warn && !granted}>
       {granted ? (
-        <Text style={styles.okMark}>✓</Text>
+        <Icon name="checkmark-circle" size={24} color={colors.accent} />
       ) : (
         <SmallButton label={t('blocker.permissionButton')} onPress={onGrant} />
       )}
@@ -497,7 +498,7 @@ function RemoveButton({ label, onPress }) {
       accessibilityLabel={label}
       style={({ pressed }) => [styles.remove, pressed && styles.pressed]}
     >
-      <Text style={styles.removeText}>✕</Text>
+      <Icon name="close" size={18} color={colors.textDim} />
     </Pressable>
   );
 }
@@ -589,7 +590,6 @@ const styles = StyleSheet.create({
   alertButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
   loading: { marginTop: spacing.xl },
 
-  okMark: { fontSize: 20, ...font('700'), color: colors.accent },
   hintRow: { paddingVertical: spacing.md, gap: spacing.sm },
   hint: { ...font('400'), fontSize: 13, color: colors.textDim, lineHeight: 18 },
   link: { fontSize: 13, ...font('600'), color: colors.accent },
@@ -630,7 +630,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
   },
-  removeText: { ...font('400'), fontSize: 13, color: colors.textDim },
   addRow: { paddingVertical: spacing.md },
   addText: { fontSize: 15, ...font('600'), color: colors.accent },
 

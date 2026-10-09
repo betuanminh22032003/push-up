@@ -11,6 +11,7 @@ import { useI18n } from '../i18n/I18nContext';
 import { colors, font, radius, spacing, type } from '../theme/theme';
 import { shareText } from '../utils/share';
 import { Button } from './Button';
+import { Icon } from './Icon';
 
 /**
  * "Miscounted?" after a camera set: the real count and an optional note,
@@ -80,7 +81,7 @@ export function MiscountModal({ session, onClose }) {
               <Text style={styles.body}>
                 {t('miscount.body', {
                   counted: session.totalReps,
-                  exercise: `${exercise.icon} ${t(`exercise.${exercise.id}`)}`,
+                  exercise: t(`exercise.${exercise.id}`),
                 })}
               </Text>
               <Text style={styles.label}>{t('miscount.real')}</Text>
@@ -117,7 +118,7 @@ export function MiscountModal({ session, onClose }) {
             </>
           )}
           <Pressable onPress={onClose} hitSlop={12} style={styles.close} accessibilityRole="button" accessibilityLabel={t('common.close')}>
-            <Text style={styles.closeText}>✕</Text>
+            <Icon name="close" size={22} color={colors.textDim} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -156,5 +157,4 @@ const styles = StyleSheet.create({
   button: { marginTop: spacing.lg },
   buttonSmall: { marginTop: spacing.sm },
   close: { position: 'absolute', top: spacing.md, right: spacing.md },
-  closeText: { ...font('400'), fontSize: 18, color: colors.textDim },
 });

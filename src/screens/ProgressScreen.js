@@ -88,7 +88,7 @@ export function ProgressScreen({ onOpenChallenge }) {
         <ExercisePicker
           options={[
             { id: 'all', label: t('progress.filterAll') },
-            ...inHistory.map((e) => ({ id: e.id, icon: e.icon, label: t(`exercise.${e.id}`) })),
+            ...inHistory.map((e) => ({ id: e.id, label: t(`exercise.${e.id}`) })),
           ]}
           selected={shown}
           onSelect={setFilter}
@@ -204,8 +204,8 @@ function ChallengeRow({ record }) {
   const unit = record.format === 'hold' ? t('common.secs') : t('common.reps');
   const what =
     record.format === 'hold'
-      ? `${exercise.icon} ${t('challenge.formatHold')}`
-      : `${exercise.icon} ${t('common.seconds', { n: record.durationSeconds })}`;
+      ? `${t(`exercise.${exercise.id}`)} · ${t('challenge.formatHold')}`
+      : `${t(`exercise.${exercise.id}`)} · ${t('common.seconds', { n: record.durationSeconds })}`;
   const line =
     record.direction === 'received'
       ? t('challenge.rowReceived', {

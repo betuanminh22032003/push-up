@@ -11,7 +11,9 @@ const LEGACY_PROGRAM_DAYS = 18;
  * means they can never drift from it, and deleting a session honestly takes a
  * badge away if it was the one that earned it.
  *
- * Each has an `id` (the translation key stem) and a `test(facts)`; the facts
+ * Each has an `id` (the translation key stem), an `icon` (an Ionicons name)
+ * or, for an exercise's own badge, the `exercise` whose figure it shows, and
+ * a `test(facts)`; the facts
  * are computed once per evaluation below. The grid shows them in this order,
  * so new ones are added at the end.
  *
@@ -26,36 +28,36 @@ const LEGACY_PROGRAM_DAYS = 18;
  * not take their badges away either.
  */
 export const ACHIEVEMENTS = [
-  { id: 'first_workout', icon: '🏁', test: (f) => f.sessions >= 1 },
-  { id: 'reps_100', icon: '💯', test: (f) => f.totalReps >= 100 },
-  { id: 'reps_500', icon: '🔥', test: (f) => f.totalReps >= 500 },
-  { id: 'reps_1000', icon: '⚡', test: (f) => f.totalReps >= 1000 },
-  { id: 'reps_5000', icon: '🏆', test: (f) => f.totalReps >= 5000 },
-  { id: 'set_25', icon: '💪', test: (f) => f.bestSet >= 25 },
-  { id: 'set_50', icon: '🦾', test: (f) => f.bestSet >= 50 },
-  { id: 'set_100', icon: '👑', test: (f) => f.bestSet >= 100 },
-  { id: 'streak_3', icon: '📅', test: (f) => f.longestStreak >= 3 },
-  { id: 'streak_7', icon: '🗓️', test: (f) => f.longestStreak >= 7 },
-  { id: 'streak_30', icon: '🌟', test: (f) => f.longestStreak >= 30 },
-  { id: 'workouts_10', icon: '🔟', test: (f) => f.sessions >= 10 },
-  { id: 'workouts_50', icon: '🎖️', test: (f) => f.sessions >= 50 },
-  { id: 'early_bird', icon: '🌅', test: (f) => f.earliestHour !== null && f.earliestHour < 7 },
-  { id: 'night_owl', icon: '🌙', test: (f) => f.latestHour !== null && f.latestHour >= 22 },
-  { id: 'program_day', icon: '📘', test: (f) => f.programDays >= 1 },
-  { id: 'program_done', icon: '🎓', test: (f) => f.programComplete },
-  { id: 'squats_100', icon: '🦵', test: (f) => f.repsByExercise.squat >= 100 },
-  { id: 'situps_100', icon: '🧘', test: (f) => f.repsByExercise.situp >= 100 },
-  { id: 'jacks_200', icon: '🤸', test: (f) => f.repsByExercise.jumpingjack >= 200 },
+  { id: 'first_workout', icon: 'flag', test: (f) => f.sessions >= 1 },
+  { id: 'reps_100', icon: 'ribbon', test: (f) => f.totalReps >= 100 },
+  { id: 'reps_500', icon: 'flame', test: (f) => f.totalReps >= 500 },
+  { id: 'reps_1000', icon: 'flash', test: (f) => f.totalReps >= 1000 },
+  { id: 'reps_5000', icon: 'trophy', test: (f) => f.totalReps >= 5000 },
+  { id: 'set_25', icon: 'barbell', test: (f) => f.bestSet >= 25 },
+  { id: 'set_50', icon: 'fitness', test: (f) => f.bestSet >= 50 },
+  { id: 'set_100', icon: 'diamond', test: (f) => f.bestSet >= 100 },
+  { id: 'streak_3', icon: 'calendar-clear', test: (f) => f.longestStreak >= 3 },
+  { id: 'streak_7', icon: 'calendar', test: (f) => f.longestStreak >= 7 },
+  { id: 'streak_30', icon: 'star', test: (f) => f.longestStreak >= 30 },
+  { id: 'workouts_10', icon: 'layers', test: (f) => f.sessions >= 10 },
+  { id: 'workouts_50', icon: 'medal', test: (f) => f.sessions >= 50 },
+  { id: 'early_bird', icon: 'sunny', test: (f) => f.earliestHour !== null && f.earliestHour < 7 },
+  { id: 'night_owl', icon: 'moon', test: (f) => f.latestHour !== null && f.latestHour >= 22 },
+  { id: 'program_day', icon: 'book', test: (f) => f.programDays >= 1 },
+  { id: 'program_done', icon: 'school', test: (f) => f.programComplete },
+  { id: 'squats_100', exercise: 'squat', test: (f) => f.repsByExercise.squat >= 100 },
+  { id: 'situps_100', exercise: 'situp', test: (f) => f.repsByExercise.situp >= 100 },
+  { id: 'jacks_200', exercise: 'jumpingjack', test: (f) => f.repsByExercise.jumpingjack >= 200 },
   {
     id: 'all_rounder',
-    icon: '🏅',
+    icon: 'apps',
     // The four there were when the badge was made; the library has its own.
     test: (f) => CLASSIC_EXERCISE_IDS.every((id) => f.repsByExercise[id] > 0),
   },
-  { id: 'explorer_10', icon: '🧭', test: (f) => f.exercisesTried >= 10 },
-  { id: 'explorer_25', icon: '🗺️', test: (f) => f.exercisesTried >= 25 },
-  { id: 'hold_300', icon: '⏱️', test: (f) => f.holdSeconds >= 300 },
-  { id: 'program_week', icon: '📗', test: (f) => f.programWeeks >= 1 },
+  { id: 'explorer_10', icon: 'compass', test: (f) => f.exercisesTried >= 10 },
+  { id: 'explorer_25', icon: 'map', test: (f) => f.exercisesTried >= 25 },
+  { id: 'hold_300', icon: 'stopwatch', test: (f) => f.holdSeconds >= 300 },
+  { id: 'program_week', icon: 'checkmark-done', test: (f) => f.programWeeks >= 1 },
 ];
 
 /** Longest run of consecutive local days with at least one rep. */

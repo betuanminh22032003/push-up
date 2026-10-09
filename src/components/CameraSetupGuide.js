@@ -5,6 +5,7 @@ import { getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
 import { colors, font, radius, spacing, type } from '../theme/theme';
 import { Button } from './Button';
+import { Icon } from './Icon';
 
 /**
  * The card shown before the camera counts: where the phone goes for this
@@ -32,13 +33,14 @@ export function CameraSetupGuide({ exerciseId, onStart, startLabel, onCancel, ca
   return (
     <View style={styles.card}>
       <Text style={styles.title}>
-        {exercise.icon} {t('setup.title', { exercise: t(`exercise.${exercise.id}`) })}
+        {t('setup.title', { exercise: t(`exercise.${exercise.id}`) })}
       </Text>
       <SetupDrawing setup={setup} label={lines.join(', ')} />
       {lines.map((line, i) => (
-        <Text key={i} style={styles.line}>
-          {['📱', '↔️', '↕️'][i]}  {line}
-        </Text>
+        <View key={i} style={styles.lineRow}>
+          <Icon name={['phone-portrait-outline', 'swap-horizontal', 'swap-vertical'][i]} size={16} color={colors.accent} />
+          <Text style={[styles.line, styles.lineText]}>{line}</Text>
+        </View>
       ))}
       <Text style={styles.hint}>{t(`exercise.${exercise.id}.hint.ai`)}</Text>
       <Text style={styles.gate}>{t('setup.gate')}</Text>
@@ -123,6 +125,8 @@ function Figure({ posture, view }) {
 }
 
 const styles = StyleSheet.create({
+  lineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  lineText: { flex: 1, marginTop: 0 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

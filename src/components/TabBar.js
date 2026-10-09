@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, font, radius, spacing } from '../theme/theme';
+import { Icon } from './Icon';
 
 /**
  * Bottom tabs. Plain Pressables rather than a navigation library: five
@@ -24,7 +25,11 @@ export function TabBar({ tabs, activeId, onSelect }) {
             style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
           >
             <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
-              <Text style={[styles.icon, active && styles.iconActive]}>{tab.icon}</Text>
+              <Icon
+                name={active ? tab.icon : `${tab.icon}-outline`}
+                size={21}
+                color={active ? colors.accent : colors.textFaint}
+              />
             </View>
             <Text
               style={[styles.label, active && styles.labelActive]}
@@ -60,8 +65,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconWrapActive: { backgroundColor: colors.accentSoft },
-  icon: { ...font('400'), fontSize: 19, opacity: 0.5 },
-  iconActive: { opacity: 1 },
   label: { fontSize: 11, ...font('500'), color: colors.textFaint, marginTop: 3 },
   labelActive: { color: colors.text, ...font('700') },
 });
