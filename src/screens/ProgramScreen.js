@@ -142,7 +142,9 @@ export function ProgramScreen({ onStartPlan }) {
             {finished ? (
               <>
                 <Text style={styles.complete}>{t('program.complete')}</Text>
-                <Text style={styles.cardBody}>{t('program.completeBody')}</Text>
+                <Text style={styles.cardBody}>
+                  {t(level === 'advanced' ? 'program.completeBodyTop' : 'program.completeBody')}
+                </Text>
                 {level !== 'advanced' ? (
                   <Button
                     label={t('program.levelUp')}
@@ -177,7 +179,7 @@ export function ProgramScreen({ onStartPlan }) {
 
           <View style={styles.sectionRow}>
             <Text style={styles.sectionLabel}>{t('program.week', { week: shownWeek })}</Text>
-            <Text style={styles.sectionMeta}>{t('program.weekProgress', week)}</Text>
+            <Text style={styles.sectionMeta}>{t('program.weekDone', week)}</Text>
           </View>
           <ExercisePicker
             options={weekChips}

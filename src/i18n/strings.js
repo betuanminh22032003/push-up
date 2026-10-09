@@ -63,6 +63,7 @@ const en = {
   'workout.target': 'Target {n}',
   'workout.maxSet': 'At least {n}, then as many as you can',
   'workout.setDone': 'Set {n} done · {reps} reps',
+  'workout.setDone.one': 'Set {n} done · {reps} rep',
   'workout.restOver': 'Rest over',
   'workout.nextIn': 'Next set starts in',
   'workout.restHint': 'Take a breath. Next set when the timer ends or when you are ready.',
@@ -179,6 +180,7 @@ const en = {
   // --- notices ------------------------------------------------------------
   'notice.nothingSaved': 'No reps counted, nothing saved.',
   'notice.saved': 'Saved {reps} reps in {time}.',
+  'notice.saved.one': 'Saved {reps} rep in {time}.',
   'notice.goalReached': 'Daily goal reached! 🎯',
   'notice.achievement': 'Achievement unlocked: {name}',
   'notice.calibrated': 'Calibrated at {lux} lx.',
@@ -189,19 +191,23 @@ const en = {
   // --- confirmations ------------------------------------------------------
   'confirm.discardTitle': 'Discard this workout?',
   'confirm.discardBody': '{reps} reps will not be saved.',
+  'confirm.discardBody.one': '{reps} rep will not be saved.',
   'confirm.discardBodyHold': '{reps} seconds held will not be saved.',
+  'confirm.discardBodyHold.one': '{reps} second held will not be saved.',
   'confirm.keep': 'Keep going',
   'confirm.discard': 'Discard',
   'confirm.deleteTitle': 'Delete workout?',
   'confirm.deleteBody': '{reps} reps will be removed from your history.',
+  'confirm.deleteBody.one': '{reps} rep will be removed from your history.',
   'confirm.deleteBodyHold': '{reps} seconds held will be removed from your history.',
+  'confirm.deleteBodyHold.one': '{reps} second held will be removed from your history.',
   'confirm.delete': 'Delete',
   'confirm.clearTitle': 'Delete all data?',
   'confirm.clearBody':
     'Every workout, your program progress, your settings and your fun time will be permanently deleted.',
   'confirm.deleteAll': 'Delete all',
   'confirm.restartTitle': 'Restart the program?',
-  'confirm.restartBody': 'Schedule progress is reset. Your workout history is kept.',
+  'confirm.restartBody': 'Schedule progress is reset. Your workout history and badges are kept.',
   'confirm.restart': 'Restart',
 
   // --- share --------------------------------------------------------------
@@ -219,6 +225,7 @@ const en = {
   'program.done': 'Done',
   'program.complete': 'Program complete! 🎓',
   'program.completeBody': 'Move up a level, or run the four weeks again.',
+  'program.completeBodyTop': 'That was the top level. Run the four weeks again with Restart program below.',
   'program.restart': 'Restart program',
 
   // --- progress -----------------------------------------------------------
@@ -235,7 +242,8 @@ const en = {
   'progress.history': 'History',
   'progress.empty': 'No workouts yet',
   'progress.emptyBody': 'Finish a workout and it will show up here.',
-  'progress.weekTotal': '{reps} reps this week',
+  'progress.weekTotal': '{reps} reps in 7 days',
+  'progress.weekTotal.one': '{reps} rep in 7 days',
   'progress.filter': 'Show exercise',
   'progress.filterAll': 'All',
 
@@ -246,6 +254,7 @@ const en = {
   'session.sets': '{n} sets',
   'session.programDay': 'Day {day}',
   'session.delete': 'Delete workout of {reps} reps',
+  'session.delete.one': 'Delete workout of {reps} rep',
 
   // --- weekdays (Sunday first, as Date#getDay) ----------------------------
   'weekday.0': 'Sun',
@@ -555,11 +564,13 @@ const en = {
   'workout.exercisesDone': '{n} exercises',
   'btn.startProgramDay': 'Start week {week} · day {day}',
   'notice.savedHold': 'Saved {reps} seconds in {time}.',
+  'notice.savedHold.one': 'Saved {reps} second in {time}.',
   'notice.savedProgram': 'Saved {n} exercises in {time}.',
   'share.textHold': 'I just did {reps} {exercise} with Hít Đất AI 💪',
   'progress.weekTotalHold': '{reps}s held this week',
   'session.scheduleDay': 'W{week} · D{day}',
   'session.deleteHold': 'Delete workout of {reps} seconds',
+  'session.deleteHold.one': 'Delete workout of {reps} second',
   'program.chooseLevel': 'Choose your level',
   'program.level.beginner': 'Beginner',
   'program.level.intermediate': 'Intermediate',
@@ -569,6 +580,7 @@ const en = {
   'program.levelBody.advanced': 'Harder variations and more reps, 3 sets of each, 40 s of rest.',
   'program.start': 'Start the schedule',
   'program.weekProgress': '{done}/{total} workouts this week',
+  'program.weekDone': '{done}/{total} done',
   'program.overall': '{done} of {total} workouts',
   'program.focus.push': 'Push · chest & triceps',
   'program.focus.legs': 'Legs & glutes',
@@ -768,7 +780,7 @@ const vi = {
     'Toàn bộ lịch sử, tiến độ chương trình, cài đặt và thời gian giải trí sẽ bị xoá vĩnh viễn.',
   'confirm.deleteAll': 'Xoá tất cả',
   'confirm.restartTitle': 'Bắt đầu lại chương trình?',
-  'confirm.restartBody': 'Tiến độ ngày sẽ được đặt lại. Lịch sử tập vẫn giữ nguyên.',
+  'confirm.restartBody': 'Tiến độ lịch tập sẽ được đặt lại. Lịch sử tập và thành tích vẫn giữ nguyên.',
   'confirm.restart': 'Bắt đầu lại',
 
   'share.text': 'Tôi vừa tập {reps} cái {exercise} trong {time} với Hít Đất AI 💪',
@@ -784,6 +796,7 @@ const vi = {
   'program.done': 'Xong',
   'program.complete': 'Hoàn thành chương trình! 🎓',
   'program.completeBody': 'Lên cấp tiếp theo, hoặc tập lại bốn tuần.',
+  'program.completeBodyTop': 'Đây là cấp cao nhất. Tập lại bốn tuần bằng nút Bắt đầu lại bên dưới.',
   'program.restart': 'Bắt đầu lại',
 
   'progress.title': 'Tiến độ',
@@ -799,7 +812,7 @@ const vi = {
   'progress.history': 'Lịch sử',
   'progress.empty': 'Chưa có buổi tập nào',
   'progress.emptyBody': 'Tập xong một buổi, nó sẽ hiện ở đây.',
-  'progress.weekTotal': '{reps} cái tuần này',
+  'progress.weekTotal': '{reps} cái trong 7 ngày',
   'progress.filter': 'Lọc theo bài tập',
   'progress.filterAll': 'Tất cả',
 
@@ -1124,6 +1137,7 @@ const vi = {
   'program.levelBody.advanced': 'Biến thể khó hơn, nhiều lần hơn, mỗi bài 3 set, nghỉ 40 giây.',
   'program.start': 'Bắt đầu lịch tập',
   'program.weekProgress': '{done}/{total} buổi tuần này',
+  'program.weekDone': 'Xong {done}/{total}',
   'program.overall': '{done}/{total} buổi',
   'program.focus.push': 'Đẩy · ngực & tay sau',
   'program.focus.legs': 'Chân & mông',
@@ -1149,7 +1163,7 @@ const vi = {
   'ach.explorer_25.body': 'Tập 25 bài khác nhau',
   'ach.hold_300.title': 'Vững vàng',
   'ach.hold_300.body': 'Tổng cộng 5 phút giữ tư thế',
-  'ach.program_week.title': 'Trọn tuần',
+  'ach.program_week.title': 'Xong tuần tập',
   'ach.program_week.body': 'Hoàn thành mọi buổi của một tuần',
 };
 
@@ -1177,6 +1191,10 @@ export function resolveLanguage(setting, deviceLanguageCodes = []) {
 export function translate(language, key, params) {
   const table = STRINGS[language] || STRINGS.en;
   let text = table[key] ?? STRINGS.en[key] ?? key;
+  // A count of one takes the `.one` form where the language has one
+  // ("1 rep", not "1 reps"); Vietnamese nouns do not change, so it has none.
+  const count = params?.reps ?? params?.n;
+  if (Number(count) === 1 && table[`${key}.one`]) text = table[`${key}.one`];
   if (params) {
     for (const [name, value] of Object.entries(params)) {
       text = text.split(`{${name}}`).join(String(value));

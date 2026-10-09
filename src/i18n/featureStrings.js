@@ -61,6 +61,7 @@ const FEATURE_EN = {
   // --- feedback -----------------------------------------------------------
   'feedback.title': 'Send feedback / report a problem',
   'feedback.body': 'Opens a report in your share sheet with the app version, phone model and the local error log ({n} entries). Nothing is sent unless you share it.',
+  'feedback.body.one': 'Opens a report in your share sheet with the app version, phone model and the local error log ({n} entry). Nothing is sent unless you share it.',
   'feedback.intro': 'Hít Đất AI feedback. Write your message here:',
 
   // --- backup -------------------------------------------------------------
@@ -80,15 +81,19 @@ const FEATURE_EN = {
   'backup.error.version': 'That backup comes from a newer version of the app. Update the app, then restore it.',
   'backup.error.data': 'That backup is damaged and cannot be restored.',
   'backup.merged': 'Restored. {n} workouts added to your history.',
+  'backup.merged.one': 'Restored. {n} workout added to your history.',
   'backup.replaced': 'Restored. Your data was replaced with the backup ({n} workouts).',
+  'backup.replaced.one': 'Restored. Your data was replaced with the backup ({n} workout).',
   'backup.replaceTitle': 'Replace everything?',
   'backup.replaceBody': 'All workouts, settings, schedule progress and challenges on this phone are replaced with the backup. This cannot be undone.',
   'backup.replace': 'Replace',
   'backup.merge': 'Merge (keep what is here)',
   'backup.previewTitle': 'Restore this backup?',
   'backup.previewSessions': '{n} workouts',
+  'backup.previewSessions.one': '{n} workout',
   'backup.previewRange': 'From {from} to {to}',
   'backup.previewStreak': 'Streak at the end: {n} days',
+  'backup.previewStreak.one': 'Streak at the end: {n} day',
   'backup.previewExported': 'Backed up on {date}',
   'backup.previewDropped': '{n} damaged records will be skipped.',
   'backup.previewHint': 'Merge adds the workouts this phone does not have yet. Replace makes the phone hold exactly what the backup holds.',

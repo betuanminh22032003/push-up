@@ -297,7 +297,7 @@ function ChallengeFlow({ request, onClose, closeRef }) {
           <Text style={styles.inviteExercise}>{playable ? exerciseName : received.exerciseId}</Text>
           <Text style={styles.inviteScore}>{received.score}</Text>
           <Text style={styles.inviteGoal}>{goalText(received)}</Text>
-          <Text style={styles.inviteDate}>{new Date(received.at).toLocaleDateString()}</Text>
+          <Text style={styles.inviteDate}>{new Date(received.at).toLocaleDateString(speechTag)}</Text>
         </View>
         {playable ? (
           <>

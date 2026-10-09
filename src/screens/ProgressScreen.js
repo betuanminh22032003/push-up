@@ -9,7 +9,7 @@ import { SessionRow } from '../components/SessionRow';
 import { StatTile } from '../components/StatTile';
 import { WeeklyChart } from '../components/WeeklyChart';
 import { EXERCISES, exerciseOf, filterByExercise, getExercise, isHold, isHoldSession } from '../exercises/exercises';
-import { useT } from '../i18n/I18nContext';
+import { useI18n, useT } from '../i18n/I18nContext';
 import { useChallenges } from '../state/ChallengesContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
@@ -199,7 +199,7 @@ const CHALLENGES_SHOWN = 5;
 
 /** One challenge sent or received: who, what, the scores and how it went. */
 function ChallengeRow({ record }) {
-  const t = useT();
+  const { t, speechTag } = useI18n();
   const exercise = getExercise(record.exerciseId);
   const unit = record.format === 'hold' ? t('common.secs') : t('common.reps');
   const what =
@@ -224,6 +224,7 @@ function ChallengeRow({ record }) {
           {formatSessionDate(record.at, Date.now(), {
             today: t('session.today'),
             yesterday: t('session.yesterday'),
+            locale: speechTag,
           })}
         </Text>
       </View>

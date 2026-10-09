@@ -617,9 +617,21 @@ await check('dailyTotals is a full week ending today, zeros included', () => {
 group('strings');
 
 await check('en and vi define exactly the same keys', () => {
-  const en = Object.keys(STRINGS.en).sort();
+  // `.one` is English grammar ("1 rep"): Vietnamese nouns have no plural.
+  const en = Object.keys(STRINGS.en).filter((k) => !k.endsWith('.one')).sort();
   const vi = Object.keys(STRINGS.vi).sort();
   assert.deepEqual(vi, en);
+  for (const k of Object.keys(STRINGS.en).filter((key) => key.endsWith('.one'))) {
+    assert.ok(STRINGS.en[k.slice(0, -4)], `${k} has a plural to go with`);
+  }
+});
+
+await check('a count of one is singular in English and unchanged in Vietnamese', () => {
+  assert.equal(translate('en', 'progress.weekTotal', { reps: 1 }), '1 rep in 7 days');
+  assert.equal(translate('en', 'progress.weekTotal', { reps: 2 }), '2 reps in 7 days');
+  assert.equal(translate('en', 'progress.weekTotal', { reps: 0 }), '0 reps in 7 days');
+  assert.equal(translate('en', 'backup.previewSessions', { n: 1 }), '1 workout');
+  assert.equal(translate('vi', 'progress.weekTotal', { reps: 1 }), '1 cái trong 7 ngày');
 });
 
 await check('no key is defined twice, where the later one would silently win', () => {
@@ -650,7 +662,9 @@ await check('no key is defined twice, where the later one would silently win', (
 await check('placeholders match between languages', () => {
   const params = (text) => (text.match(/\{[a-z]+\}/g) || []).sort();
   for (const key of Object.keys(STRINGS.en)) {
-    assert.deepEqual(params(STRINGS.vi[key]), params(STRINGS.en[key]), key);
+    // A singular form has the same placeholders as its plural.
+    const other = key.endsWith('.one') ? STRINGS.en[key.slice(0, -4)] : STRINGS.vi[key];
+    assert.deepEqual(params(other), params(STRINGS.en[key]), key);
   }
 });
 

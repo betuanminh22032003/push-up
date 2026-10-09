@@ -14,7 +14,6 @@ import { appInfo, deviceInfo } from '../diagnostics/device';
 import { loadErrors } from '../diagnostics/errorLog';
 import { formatReport } from '../diagnostics/report';
 import { useI18n } from '../i18n/I18nContext';
-import { STORAGE_KEYS } from '../storage/sessions';
 import { useChallenges } from '../state/ChallengesContext';
 import { shareText } from '../utils/share';
 import {
@@ -96,13 +95,13 @@ export function SettingsScreen({ onShowOnboarding }) {
       if (!pending) return;
       setBusy(true);
       try {
-        const { added } = await restoreAppData(pending.backup, mode);
+        const { addedWorkouts } = await restoreAppData(pending.backup, mode);
         await Promise.all([reloadSettings(), reloadSessions(), reloadChallenges()]);
         setBackupNote({
           tone: 'ok',
           text:
             mode === 'merge'
-              ? t('backup.merged', { n: added[STORAGE_KEYS.sessions] ?? 0 })
+              ? t('backup.merged', { n: addedWorkouts })
               : t('backup.replaced', { n: pending.summary.sessions }),
         });
       } catch (e) {
@@ -380,10 +379,10 @@ export function SettingsScreen({ onShowOnboarding }) {
 
 /** What a picked backup holds, and the choice of what to do with it. */
 function BackupPreview({ preview, onMerge, onReplace, onCancel }) {
-  const { t } = useI18n();
+  const { t, speechTag } = useI18n();
   if (!preview) return null;
   const s = preview.summary;
-  const date = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleDateString() : '—');
+  const date = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleDateString(speechTag) : '—');
   const exported = s.exportedAt ? new Date(s.exportedAt) : null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
@@ -399,7 +398,7 @@ function BackupPreview({ preview, onMerge, onReplace, onCancel }) {
           ) : null}
           <Text style={styles.sheetLine}>{t('backup.previewStreak', { n: s.streak })}</Text>
           {exported && !Number.isNaN(exported.getTime()) ? (
-            <Text style={styles.sheetLine}>{t('backup.previewExported', { date: exported.toLocaleString() })}</Text>
+            <Text style={styles.sheetLine}>{t('backup.previewExported', { date: exported.toLocaleString(speechTag) })}</Text>
           ) : null}
           {preview.dropped ? (
             <Text style={[styles.sheetLine, styles.backupNoteWarn]}>{t('backup.previewDropped', { n: preview.dropped })}</Text>

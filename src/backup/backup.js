@@ -120,10 +120,12 @@ export function parseBackup(text, { keys, sessionsKey, isValidSession, normalize
  * @param {object} backup        from parseBackup
  * @param {object} options
  *   sessionsKey
- *   streakOf     (sessions) => streak in days, as of the backup's last day
+ *   streakOf      (sessions) => streak in days, as of the backup's last day
+ *   workoutsOf    (sessions) => how many workouts they are; one per session if left out
  * @returns {{ sessions, totalReps, firstAt, lastAt, exportedAt, streak, keys }}
+ *   `sessions` counts workouts
  */
-export function summarizeBackup(backup, { sessionsKey, streakOf }) {
+export function summarizeBackup(backup, { sessionsKey, streakOf, workoutsOf = (list) => list.length }) {
   const sessions = backup.data[sessionsKey] || [];
   let firstAt = null;
   let lastAt = null;
@@ -134,7 +136,7 @@ export function summarizeBackup(backup, { sessionsKey, streakOf }) {
     totalReps += s.totalReps;
   }
   return {
-    sessions: sessions.length,
+    sessions: workoutsOf(sessions),
     totalReps,
     firstAt,
     lastAt,

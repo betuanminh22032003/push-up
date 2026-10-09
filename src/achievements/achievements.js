@@ -55,7 +55,7 @@ export const ACHIEVEMENTS = [
   { id: 'explorer_10', icon: '🧭', test: (f) => f.exercisesTried >= 10 },
   { id: 'explorer_25', icon: '🗺️', test: (f) => f.exercisesTried >= 25 },
   { id: 'hold_300', icon: '⏱️', test: (f) => f.holdSeconds >= 300 },
-  { id: 'program_week', icon: '🗓', test: (f) => f.programWeeks >= 1 },
+  { id: 'program_week', icon: '📗', test: (f) => f.programWeeks >= 1 },
 ];
 
 /** Longest run of consecutive local days with at least one rep. */

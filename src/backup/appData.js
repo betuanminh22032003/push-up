@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 import { BACKUP_KEYS, STORAGE_KEYS, isValidSession, normalizeSession } from '../storage/sessions';
-import { computeStats } from '../utils/stats';
+import { computeStats, countWorkouts } from '../utils/stats';
 import { buildBackup, parseBackup, planRestore, summarizeBackup } from './backup';
 
 /** Lists of records merged by id on a restore, with the field they sort by. */
@@ -34,6 +34,7 @@ export function readBackup(text) {
   const summary = summarizeBackup(result.backup, {
     sessionsKey: STORAGE_KEYS.sessions,
     streakOf: (sessions, at) => computeStats(sessions, at).streak,
+    workoutsOf: countWorkouts,
   });
   return { ...result, summary };
 }
@@ -41,7 +42,8 @@ export function readBackup(text) {
 /**
  * Write a checked backup over (replace) or into (merge) what is stored. The
  * caller reloads the app's state from storage afterwards.
- * @returns {{ added: object }}  for a merge, records added per list key
+ * @returns {{ added: object, addedWorkouts: number }}  for a merge, records
+ *   added per list key, and how many workouts the added sessions make
  */
 export async function restoreAppData(backup, mode) {
   const pairs = await AsyncStorage.multiGet(BACKUP_KEYS);
@@ -62,5 +64,8 @@ export async function restoreAppData(backup, mode) {
   }
   if (sets.length) await AsyncStorage.multiSet(sets);
   if (removes.length) await AsyncStorage.multiRemove(removes);
-  return { added };
+  const sessionsKey = STORAGE_KEYS.sessions;
+  const before = Array.isArray(current[sessionsKey]) ? current[sessionsKey] : [];
+  const after = Array.isArray(writes[sessionsKey]) ? writes[sessionsKey] : before;
+  return { added, addedWorkouts: Math.max(0, countWorkouts(after) - countWorkouts(before)) };
 }
