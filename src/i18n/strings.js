@@ -383,6 +383,7 @@ const en = {
   'blocker.sectionRate': 'Earning',
   'blocker.rate': 'Each push-up earns',
   'blocker.ratePerExercise': 'By exercise, one rep earns: {list}',
+  'blocker.ratePerHold': 'Holds earn by the second: {name} {amount} a second.',
   'blocker.timer': 'Countdown on screen',
   'blocker.timerBody': 'A small timer over a blocked app while your time runs.',
   'blocker.keepTitle': 'Keep blocking running',
@@ -412,7 +413,7 @@ const en = {
   'blocker.disclosureBody':
     "To block websites too, Hít Đất AI uses Android's Accessibility Service to see which app is open on your screen. Note that many banking apps refuse to open while any app has it on.",
   'blocker.disclosure1':
-    'It only checks the name of the app in front and, in a browser, the domain of the page. It does not read anything else on the screen, your messages or what you type.',
+    'It only checks the name of the app in front and, in a browser, the domain of the page. It does not read anything else on the screen, your messages or what you type. When your time runs out it may go back, go to the home screen or close a blocked app\'s picture-in-picture window.',
   'blocker.disclosure2': 'Nothing is recorded as history, and nothing leaves your phone.',
   'blocker.disclosure3':
     'You can turn the permission off at any time in Settings › Accessibility, and switch blocking off right here.',
@@ -942,6 +943,7 @@ const vi = {
   'blocker.sectionRate': 'Quy đổi',
   'blocker.rate': 'Mỗi cái hít đất đổi được',
   'blocker.ratePerExercise': 'Theo từng bài, mỗi cái đổi được: {list}',
+  'blocker.ratePerHold': 'Bài giữ tư thế tính theo giây: {name} {amount} mỗi giây.',
   'blocker.timer': 'Đồng hồ đếm ngược',
   'blocker.timerBody': 'Một đồng hồ nhỏ hiện trên ứng dụng bị chặn khi thời gian đang chạy.',
   'blocker.keepTitle': 'Giữ chặn luôn chạy',
@@ -971,7 +973,7 @@ const vi = {
   'blocker.disclosureBody':
     'Để chặn cả trang web, Hít Đất AI dùng dịch vụ Trợ năng (Accessibility) của Android để biết ứng dụng nào đang mở trên màn hình. Lưu ý: nhiều app ngân hàng không cho mở khi có app đang bật Trợ năng.',
   'blocker.disclosure1':
-    'Chỉ kiểm tra tên ứng dụng đang mở và, trong trình duyệt, tên miền của trang. Không đọc gì khác trên màn hình, tin nhắn hay những gì bạn gõ.',
+    'Chỉ kiểm tra tên ứng dụng đang mở và, trong trình duyệt, tên miền của trang. Không đọc gì khác trên màn hình, tin nhắn hay những gì bạn gõ. Khi hết giờ, dịch vụ có thể quay lại, về màn hình chính hoặc đóng cửa sổ hình-trong-hình của ứng dụng bị chặn.',
   'blocker.disclosure2': 'Không lưu lịch sử sử dụng, không gửi gì ra khỏi máy.',
   'blocker.disclosure3':
     'Bạn có thể tắt quyền bất cứ lúc nào trong Cài đặt › Trợ năng, và tắt chặn ngay tại đây.',

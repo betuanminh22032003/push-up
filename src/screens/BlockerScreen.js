@@ -28,10 +28,14 @@ import { Button } from '../components/Button';
 import { Chips, Row, Section, Toggle } from '../components/SettingsRows';
 import { CLASSIC_EXERCISE_IDS, getExercise } from '../exercises/exercises';
 import { useT } from '../i18n/I18nContext';
+import { requestNotificationPermission } from '../notifications/reminders';
 import { useBlocker } from '../state/BlockerContext';
 import { useSettings } from '../state/SettingsContext';
 import { colors, radius, spacing, type } from '../theme/theme';
 import { formatDuration } from '../utils/time';
+
+/** The hold the rate note uses as its example. */
+const PLANK = getExercise('plank');
 
 const KEEP_STEPS = ['blocker.keep1', 'blocker.keep2', 'blocker.keep3', 'blocker.keep4'];
 
@@ -174,9 +178,12 @@ export function BlockerScreen({ onGoWorkout }) {
     }
   };
 
-  const agreeAndOpen = () => {
+  const agreeAndOpen = async () => {
     const permission = asking;
     setAsking(null);
+    // The watcher runs as a foreground service whose notification says
+    // blocking is on; Android 13+ hides it unless notifications are allowed.
+    if (permission !== 'accessibility') await requestNotificationPermission();
     openers[permission]?.();
   };
 
@@ -398,6 +405,11 @@ export function BlockerScreen({ onGoWorkout }) {
                       `${e.icon} ${t(`exercise.${e.id}`)} ${formatPerRep(rate * e.creditWeight, t)}`,
                   ).join(' · '),
                 })}
+                {/* Holds are paid by the second, which the list above cannot show. */}
+                {` ${t('blocker.ratePerHold', {
+                  name: `${PLANK.icon} ${t(`exercise.${PLANK.id}`)}`,
+                  amount: formatPerRep(rate * PLANK.creditWeight, t),
+                })}`}
               </Text>
             </Row>
             <Row title={t('blocker.timer')} body={t('blocker.timerBody')}>

@@ -44,8 +44,12 @@ export function configureNotifications() {
   });
 }
 
-/** @returns {Promise<boolean>} whether notifications may be shown */
-export async function requestReminderPermission() {
+/**
+ * Notifications at all, for the reminder and for the app blocker's
+ * "blocking is on" notification, which Android 13+ hides without it.
+ * @returns {Promise<boolean>} whether notifications may be shown
+ */
+export async function requestNotificationPermission() {
   const Notifications = mod();
   if (!Notifications) return false;
   try {

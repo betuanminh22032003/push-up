@@ -20,7 +20,7 @@ import { shareText } from '../utils/share';
 import {
   cancelDailyReminder,
   remindersSupported,
-  requestReminderPermission,
+  requestNotificationPermission,
 } from '../notifications/reminders';
 import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
@@ -157,7 +157,7 @@ export function SettingsScreen({ onShowOnboarding }) {
         await cancelDailyReminder();
         return;
       }
-      const granted = await requestReminderPermission();
+      const granted = await requestNotificationPermission();
       setReminderDenied(!granted);
       // Scheduling itself happens in the app shell, which re-schedules from
       // settings so the text always matches the current language.
