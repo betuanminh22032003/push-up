@@ -55,6 +55,7 @@ const en = {
   'status.active': 'ACTIVE',
   'status.paused': 'PAUSED',
   'status.rest': 'REST',
+  'status.saving': 'SAVING',
 
   // --- workout copy -------------------------------------------------------
   'workout.free': 'Free workout',
@@ -76,6 +77,7 @@ const en = {
   // --- buttons ------------------------------------------------------------
   'btn.start': 'Start',
   'btn.calibrating': 'Calibrating...',
+  'btn.saving': 'Saving...',
   'btn.pause': 'Pause',
   'btn.resume': 'Resume',
   'btn.done': 'Done',
@@ -177,6 +179,7 @@ const en = {
   // --- confirmations ------------------------------------------------------
   'confirm.discardTitle': 'Discard this workout?',
   'confirm.discardBody': '{reps} reps will not be saved.',
+  'confirm.discardBodyHold': '{reps} seconds held will not be saved.',
   'confirm.keep': 'Keep going',
   'confirm.discard': 'Discard',
   'confirm.deleteTitle': 'Delete workout?',
@@ -528,6 +531,10 @@ const en = {
   'workout.nextExercise': 'Next: {exercise}',
   'workout.programDay': 'Week {week} · Day {day}',
   'workout.summaryProgram': 'Week {week}, day {day} complete',
+  'workout.summaryProgramPartial': 'Week {week}, day {day}: saved, not finished',
+  'notice.saveFailed': 'The workout could not be saved ({reason}).',
+  'share.textProgram': 'I just did {n} exercises, {sets} sets in {time} with Hít Đất AI 💪',
+  'common.secShort': 's',
   'workout.exercisesDone': '{n} exercises',
   'btn.startProgramDay': 'Start week {week} · day {day}',
   'notice.savedHold': 'Saved {reps} seconds in {time}.',
@@ -608,6 +615,7 @@ const vi = {
   'status.active': 'ĐANG TẬP',
   'status.paused': 'TẠM DỪNG',
   'status.rest': 'NGHỈ',
+  'status.saving': 'ĐANG LƯU',
 
   'workout.free': 'Tập tự do',
   'workout.set': 'Set {n}/{total}',
@@ -627,6 +635,7 @@ const vi = {
 
   'btn.start': 'Bắt đầu',
   'btn.calibrating': 'Đang hiệu chỉnh...',
+  'btn.saving': 'Đang lưu...',
   'btn.pause': 'Tạm dừng',
   'btn.resume': 'Tiếp tục',
   'btn.done': 'Xong',
@@ -720,6 +729,7 @@ const vi = {
 
   'confirm.discardTitle': 'Bỏ buổi tập này?',
   'confirm.discardBody': '{reps} cái sẽ không được lưu.',
+  'confirm.discardBodyHold': '{reps} giây giữ tư thế sẽ không được lưu.',
   'confirm.keep': 'Tập tiếp',
   'confirm.discard': 'Bỏ',
   'confirm.deleteTitle': 'Xoá buổi tập?',
@@ -1059,6 +1069,10 @@ const vi = {
   'workout.nextExercise': 'Tiếp theo: {exercise}',
   'workout.programDay': 'Tuần {week} · Ngày {day}',
   'workout.summaryProgram': 'Xong tuần {week}, ngày {day}',
+  'workout.summaryProgramPartial': 'Tuần {week}, ngày {day}: đã lưu, chưa xong',
+  'notice.saveFailed': 'Không lưu được buổi tập ({reason}).',
+  'share.textProgram': 'Tôi vừa tập {n} bài, {sets} set trong {time} với Hít Đất AI 💪',
+  'common.secShort': 's',
   'workout.exercisesDone': '{n} bài',
   'btn.startProgramDay': 'Bắt đầu tuần {week} · ngày {day}',
   'notice.savedHold': 'Đã lưu {reps} giây trong {time}.',

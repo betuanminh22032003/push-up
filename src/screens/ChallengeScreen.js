@@ -27,7 +27,7 @@ import { useBlocker } from '../state/BlockerContext';
 import { useChallenges } from '../state/ChallengesContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, radius, spacing, textGlow, type } from '../theme/theme';
 import { shareText } from '../utils/share';
 import { formatDuration } from '../utils/time';
 
@@ -446,6 +446,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   stageCenter: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  score: { ...type.counter, color: colors.text, textShadow: '0px 2px 12px rgba(0,0,0,0.85)' },
-  clock: { ...type.timer, color: colors.text, marginTop: -spacing.sm, textShadow: '0px 2px 12px rgba(0,0,0,0.85)' },
+  score: { ...type.counter, color: colors.text, ...textGlow(2, 12) },
+  clock: { ...type.timer, color: colors.text, marginTop: -spacing.sm, ...textGlow(2, 12) },
 });

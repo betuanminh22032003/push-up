@@ -7,7 +7,7 @@ import { newlyUnlocked, unlockedAchievements } from '../achievements/achievement
 import { creditFor, earnsTime, formatAmount, hasWayToBlock, isSetUp } from '../blocker/blockerLogic';
 import { Button } from '../components/Button';
 import { CameraSetupGuide } from '../components/CameraSetupGuide';
-import { ExerciseGuideButton, ExerciseGuideSheet, GuideDock } from '../components/ExerciseGuide';
+import { DOCK_W, ExerciseGuideButton, ExerciseGuideSheet, GuideDock } from '../components/ExerciseGuide';
 import { ExerciseLibraryButton } from '../components/ExerciseLibrary';
 import { MiscountModal } from '../components/MiscountModal';
 import { StatTile } from '../components/StatTile';
@@ -33,7 +33,7 @@ import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
 import { createSessionId } from '../storage/sessions';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, radius, spacing, textGlow, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { shareText } from '../utils/share';
 import { formatDuration } from '../utils/time';
@@ -102,11 +102,15 @@ function groupByExercise(sets) {
 const STATUS_COLOR = {
   idle: colors.textDim,
   calibrating: colors.warn,
+  saving: colors.accent,
   countdown: colors.warn,
   active: colors.accent,
   paused: colors.warn,
   rest: colors.textDim,
 };
+
+/** The furthest the stage's content is shrunk to fit a short screen. */
+const MIN_STAGE_SCALE = 0.3;
 
 /** Seconds from the end of a countdown at which each remaining second ticks. */
 const TICK_FROM = 3;
@@ -162,7 +166,15 @@ export function WorkoutScreen({
     completeScheduleDay,
   } = useSessions();
 
-  const [status, setStatus] = useState('idle');
+  // `statusRef` is the status as of the last change, read by handlers that
+  // run between renders: a rep from the camera or a second double tap on Done
+  // must see a set that has just ended as ended.
+  const [status, setStatusState] = useState('idle');
+  const statusRef = useRef('idle');
+  const setStatus = useCallback((next) => {
+    statusRef.current = next;
+    setStatusState(next);
+  }, []);
   const [reps, setReps] = useState(0);
   const [completedSets, setCompletedSets] = useState([]);
   const [restOver, setRestOver] = useState(false);
@@ -206,8 +218,12 @@ export function WorkoutScreen({
     [],
   );
   const stageRoom = stageHeight - spacing.md; // a little air above and below
+  // A stage squeezed to nothing (a short phone, a large font) still scales its
+  // content down as far as it reasonably can, instead of not at all.
   const fitScale =
-    stageRoom > 0 && stageContentHeight > stageRoom ? stageRoom / stageContentHeight : 1;
+    stageHeight > 0 && stageContentHeight > stageRoom
+      ? Math.max(MIN_STAGE_SCALE, Math.max(0, stageRoom) / stageContentHeight)
+      : 1;
 
   // The plan being followed. Adopted from the prop only between workouts, so
   // a plan picked mid-set can never swap the targets under a running set.
@@ -295,7 +311,9 @@ export function WorkoutScreen({
     // Through a schedule day, the way of counting carries over: the camera
     // stays the camera, and without it tapping becomes the stopwatch for a
     // hold and back again, rather than switching the camera on mid-workout.
-    const carried = !planSets || !source
+    // Only from one exercise to the next (the rest between them): a day that
+    // is just being picked starts from each exercise's own choice.
+    const carried = !planSets || !source || status !== 'rest'
       ? null
       : usable.includes(source.id)
         ? source.id
@@ -378,6 +396,9 @@ export function WorkoutScreen({
   }, [closeRest, resetTimer]);
 
   const finishWorkout = useCallback(async () => {
+    // Once only: Done tapped twice, or the last set completing itself while
+    // Done is pressed, must not save (and credit) the workout twice.
+    if (statusRef.current === 'idle' || statusRef.current === 'saving') return;
     closeRest();
     const sets = live.current.sets;
     const totalCount = sets.reduce((sum, s) => sum + s.reps, 0);
@@ -385,7 +406,7 @@ export function WorkoutScreen({
     const restTotal = Math.round(live.current.restSeconds);
     const followed = activePlan;
 
-    setStatus('paused'); // stop counting immediately while the write happens
+    setStatus('saving'); // stop counting, and take every control away, while the write happens
 
     // A workout with no reps is not a workout — persisting it would dirty the
     // history list and the averages without recording anything real.
@@ -410,27 +431,36 @@ export function WorkoutScreen({
     const workoutId = groups.length > 1 ? createSessionId() : undefined;
     const saved = [];
     let earnedSeconds = 0;
-    for (const [i, group] of groups.entries()) {
-      const groupReps = group.sets.reduce((sum, s) => sum + s.reps, 0);
-      if (groupReps === 0) continue;
-      const session = await addSession({
-        totalReps: groupReps,
-        durationSeconds: group.sets.reduce((sum, s) => sum + s.durationSeconds, 0),
-        sourceId: group.sets[0].sourceId,
-        exerciseId: group.exerciseId,
-        sets: group.sets,
-        restSeconds: i === 0 ? restTotal : 0,
-        program:
-          followed?.kind === 'program'
-            ? { level: followed.level, week: followed.week, day: followed.day }
-            : null,
-        workoutId,
-      });
-      saved.push(session);
-      // Credited with the save, so fun time always matches the history: a
-      // discarded workout earns nothing, exactly as it records nothing.
-      // Lighter exercises earn a share of a push-up's rate.
-      earnedSeconds += await creditReps(groupReps, getExercise(group.exerciseId).creditWeight);
+    try {
+      for (const [i, group] of groups.entries()) {
+        const groupReps = group.sets.reduce((sum, s) => sum + s.reps, 0);
+        if (groupReps === 0) continue;
+        const session = await addSession({
+          totalReps: groupReps,
+          durationSeconds: group.sets.reduce((sum, s) => sum + s.durationSeconds, 0),
+          sourceId: group.sets[0].sourceId,
+          exerciseId: group.exerciseId,
+          sets: group.sets,
+          restSeconds: i === 0 ? restTotal : 0,
+          program:
+            followed?.kind === 'program'
+              ? { level: followed.level, week: followed.week, day: followed.day }
+              : null,
+          workoutId,
+        });
+        saved.push(session);
+        // Credited with the save, so fun time always matches the history: a
+        // discarded workout earns nothing, exactly as it records nothing.
+        // Lighter exercises earn a share of a push-up's rate.
+        earnedSeconds += await creditReps(groupReps, getExercise(group.exerciseId).creditWeight);
+      }
+    } catch (e) {
+      // Storage refused the write. What was saved stays saved; the rest is
+      // reported rather than left behind a screen with no way out.
+      resetWorkout();
+      setNotice({ tone: 'warn', text: t('notice.saveFailed', { reason: e?.message || String(e) }) });
+      if (followed) onClearPlan?.();
+      return;
     }
 
     // A schedule day is done once every one of its sets is.
@@ -464,6 +494,7 @@ export function WorkoutScreen({
     const only = groups.length === 1 ? groups[0].exerciseId : null;
     setSummary({
       kind: followed?.kind === 'program' ? 'program' : 'free',
+      dayDone,
       week: followed?.week,
       day: followed?.day,
       exerciseId: only ?? groups[0].exerciseId,
@@ -549,6 +580,7 @@ export function WorkoutScreen({
   }, [closeRest, resetTimer, resetDetector, countdownSeconds, activate]);
 
   const endSet = useCallback(() => {
+    if (statusRef.current !== 'active' && statusRef.current !== 'paused') return;
     const setReps_ = live.current.reps;
     // Done without a single rep means done with the workout.
     if (setReps_ === 0) {
@@ -561,6 +593,7 @@ export function WorkoutScreen({
       { reps: setReps_, durationSeconds, exerciseId: exercise.id, sourceId: source?.id },
     ];
     live.current.sets = done;
+    live.current.reps = 0; // the set is recorded; its reps are in `sets` now
     setCompletedSets(done);
 
     // The last set of a schedule day ends the workout.
@@ -575,6 +608,9 @@ export function WorkoutScreen({
   }, [finishWorkout, readElapsedMs, planSets, doneFeedback, t, exercise.id, source]);
 
   const handleRep = useCallback(() => {
+    // A rep that arrives after the set ended (the camera page stops a beat
+    // later) belongs to no set.
+    if (statusRef.current !== 'active') return;
     const next = live.current.reps + 1;
     live.current.reps = next;
     setReps(next);
@@ -601,7 +637,9 @@ export function WorkoutScreen({
 
   const countdownRemaining = useCountdown({
     seconds: status === 'rest' ? restSeconds : countdownSeconds,
-    active: status === 'countdown' || status === 'rest',
+    // Not while the full guide is open over it: rest and the countdown start
+    // again once it closes, rather than a set beginning unseen behind it.
+    active: (status === 'countdown' || status === 'rest') && !guideSheet,
     runKey: `${status}-${setIndex}`,
     onTick: (left) => {
       if (left <= TICK_FROM) tickFeedback();
@@ -652,7 +690,8 @@ export function WorkoutScreen({
     (andStart) => {
       const wasStart = guide === 'start';
       setGuide(null);
-      if (!settings.setupSeen?.[exercise.id]) {
+      // Only once the camera is opened from it: a card dismissed unread shows again.
+      if (andStart && !settings.setupSeen?.[exercise.id]) {
         updateSettings({ setupSeen: { ...settings.setupSeen, [exercise.id]: true } });
       }
       if (andStart && wasStart) start({ skipGuide: true });
@@ -730,10 +769,13 @@ export function WorkoutScreen({
   }, [controlFeedback, finishWorkout]);
 
   const confirmDiscard = useCallback(() => {
-    const total = live.current.sets.reduce((sum, s) => sum + s.reps, 0) + live.current.reps;
+    const sets = live.current.sets;
+    const total = sets.reduce((sum, s) => sum + s.reps, 0) + live.current.reps;
+    // Seconds, when everything so far is a hold.
+    const allHolds = holdMode && sets.every((s) => isHold(s.exerciseId));
     confirm({
       title: t('confirm.discardTitle'),
-      message: t('confirm.discardBody', { reps: total }),
+      message: t(allHolds ? 'confirm.discardBodyHold' : 'confirm.discardBody', { reps: total }),
       confirmText: t('confirm.discard'),
       cancelText: t('confirm.keep'),
       destructive: true,
@@ -742,7 +784,7 @@ export function WorkoutScreen({
         if (activePlan) onClearPlan?.();
       },
     });
-  }, [t, resetWorkout, activePlan, onClearPlan]);
+  }, [t, resetWorkout, activePlan, onClearPlan, holdMode]);
 
   const selectSource = useCallback(
     (nextSource) => {
@@ -770,6 +812,16 @@ export function WorkoutScreen({
 
   const share = useCallback(() => {
     if (!summary) return;
+    if (summary.exercises > 1) {
+      shareText(
+        t('share.textProgram', {
+          n: summary.exercises,
+          sets: summary.sets,
+          time: formatDuration(summary.durationSeconds),
+        }),
+      );
+      return;
+    }
     let text = t(isHold(summary.exerciseId) ? 'share.textHold' : 'share.text', {
       reps: summary.totalReps,
       time: formatDuration(summary.durationSeconds),
@@ -800,10 +852,14 @@ export function WorkoutScreen({
 
   // --- render --------------------------------------------------------------
   // Only sources this device has that can count this exercise, best first.
+  // The same rule as the automatic pick: a schedule day offers only the ways
+  // of counting that need no setting up between exercises.
   const selectableSources = useMemo(
     () =>
-      exercise.sources.filter((id) => availableSourceIds?.includes(id)).map(getSourceById),
-    [exercise, availableSourceIds],
+      exercise.sources
+        .filter((id) => availableSourceIds?.includes(id) && (!planSets || PROGRAM_SOURCE_IDS.includes(id)))
+        .map(getSourceById),
+    [exercise, availableSourceIds, planSets],
   );
 
   /**
@@ -867,11 +923,20 @@ export function WorkoutScreen({
   const totalSets = planSets ? planSets.length : null;
   // Fun time so far this workout, each set at its own exercise's weight.
   const workoutReps = completedSets.reduce((sum, s) => sum + s.reps, 0) + reps;
-  const workoutCredit =
-    completedSets.reduce(
-      (sum, s) => sum + creditFor(s.reps, blockerRate, getExercise(s.exerciseId).creditWeight),
-      0,
-    ) + creditFor(reps, blockerRate, exercise.creditWeight);
+  // Grouped by exercise and rounded once per group, as the save credits it.
+  const workoutCredit = groupByExercise([
+    ...completedSets,
+    { reps, exerciseId: exercise.id },
+  ]).reduce(
+    (sum, g) =>
+      sum +
+      creditFor(
+        g.sets.reduce((n, x) => n + x.reps, 0),
+        blockerRate,
+        getExercise(g.exerciseId).creditWeight,
+      ),
+    0,
+  );
   // Where to put the phone depends on both. For the one render between an
   // exercise change and its source being picked, the source's own hint.
   const hintKey = supportsSource(exercise.id, source.id)
@@ -899,7 +964,11 @@ export function WorkoutScreen({
       : null;
   const summaryCount = summary && isHold(summary.exerciseId) && summary.exercises === 1;
   // Not with the phone in a pocket (nobody sees it), nor while the camera starts.
-  const showDock = running && status !== 'calibrating' && !pocketLock;
+  const showDock = running && status !== 'calibrating' && status !== 'saving' && !pocketLock;
+  // The open figure sits at the stage's top right: the count moves aside and
+  // gets smaller, so the figure never covers it.
+  const besideDock = showDock && (status === 'rest' ? restDockOpen : dockOpen);
+  const counterStyle = besideDock ? [styles.counter, styles.counterCompact] : styles.counter;
 
 
   return (
@@ -1005,14 +1074,21 @@ export function WorkoutScreen({
         {poseActive ? <VisibilityPill visibility={visibility} /> : null}
 
         <View
-          style={[styles.stageContent, fitScale < 1 && { transform: [{ scale: fitScale }] }]}
+          style={[
+            styles.stageContent,
+            besideDock && styles.stageContentBesideDock,
+            fitScale < 1 && { transform: [{ scale: fitScale }] },
+          ]}
           onLayout={onStageContentLayout}
         >
           {status === 'idle' && summary ? (
             <View style={styles.summary}>
               <Text style={styles.summaryTitle}>
                 {summary.kind === 'program'
-                  ? t('workout.summaryProgram', { week: summary.week, day: summary.day })
+                  ? t(summary.dayDone ? 'workout.summaryProgram' : 'workout.summaryProgramPartial', {
+                      week: summary.week,
+                      day: summary.day,
+                    })
                   : t('workout.summaryTitle')}
               </Text>
               <Text style={styles.summaryReps} allowFontScaling={false}>
@@ -1081,11 +1157,11 @@ export function WorkoutScreen({
                 </Text>
               </View>
 
-              {status === 'calibrating' ? (
-                <ActivityIndicator color={colors.warn} style={styles.spinner} />
+              {status === 'calibrating' || status === 'saving' ? (
+                <ActivityIndicator color={statusColor} style={styles.spinner} />
               ) : status === 'countdown' ? (
                 <>
-                  <Text style={styles.counter} allowFontScaling={false}>
+                  <Text style={counterStyle} allowFontScaling={false}>
                     {countdownRemaining || countdownSeconds}
                   </Text>
                   {planLine ? <Text style={styles.subline}>{planLine}</Text> : null}
@@ -1097,7 +1173,7 @@ export function WorkoutScreen({
                       {t('workout.restOver')}
                     </Text>
                   ) : (
-                    <Text style={styles.counter} allowFontScaling={false}>
+                    <Text style={counterStyle} allowFontScaling={false}>
                       {countdownRemaining}
                     </Text>
                   )}
@@ -1115,7 +1191,7 @@ export function WorkoutScreen({
               ) : (
                 <>
                   <Text
-                    style={styles.counter}
+                    style={counterStyle}
                     allowFontScaling={false}
                     accessibilityLabel={`${reps} ${holdMode ? t('common.secs') : t('common.reps')}`}
                   >
@@ -1184,7 +1260,7 @@ export function WorkoutScreen({
           <Text style={styles.planSets} numberOfLines={2}>
             {activePlan.items
               .map((item) =>
-                `${getExercise(item.exerciseId).icon} ${item.sets}×${item.target}${item.hold ? 's' : ''}`,
+                `${getExercise(item.exerciseId).icon} ${item.sets}×${item.target}${item.hold ? t('common.secShort') : ''}`,
               )
               .join('  ')}
           </Text>
@@ -1240,8 +1316,13 @@ export function WorkoutScreen({
           />
         ) : null}
 
-        {status === 'calibrating' ? (
-          <Button label={t('btn.calibrating')} onPress={() => {}} disabled style={styles.grow} />
+        {status === 'calibrating' || status === 'saving' ? (
+          <Button
+            label={t(status === 'saving' ? 'btn.saving' : 'btn.calibrating')}
+            onPress={() => {}}
+            disabled
+            style={styles.grow}
+          />
         ) : null}
 
         {status === 'countdown' ? (
@@ -1392,7 +1473,7 @@ const styles = StyleSheet.create({
     color: colors.accent,
     marginTop: spacing.sm,
     textAlign: 'center',
-    textShadow: '0px 1px 8px rgba(0,0,0,0.85)',
+    ...textGlow(1, 8),
   },
 
   statsRow: { flexDirection: 'row' },
@@ -1410,6 +1491,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   stageContent: { alignSelf: 'stretch', alignItems: 'center' },
+  stageContentBesideDock: { paddingRight: DOCK_W + spacing.sm * 2 },
   stageArmed: { borderColor: colors.border, backgroundColor: colors.surface },
   stageNear: { borderColor: colors.accent, backgroundColor: colors.accentDim },
 
@@ -1431,15 +1513,16 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: spacing.sm,
     // Keeps the count readable over a bright camera frame.
-    textShadow: '0px 2px 12px rgba(0,0,0,0.85)',
+    ...textGlow(2, 12),
   },
+  counterCompact: { fontSize: 96, letterSpacing: -4 },
   restOver: {
     fontSize: 40,
     fontWeight: '300',
     color: colors.text,
     marginTop: spacing.xl,
     marginBottom: spacing.lg,
-    textShadow: '0px 2px 12px rgba(0,0,0,0.85)',
+    ...textGlow(2, 12),
   },
   timer: { ...type.timer, color: colors.textDim, marginTop: -spacing.sm },
   unit: { ...type.label, color: colors.textDim, marginTop: -spacing.md, marginBottom: spacing.sm },
@@ -1448,7 +1531,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: spacing.sm,
     textAlign: 'center',
-    textShadow: '0px 1px 8px rgba(0,0,0,0.85)',
+    ...textGlow(1, 8),
   },
   stageHint: {
     ...type.label,
