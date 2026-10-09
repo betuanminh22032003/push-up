@@ -209,6 +209,7 @@ export function SettingsScreen({ onShowOnboarding }) {
             value={settings.dailyGoal}
             onDown={() => shiftGoal(-GOAL_STEP)}
             onUp={() => shiftGoal(GOAL_STEP)}
+            label={t('settings.dailyGoal')}
             downDisabled={settings.dailyGoal <= GOAL_MIN}
             upDisabled={settings.dailyGoal >= GOAL_MAX}
           />
@@ -277,6 +278,16 @@ export function SettingsScreen({ onShowOnboarding }) {
                 label={t('settings.reminderToggle')}
               />
             </Row>
+            {reminderDenied ? (
+              <Pressable
+                onPress={() => Linking.openSettings().catch(() => {})}
+                hitSlop={8}
+                accessibilityRole="button"
+                style={styles.inlineLink}
+              >
+                <Text style={styles.inlineLinkText}>{t('settings.openAppSettings')}</Text>
+              </Pressable>
+            ) : null}
             {settings.reminderEnabled ? (
               <Row title={t('settings.reminderTime')} stacked>
                 <View style={styles.clockRow}>
@@ -284,12 +295,14 @@ export function SettingsScreen({ onShowOnboarding }) {
                     value={formatClock(settings.reminderHour, 0).slice(0, 2)}
                     onDown={() => shiftHour(-1)}
                     onUp={() => shiftHour(1)}
+                    label={t('settings.hour')}
                   />
                   <Text style={styles.clockColon}>:</Text>
                   <Stepper
                     value={formatClock(0, settings.reminderMinute).slice(3)}
                     onDown={() => shiftMinute(-15)}
                     onUp={() => shiftMinute(15)}
+                    label={t('settings.minute')}
                   />
                 </View>
               </Row>
@@ -401,14 +414,15 @@ function BackupPreview({ preview, onMerge, onReplace, onCancel }) {
   );
 }
 
-function Stepper({ value, onDown, onUp, downDisabled, upDisabled }) {
+function Stepper({ value, onDown, onUp, label, downDisabled, upDisabled }) {
+  const { t } = useI18n();
   return (
     <View style={styles.stepper}>
       <Pressable
         onPress={onDown}
         disabled={downDisabled}
         accessibilityRole="button"
-        accessibilityLabel="−"
+        accessibilityLabel={`${label}: ${t('settings.less')}, ${value}`}
         style={({ pressed }) => [styles.stepBtn, (pressed || downDisabled) && styles.pressed]}
       >
         <Text style={styles.stepGlyph}>−</Text>
@@ -418,7 +432,7 @@ function Stepper({ value, onDown, onUp, downDisabled, upDisabled }) {
         onPress={onUp}
         disabled={upDisabled}
         accessibilityRole="button"
-        accessibilityLabel="+"
+        accessibilityLabel={`${label}: ${t('settings.more')}, ${value}`}
         style={({ pressed }) => [styles.stepBtn, (pressed || upDisabled) && styles.pressed]}
       >
         <Text style={styles.stepGlyph}>+</Text>
@@ -483,4 +497,6 @@ const styles = StyleSheet.create({
   },
   clockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   clockColon: { fontSize: 20, color: colors.textDim, marginHorizontal: spacing.xs },
+  inlineLink: { alignSelf: 'flex-start', paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  inlineLinkText: { fontSize: 14, fontWeight: '600', color: colors.accent },
 });

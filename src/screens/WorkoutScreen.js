@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -197,6 +197,8 @@ export function WorkoutScreen({
   // The full guide, opened from the figure; a set running then waits for it.
   const [guideSheet, setGuideSheet] = useState(false);
   const resumeAfterGuideRef = useRef(false);
+  // The camera stage is covered by a problem or a permission request.
+  const [poseBlocked, setPoseBlocked] = useState(false);
 
   const [source, setSource] = useState(null);
   const [sourceConfig, setSourceConfig] = useState(null);
@@ -748,6 +750,15 @@ export function WorkoutScreen({
     resumeAfterGuideRef.current = false;
   }, [status, resume]);
 
+  // Leaving the app mid-set pauses it: the clock would run on with nobody
+  // counting, and Android takes the camera away from an app in the background.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' && statusRef.current === 'active') pause();
+    });
+    return () => sub.remove();
+  }, [pause]);
+
   // Each rest shows the next exercise again, even if the last one was hidden.
   useEffect(() => {
     if (status === 'rest') setRestDockOpen(true);
@@ -1069,6 +1080,12 @@ export function WorkoutScreen({
             onRep={() => handleRepRef.current?.()}
             onFrame={handlePoseFrame}
             onVisibility={setVisibility}
+            // Each set starts the analyser afresh and waits to see the whole
+            // body again: bending to the phone to press Done must not leave a
+            // half rep for the next set, nor an open gate after a walk away.
+            resetKey={setIndex}
+            regateKey={setIndex}
+            onBlockingChange={setPoseBlocked}
           />
         ) : null}
         {poseActive ? <VisibilityPill visibility={visibility} /> : null}
@@ -1076,6 +1093,9 @@ export function WorkoutScreen({
         <View
           style={[
             styles.stageContent,
+            // The camera's own cover (no permission, an error with Try again)
+            // must be read and pressed, not hidden under the counter.
+            poseActive && poseBlocked && styles.hidden,
             besideDock && styles.stageContentBesideDock,
             fitScale < 1 && { transform: [{ scale: fitScale }] },
           ]}
@@ -1492,6 +1512,7 @@ const styles = StyleSheet.create({
   },
   stageContent: { alignSelf: 'stretch', alignItems: 'center' },
   stageContentBesideDock: { paddingRight: DOCK_W + spacing.sm * 2 },
+  hidden: { display: 'none' },
   stageArmed: { borderColor: colors.border, backgroundColor: colors.surface },
   stageNear: { borderColor: colors.accent, backgroundColor: colors.accentDim },
 

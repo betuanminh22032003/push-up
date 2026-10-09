@@ -622,6 +622,31 @@ await check('en and vi define exactly the same keys', () => {
   assert.deepEqual(vi, en);
 });
 
+await check('no key is defined twice, where the later one would silently win', () => {
+  const src = read('src/i18n/strings.js');
+  for (const name of ['en', 'vi']) {
+    const block = src.slice(src.indexOf(`const ${name} = {`), src.indexOf('\n};', src.indexOf(`const ${name} = {`)));
+    const keys = [...block.matchAll(/^ {2}'([^']+)':/gm)].map((m) => m[1]);
+    const dupes = keys.filter((k, i) => keys.indexOf(k) !== i);
+    assert.deepEqual(dupes, [], `${name} in strings.js`);
+  }
+  // The other tables are spread over the base one: an overlap would hide a string.
+  const { EXERCISE_STRINGS, FEATURE_STRINGS, GUIDE_STRINGS } = strings;
+  for (const lang of LANGUAGES) {
+    const seen = new Map();
+    for (const [table, keys] of [
+      ['exerciseStrings', Object.keys(EXERCISE_STRINGS[lang])],
+      ['featureStrings', Object.keys(FEATURE_STRINGS[lang])],
+      ['guideStrings', Object.keys(GUIDE_STRINGS[lang])],
+    ]) {
+      for (const key of keys) {
+        assert.ok(!seen.has(key), `${lang} ${key} in ${seen.get(key)} and ${table}`);
+        seen.set(key, table);
+      }
+    }
+  }
+});
+
 await check('placeholders match between languages', () => {
   const params = (text) => (text.match(/\{[a-z]+\}/g) || []).sort();
   for (const key of Object.keys(STRINGS.en)) {

@@ -38,6 +38,22 @@ export const CHALLENGE_DURATIONS = [30, 60, 120];
 export const NAME_MAX = 24;
 export const SCORE_MAX = 9999;
 
+/**
+ * Scores no real run reaches, refused so a tampered link cannot set a target
+ * nobody can beat: a hold is capped at 600 seconds (HOLD_CAP_SECONDS in
+ * ./challenge.js), and the briskest exercise counts about four reps a second.
+ */
+export const HOLD_SCORE_MAX = 600;
+export const REPS_PER_SECOND_MAX = 5;
+
+/** The highest score a link may carry for this format. */
+export function scoreCap(format, durationSeconds) {
+  return Math.min(SCORE_MAX, format === 'hold' ? HOLD_SCORE_MAX : durationSeconds * REPS_PER_SECOND_MAX);
+}
+
+/** 2100-01-01 in Unix seconds: later than any real challenge, early enough to be a valid Date. */
+const TIME_MAX = 4102444800;
+
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 function utf8Bytes(text) {
@@ -133,7 +149,8 @@ export function validatePayload(p) {
   if (p.f !== 'reps' && p.f !== 'hold') return null;
   if (p.f === 'reps' ? !CHALLENGE_DURATIONS.includes(p.d) : p.d !== 0) return null;
   if (!Number.isInteger(p.s) || p.s < 0 || p.s > SCORE_MAX) return null;
-  if (!Number.isInteger(p.t) || p.t < 0) return null;
+  if (p.s > scoreCap(p.f, p.d)) return null;
+  if (!Number.isInteger(p.t) || p.t < 0 || p.t > TIME_MAX) return null;
   if (typeof p.i !== 'string' || !ID_PATTERN.test(p.i)) return null;
   if (p.n !== undefined && typeof p.n !== 'string') return null;
   if (p.r !== undefined && (typeof p.r !== 'string' || !ID_PATTERN.test(p.r))) return null;
@@ -161,7 +178,7 @@ export function encodeChallenge(c) {
     f: c.format,
     d: c.format === 'hold' ? 0 : c.durationSeconds,
     n: cleanName(c.name),
-    s: Math.max(0, Math.min(SCORE_MAX, Math.round(c.score))),
+    s: Math.max(0, Math.min(scoreCap(c.format, c.durationSeconds), Math.round(c.score))),
     t: Math.floor(c.at / 1000),
     i: c.id,
   };

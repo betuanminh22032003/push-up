@@ -63,13 +63,14 @@ export async function requestReminderPermission() {
  * calling this on every launch is safe and keeps the text in the current
  * language.
  */
-export async function scheduleDailyReminder({ hour, minute, title, body }) {
+export async function scheduleDailyReminder({ hour, minute, title, body, channelName = 'Reminders' }) {
   const Notifications = mod();
   if (!Notifications) return false;
   try {
     if (Platform.OS === 'android') {
+      // The name shows in the system's notification settings: in the app's language.
       await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: 'Reminders',
+        name: channelName,
         importance: Notifications.AndroidImportance.DEFAULT,
       });
     }

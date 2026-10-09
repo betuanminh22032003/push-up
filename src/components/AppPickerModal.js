@@ -86,7 +86,7 @@ export function AppPickerModal({ visible, apps, loading, selected, onSave, onClo
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <SafeAreaView style={styles.screen}>
         <View style={styles.top}>
-          <Text style={styles.title}>{t('picker.title')}</Text>
+          <Text style={styles.title}>{t('appPicker.title')}</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
             <Text style={styles.cancel}>{t('common.cancel')}</Text>
           </Pressable>
