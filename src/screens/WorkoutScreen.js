@@ -905,7 +905,7 @@ export function WorkoutScreen({
       <View style={styles.header}>
         <View>
           <Text style={styles.brand}>HÍT ĐẤT AI</Text>
-          <Text style={styles.brandSub}>PUSH-UP</Text>
+          <Text style={styles.brandSub}>{t('brand.tagline')}</Text>
         </View>
         {planSets ? (
           <Text style={styles.headerPlan}>
@@ -1367,7 +1367,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
   },
   brand: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: 2 },
-  brandSub: { ...type.label, color: colors.textFaint, marginTop: -2 },
+  brandSub: { ...type.label, color: colors.textFaint, marginTop: -2, textTransform: 'uppercase' },
   headerPlan: { ...type.label, color: colors.accent },
   funChip: {
     paddingVertical: 6,

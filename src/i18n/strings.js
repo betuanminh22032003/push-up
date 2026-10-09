@@ -23,6 +23,7 @@ const en = {
   'tab.progress': 'Progress',
   'tab.blocker': 'Blocker',
   'tab.settings': 'Settings',
+  'brand.tagline': 'AI workout counter',
 
   // --- common -------------------------------------------------------------
   'common.cancel': 'Cancel',
@@ -578,6 +579,7 @@ const vi = {
   'tab.progress': 'Tiến độ',
   'tab.blocker': 'Chặn app',
   'tab.settings': 'Cài đặt',
+  'brand.tagline': 'Đếm bài tập bằng AI',
 
   'common.cancel': 'Huỷ',
   'common.close': 'Đóng',
