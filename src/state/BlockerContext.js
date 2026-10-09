@@ -181,11 +181,15 @@ export function BlockerProvider({ children }) {
     async (reps, weight = 1) => {
       if (!NativeBlocker) return 0;
       try {
-        if (!earnsTime(await read())) return 0;
+        const before = await read();
+        if (!earnsTime(before)) return 0;
         const seconds = creditFor(reps, rate, weight);
         if (seconds <= 0) return 0;
         const next = accept(normalizeState(await NativeBlocker.addCredit(seconds)));
-        return next.reachable ? seconds : 0;
+        if (!next.reachable) return 0;
+        // What the balance really grew by: it is capped (24 h), and a credit
+        // past the cap must not be announced as earned.
+        return Math.max(0, Math.min(seconds, Math.round(next.balanceSeconds - before.balanceSeconds)));
       } catch {
         return 0;
       }

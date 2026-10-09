@@ -180,6 +180,20 @@ export function nextProgramDay(completed = {}) {
   return null;
 }
 
+/**
+ * A run of the schedule folded into the badge counts it earned, for when it
+ * is restarted or followed by the next level (src/storage/sessions.js,
+ * loadScheduleEarned). `earned` is the earlier runs' counts, or null.
+ */
+export function addEarnedRun(earned, completed = {}) {
+  const prev = earned || {};
+  return {
+    days: (prev.days || 0) + countCompleted(completed),
+    weeks: (prev.weeks || 0) + weeksCompleted(completed),
+    complete: (prev.complete || 0) + (isProgramComplete(completed) ? 1 : 0),
+  };
+}
+
 export function isProgramComplete(completed = {}) {
   return nextProgramDay(completed) === null;
 }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_blocker_service_label">Hít Đất AI app blocker</string>
-  <string name="app_blocker_service_description">Blocks the apps you choose in Hít Đất AI until you earn time with push-ups, and counts that time down while you use them. It only checks which app is open. It does not read what is on the screen or what you type, and nothing leaves your phone.</string>
+  <string name="app_blocker_service_description">Blocks the apps and websites you choose in Hít Đất AI until you earn time with a workout, and counts that time down while you use them. It checks which app is open and, in a browser, the domain of the page; it does not read anything else on the screen, your messages or what you type, and nothing leaves your phone. When your time runs out it may go back, go to the home screen or close a blocked app\'s picture-in-picture window.</string>
 </resources>

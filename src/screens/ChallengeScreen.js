@@ -27,7 +27,7 @@ import { useBlocker } from '../state/BlockerContext';
 import { useChallenges } from '../state/ChallengesContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
-import { colors, radius, spacing, type } from '../theme/theme';
+import { colors, radius, spacing, textGlow, type } from '../theme/theme';
 import { shareText } from '../utils/share';
 import { formatDuration } from '../utils/time';
 
@@ -55,14 +55,30 @@ const TICK_MS = 200;
  */
 export function ChallengeScreen({ request, onClose }) {
   const visible = !!request;
+  // Back goes through the flow's own close, which stops and scores a run in
+  // progress instead of throwing it away.
+  const closeRef = useRef(null);
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={() => onClose?.()} statusBarTranslucent>
-      {visible ? <ChallengeFlow request={request} onClose={onClose} /> : null}
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={() => (closeRef.current ? closeRef.current() : onClose?.())}
+      statusBarTranslucent
+    >
+      {visible ? (
+        <ChallengeFlow
+          // A different challenge is a different flow: nothing carries over.
+          key={request.challenge?.id ?? `new-${request.exerciseId ?? ''}`}
+          request={request}
+          onClose={onClose}
+          closeRef={closeRef}
+        />
+      ) : null}
     </Modal>
   );
 }
 
-function ChallengeFlow({ request, onClose }) {
+function ChallengeFlow({ request, onClose, closeRef }) {
   const { t, speechTag } = useI18n();
   const insets = useSafeAreaInsets();
   const { settings, updateSettings } = useSettings();
@@ -92,6 +108,7 @@ function ChallengeFlow({ request, onClose }) {
   const [started, setStarted] = useState(false);
   const [live, setLive] = useState({ score: 0, remaining: null, elapsed: 0 });
   const [resetKey, setResetKey] = useState(0);
+  const [poseBlocked, setPoseBlocked] = useState(false);
   const [result, setResult] = useState(null);
   const [nameDraft, setNameDraft] = useState(settings.challengeName ?? '');
 
@@ -231,6 +248,13 @@ function ChallengeFlow({ request, onClose }) {
     }
     onClose?.();
   }, [phase, stop, onClose]);
+  useEffect(() => {
+    if (!closeRef) return undefined;
+    closeRef.current = handleClose;
+    return () => {
+      closeRef.current = null;
+    };
+  }, [closeRef, handleClose]);
 
   // --- render ---------------------------------------------------------------------
   const exerciseName = t(`exercise.${exerciseId}`);
@@ -273,7 +297,7 @@ function ChallengeFlow({ request, onClose }) {
           <Text style={styles.inviteExercise}>{playable ? exerciseName : received.exerciseId}</Text>
           <Text style={styles.inviteScore}>{received.score}</Text>
           <Text style={styles.inviteGoal}>{goalText(received)}</Text>
-          <Text style={styles.inviteDate}>{new Date(received.at).toLocaleDateString()}</Text>
+          <Text style={styles.inviteDate}>{new Date(received.at).toLocaleDateString(speechTag)}</Text>
         </View>
         {playable ? (
           <>
@@ -313,9 +337,10 @@ function ChallengeFlow({ request, onClose }) {
             onRep={onRep}
             onVisibility={setVisibility}
             resetKey={resetKey}
+            onBlockingChange={setPoseBlocked}
           />
           <VisibilityPill visibility={visibility} />
-          <View style={styles.stageCenter} pointerEvents="none">
+          <View style={[styles.stageCenter, poseBlocked && styles.hidden]} pointerEvents="none">
             {started ? (
               <>
                 <Text style={styles.score} allowFontScaling={false}>{live.score}</Text>
@@ -446,6 +471,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   stageCenter: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  score: { ...type.counter, color: colors.text, textShadow: '0px 2px 12px rgba(0,0,0,0.85)' },
-  clock: { ...type.timer, color: colors.text, marginTop: -spacing.sm, textShadow: '0px 2px 12px rgba(0,0,0,0.85)' },
+  score: { ...type.counter, color: colors.text, ...textGlow(2, 12) },
+  clock: { ...type.timer, color: colors.text, marginTop: -spacing.sm, ...textGlow(2, 12) },
+  hidden: { display: 'none' },
 });

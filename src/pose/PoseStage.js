@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useCameraPermissions } from 'expo-camera';
 import { WebView } from 'react-native-webview';
 
@@ -41,7 +41,39 @@ import { colors, radius, spacing, type } from '../theme/theme';
  * `resetKey`: changing it restarts the analyser's count (a challenge starts
  * from zero when its clock does). `regateKey`: changing it closes the gate
  * again, so the whole body has to be seen once more.
+ *
+ * When something goes wrong (no camera, no network, the page or its renderer
+ * dies) the stage says so in the app's language and offers Try again, which
+ * loads the page afresh; a page that never gets going is given up on after a
+ * while rather than spinning forever. `onBlockingChange(true)` while such a
+ * cover is up, so the screen can clear its own figures off it.
+ *
+ * In the background Android takes the camera away from the app, so the page
+ * is unloaded there and loaded again on the way back.
  */
+
+/** Only the published page may drive the counter. */
+const PAGE_ORIGIN = (POSE_PAGE_URL.match(/^https:\/\/[^/]+/) || [''])[0];
+
+/** How long the page may take to show the camera, then to load the model. */
+const CAMERA_TIMEOUT_MS = 25 * 1000;
+const MODEL_TIMEOUT_MS = 90 * 1000;
+
+/** The page's error codes (pages from protocol 4 on send one) and what to tell the user. */
+const ERROR_KEYS = {
+  denied: 'pose.err.denied',
+  busy: 'pose.err.busy',
+  cameraEnded: 'pose.err.cameraEnded',
+  load: 'pose.err.load',
+  inference: 'pose.err.inference',
+};
+
+function failureFromPage(message) {
+  if (ERROR_KEYS[message.code]) return { key: ERROR_KEYS[message.code] };
+  // A page from before error codes: the one message worth telling apart.
+  if (message.message === 'camera track ended') return { key: ERROR_KEYS.cameraEnded };
+  return { key: 'pose.err.generic' };
+}
 export function PoseStage({
   active,
   paused,
@@ -51,14 +83,22 @@ export function PoseStage({
   resetKey,
   regateKey,
   exercise = 'pushup',
+  onBlockingChange,
 }) {
   const t = useT();
   const webviewRef = useRef(null);
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
   const [ready, setReady] = useState(false);
   const [cameraUp, setCameraUp] = useState(false);
+  // { key, params } of what went wrong, shown in the app's language.
   const [failure, setFailure] = useState(null);
   const [outdated, setOutdated] = useState(false);
+  // Bumped to load the page again from scratch (Try again).
+  const [reloadKey, setReloadKey] = useState(0);
+  // After the page's renderer died, it runs the model on the CPU: the GPU
+  // delegate takes the whole renderer down on some Android GPUs.
+  const [forceCpu, setForceCpu] = useState(false);
+  const [foreground, setForeground] = useState(AppState.currentState !== 'background');
 
   const onRepRef = useRef(onRep);
   const onFrameRef = useRef(onFrame);
@@ -73,22 +113,62 @@ export function PoseStage({
   // exercise asked for. A ref, so the message handler never goes stale.
   const exerciseRef = useRef(exercise);
   const countingRef = useRef(false);
-  useEffect(() => {
-    // A new exercise is a new page load (the URL changes): start over.
-    exerciseRef.current = exercise;
+  // A page load starts from nothing: a new exercise (the URL changes), Try
+  // again, or coming back from the background.
+  const resetPage = useCallback(() => {
     countingRef.current = false;
     setReady(false);
     setCameraUp(false);
     setFailure(null);
     setOutdated(false);
-  }, [exercise]);
-
-  // Ask once, when the camera is first needed rather than at app launch.
+  }, []);
   useEffect(() => {
-    if (active && permission && !permission.granted && permission.canAskAgain) {
+    exerciseRef.current = exercise;
+    resetPage();
+  }, [exercise, resetPage]);
+
+  const retry = useCallback(() => {
+    resetPage();
+    setReloadKey((k) => k + 1);
+  }, [resetPage]);
+
+  // Ask once, when the camera is first needed rather than at app launch. A
+  // refusal is answered from the cover's button, not by asking again at once.
+  const askedRef = useRef(false);
+  useEffect(() => {
+    if (active && permission && !permission.granted && permission.canAskAgain && !askedRef.current) {
+      askedRef.current = true;
       requestPermission();
     }
   }, [active, permission, requestPermission]);
+
+  // Background: unload the page (the camera is gone anyway); foreground: load
+  // it again, and re-read the permission, which may have been granted in Settings.
+  useEffect(() => {
+    if (!active) return undefined;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        setForeground(false);
+        resetPage();
+      } else if (state === 'active') {
+        setForeground(true);
+        getPermission?.().catch?.(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, [active, resetPage, getPermission]);
+
+  // A page that never gets the camera going, or never loads the model, is
+  // given up on with a reason and Try again, instead of spinning forever.
+  const mounted = active && foreground && !!permission?.granted;
+  useEffect(() => {
+    if (!mounted || ready || failure || outdated) return undefined;
+    const id = setTimeout(
+      () => setFailure({ key: 'pose.err.timeout' }),
+      cameraUp ? MODEL_TIMEOUT_MS : CAMERA_TIMEOUT_MS,
+    );
+    return () => clearTimeout(id);
+  }, [mounted, ready, failure, outdated, cameraUp, reloadKey]);
 
   // Pausing is a message, not an unmount: tearing the WebView down would drop
   // the camera and re-download the model on every resume.
@@ -112,6 +192,8 @@ export function PoseStage({
   }, [resetKey, regateKey, ready]);
 
   const handleMessage = useCallback((event) => {
+    const from = event.nativeEvent.url;
+    if (PAGE_ORIGIN && typeof from === 'string' && !from.startsWith(PAGE_ORIGIN)) return;
     let message;
     try {
       message = JSON.parse(event.nativeEvent.data);
@@ -154,12 +236,23 @@ export function PoseStage({
         // would wait for a visibility message that never comes.
         if (!message.gate) onVisibilityRef.current?.({ ready: true, missing: [], progress: 1, legacy: true });
       } else if (message.phase === 'error') {
-        setFailure(message.message || 'Pose detection failed.');
+        countingRef.current = false;
+        setFailure(failureFromPage(message));
       }
     }
   }, []);
 
-  if (!active) return null;
+  // Not tied to `foreground`: Android reports a system dialog (the camera
+  // permission one included) as the background, and the cover stays the
+  // cover while it is up.
+  const blocking =
+    active && (!permission || !permission.granted || !!failure || outdated || (!ready && !cameraUp));
+  useEffect(() => {
+    onBlockingChange?.(blocking);
+  }, [blocking, onBlockingChange]);
+  useEffect(() => () => onBlockingChange?.(false), [onBlockingChange]);
+
+  if (!active || !foreground) return null;
 
   // useCameraPermissions resolves asynchronously and is null on first render.
   // The WebView must not mount during that window: it would call getUserMedia
@@ -172,44 +265,69 @@ export function PoseStage({
   }
 
   if (!permission.granted) {
+    // Asked already, or not allowed to ask: the button asks again where
+    // Android still lets it, and opens the app's settings where it does not.
     return (
       <Overlay
         title={t('pose.needCamera')}
         body={permission.canAskAgain ? t('pose.allowCamera') : t('pose.denied')}
+        action={
+          permission.canAskAgain
+            ? { label: t('pose.allowButton'), onPress: requestPermission }
+            : { label: t('pose.openSettings'), onPress: () => Linking.openSettings().catch(() => {}) }
+        }
       />
     );
   }
 
-  const problem = failure || (outdated ? t('pose.outdated') : null);
+  const problem = failure ? t(failure.key, failure.params) : outdated ? t('pose.outdated') : null;
+  const query = `?exercise=${encodeURIComponent(exercise)}${forceCpu ? '&delegate=cpu' : ''}`;
 
   return (
     <View style={styles.wrap}>
       <WebView
+        key={`${exercise}-${reloadKey}`}
         ref={webviewRef}
-        source={{ uri: `${POSE_PAGE_URL}?exercise=${encodeURIComponent(exercise)}` }}
+        source={{ uri: `${POSE_PAGE_URL}${query}` }}
         onMessage={handleMessage}
-        onError={({ nativeEvent }) =>
-          setFailure(t('pose.loadFailed', { reason: nativeEvent.description }))
-        }
+        onError={() => setFailure({ key: 'pose.loadFailed' })}
         onHttpError={({ nativeEvent }) =>
-          setFailure(t('pose.httpFailed', { code: nativeEvent.statusCode }))
+          setFailure({ key: 'pose.httpFailed', params: { code: nativeEvent.statusCode } })
         }
-        // Without this a crashed or killed page just leaves a black box.
-        onRenderProcessGone={() => setFailure(t('pose.viewCrashed'))}
+        // The library's own error view is English and sits under the cover.
+        renderError={() => <View style={styles.webview} />}
+        // A dead renderer cannot be used again: the view is replaced. The
+        // first time it is tried again on the CPU at once, since the GPU
+        // delegate is the usual cause; after that it is up to the user.
+        onRenderProcessGone={() => {
+          resetPage();
+          if (!forceCpu) {
+            setForceCpu(true);
+            setReloadKey((k) => k + 1);
+          } else {
+            setFailure({ key: 'pose.viewCrashed' });
+          }
+        }}
+        // Only the detector page loads here; any other navigation is refused.
+        originWhitelist={[PAGE_ORIGIN || 'https://*']}
+        onShouldStartLoadWithRequest={({ url }) => !PAGE_ORIGIN || url.startsWith(PAGE_ORIGIN)}
         // Live camera in a WebView needs all four of these.
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         mediaCapturePermissionGrantType="grant"
         javaScriptEnabled
         domStorageEnabled
-        originWhitelist={['https://*']}
-        allowsProtectedMedia
         style={styles.webview}
         containerStyle={styles.webview}
       />
 
       {problem ? (
-        <Overlay title={t('pose.problem')} body={problem} tone="error" />
+        <Overlay
+          title={t('pose.problem')}
+          body={problem}
+          tone="error"
+          action={outdated ? null : { label: t('pose.retry'), onPress: retry }}
+        />
       ) : ready ? null : cameraUp ? (
         <Banner text={t('pose.loadingModel')} />
       ) : (
@@ -229,12 +347,22 @@ function Banner({ text }) {
   );
 }
 
-function Overlay({ title, body, tone, loading }) {
+function Overlay({ title, body, tone, loading, action }) {
   return (
     <View style={styles.overlay}>
       {loading ? <ActivityIndicator color={colors.accent} style={styles.spinner} /> : null}
       <Text style={[styles.title, tone === 'error' && styles.titleError]}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
+      {action ? (
+        <Pressable
+          onPress={action.onPress}
+          hitSlop={8}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+        >
+          <Text style={styles.actionText}>{action.label}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -284,4 +412,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     lineHeight: 21,
   },
+  action: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  actionPressed: { opacity: 0.7 },
+  actionText: { fontSize: 15, fontWeight: '700', color: colors.accent },
 });

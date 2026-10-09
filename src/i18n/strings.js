@@ -23,6 +23,7 @@ const en = {
   'tab.progress': 'Progress',
   'tab.blocker': 'Blocker',
   'tab.settings': 'Settings',
+  'brand.tagline': 'AI workout counter',
 
   // --- common -------------------------------------------------------------
   'common.cancel': 'Cancel',
@@ -54,6 +55,7 @@ const en = {
   'status.active': 'ACTIVE',
   'status.paused': 'PAUSED',
   'status.rest': 'REST',
+  'status.saving': 'SAVING',
 
   // --- workout copy -------------------------------------------------------
   'workout.free': 'Free workout',
@@ -61,6 +63,7 @@ const en = {
   'workout.target': 'Target {n}',
   'workout.maxSet': 'At least {n}, then as many as you can',
   'workout.setDone': 'Set {n} done · {reps} reps',
+  'workout.setDone.one': 'Set {n} done · {reps} rep',
   'workout.restOver': 'Rest over',
   'workout.nextIn': 'Next set starts in',
   'workout.restHint': 'Take a breath. Next set when the timer ends or when you are ready.',
@@ -75,6 +78,7 @@ const en = {
   // --- buttons ------------------------------------------------------------
   'btn.start': 'Start',
   'btn.calibrating': 'Calibrating...',
+  'btn.saving': 'Saving...',
   'btn.pause': 'Pause',
   'btn.resume': 'Resume',
   'btn.done': 'Done',
@@ -157,15 +161,26 @@ const en = {
     'Camera access was denied. Enable it for this app in your device settings, or switch to another mode, such as Tap.',
   'pose.loadingModel': 'Loading the model… you can frame yourself now',
   'pose.problem': 'Detector problem',
-  'pose.loadFailed': 'Could not load the detector ({reason}). AI camera needs an internet connection the first time.',
+  'pose.loadFailed': 'Could not load the detector. The AI camera needs an internet connection.',
   'pose.httpFailed': 'Detector page returned HTTP {code}. Try again in a moment.',
-  'pose.viewCrashed': 'The camera view stopped unexpectedly. End the set and start again.',
+  'pose.viewCrashed': 'The camera view stopped unexpectedly. Try again, or count another way, such as Tap.',
+  'pose.retry': 'Try again',
+  'pose.allowButton': 'Allow camera',
+  'pose.openSettings': 'Open settings',
+  'pose.err.denied': 'The camera was refused. Allow it for this app in the phone settings, then try again.',
+  'pose.err.busy': 'Another app is using the camera. Close it, then try again.',
+  'pose.err.cameraEnded': 'The camera stopped. Try again to start it.',
+  'pose.err.load': 'Could not download the detector. The AI camera needs an internet connection.',
+  'pose.err.inference': 'The detector keeps failing on this phone. Try again, or count another way, such as Tap.',
+  'pose.err.timeout': 'The camera is taking too long to start. Check the internet connection, then try again.',
+  'pose.err.generic': 'The detector stopped. Try again, or count another way, such as Tap.',
   'pose.outdated':
     'The online detector is still an older version that only counts push-ups. Switch to another mode, such as Tap, for now; it updates by itself once the new version is published.',
 
   // --- notices ------------------------------------------------------------
   'notice.nothingSaved': 'No reps counted, nothing saved.',
   'notice.saved': 'Saved {reps} reps in {time}.',
+  'notice.saved.one': 'Saved {reps} rep in {time}.',
   'notice.goalReached': 'Daily goal reached! 🎯',
   'notice.achievement': 'Achievement unlocked: {name}',
   'notice.calibrated': 'Calibrated at {lux} lx.',
@@ -176,17 +191,23 @@ const en = {
   // --- confirmations ------------------------------------------------------
   'confirm.discardTitle': 'Discard this workout?',
   'confirm.discardBody': '{reps} reps will not be saved.',
+  'confirm.discardBody.one': '{reps} rep will not be saved.',
+  'confirm.discardBodyHold': '{reps} seconds held will not be saved.',
+  'confirm.discardBodyHold.one': '{reps} second held will not be saved.',
   'confirm.keep': 'Keep going',
   'confirm.discard': 'Discard',
   'confirm.deleteTitle': 'Delete workout?',
   'confirm.deleteBody': '{reps} reps will be removed from your history.',
+  'confirm.deleteBody.one': '{reps} rep will be removed from your history.',
+  'confirm.deleteBodyHold': '{reps} seconds held will be removed from your history.',
+  'confirm.deleteBodyHold.one': '{reps} second held will be removed from your history.',
   'confirm.delete': 'Delete',
   'confirm.clearTitle': 'Delete all data?',
   'confirm.clearBody':
     'Every workout, your program progress, your settings and your fun time will be permanently deleted.',
   'confirm.deleteAll': 'Delete all',
   'confirm.restartTitle': 'Restart the program?',
-  'confirm.restartBody': 'Schedule progress is reset. Your workout history is kept.',
+  'confirm.restartBody': 'Schedule progress is reset. Your workout history and badges are kept.',
   'confirm.restart': 'Restart',
 
   // --- share --------------------------------------------------------------
@@ -204,6 +225,7 @@ const en = {
   'program.done': 'Done',
   'program.complete': 'Program complete! 🎓',
   'program.completeBody': 'Move up a level, or run the four weeks again.',
+  'program.completeBodyTop': 'That was the top level. Run the four weeks again with Restart program below.',
   'program.restart': 'Restart program',
 
   // --- progress -----------------------------------------------------------
@@ -220,7 +242,8 @@ const en = {
   'progress.history': 'History',
   'progress.empty': 'No workouts yet',
   'progress.emptyBody': 'Finish a workout and it will show up here.',
-  'progress.weekTotal': '{reps} reps this week',
+  'progress.weekTotal': '{reps} reps in 7 days',
+  'progress.weekTotal.one': '{reps} rep in 7 days',
   'progress.filter': 'Show exercise',
   'progress.filterAll': 'All',
 
@@ -231,6 +254,7 @@ const en = {
   'session.sets': '{n} sets',
   'session.programDay': 'Day {day}',
   'session.delete': 'Delete workout of {reps} reps',
+  'session.delete.one': 'Delete workout of {reps} rep',
 
   // --- weekdays (Sunday first, as Date#getDay) ----------------------------
   'weekday.0': 'Sun',
@@ -368,6 +392,7 @@ const en = {
   'blocker.sectionRate': 'Earning',
   'blocker.rate': 'Each push-up earns',
   'blocker.ratePerExercise': 'By exercise, one rep earns: {list}',
+  'blocker.ratePerHold': 'Holds earn by the second: {name} {amount} a second.',
   'blocker.timer': 'Countdown on screen',
   'blocker.timerBody': 'A small timer over a blocked app while your time runs.',
   'blocker.keepTitle': 'Keep blocking running',
@@ -397,7 +422,7 @@ const en = {
   'blocker.disclosureBody':
     "To block websites too, Hít Đất AI uses Android's Accessibility Service to see which app is open on your screen. Note that many banking apps refuse to open while any app has it on.",
   'blocker.disclosure1':
-    'It only checks the name of the app in front and, in a browser, the domain of the page. It does not read anything else on the screen, your messages or what you type.',
+    'It only checks the name of the app in front and, in a browser, the domain of the page. It does not read anything else on the screen, your messages or what you type. When your time runs out it may go back, go to the home screen or close a blocked app\'s picture-in-picture window.',
   'blocker.disclosure2': 'Nothing is recorded as history, and nothing leaves your phone.',
   'blocker.disclosure3':
     'You can turn the permission off at any time in Settings › Accessibility, and switch blocking off right here.',
@@ -418,7 +443,7 @@ const en = {
     'On the next screen, find "Hít Đất AI" and switch it on, then come back here for the other permission.',
 
   // --- app picker ---------------------------------------------------------
-  'picker.title': 'Choose apps to block',
+  'appPicker.title': 'Choose apps to block',
   'picker.search': 'Search apps',
   'picker.loading': 'Loading your apps…',
   'picker.suggested': 'Suggested',
@@ -448,7 +473,7 @@ const en = {
   'settings.data': 'Data',
   'settings.about': 'About',
   'settings.dailyGoal': 'Daily goal',
-  'settings.dailyGoalBody': 'Reps per day. Every exercise and every counting mode counts toward it.',
+  'settings.dailyGoalBody': 'Reps per day, from every exercise and counting mode. Holds such as the plank are timed, so they do not count toward it.',
   'settings.countdown': 'Countdown before a set',
   'settings.countdownBody': 'Time to get into position after pressing Start.',
   'settings.rest': 'Rest between sets',
@@ -461,6 +486,11 @@ const en = {
   'settings.reminderBody': 'A notification at the same time every day.',
   'settings.reminderTime': 'Time',
   'settings.reminderDenied': 'Notifications are blocked for this app. Enable them in system settings.',
+  'settings.openAppSettings': 'Open app settings',
+  'settings.hour': 'Hour',
+  'settings.minute': 'Minute',
+  'settings.less': 'less',
+  'settings.more': 'more',
   'settings.reminderWeb': 'Reminders are only available in the mobile app.',
   'settings.reminderExpoGo': 'Reminders are not available in Expo Go on Android. Use a development build or the store version.',
   'settings.language': 'Language',
@@ -469,15 +499,16 @@ const en = {
   'settings.langVi': 'Tiếng Việt',
   'settings.howItWorks': 'How it works',
   'settings.clearAll': 'Delete all data',
-  'settings.clearAllBody': 'Workouts, program progress, settings and fun time.',
+  'settings.clearAllBody': 'Workouts, schedule progress, challenges, settings, fun time and the error log.',
   'settings.privacy': 'Privacy policy',
   'settings.privacyNote': 'Everything stays on your phone. No account, no ads, no tracking.',
   'settings.version': 'Version {version}',
   'settings.sourceCode': 'Source code',
 
   // --- reminder notification ----------------------------------------------
-  'reminder.title': 'Time for push-ups 💪',
+  'reminder.title': 'Time to work out 💪',
   'reminder.body': 'Keep your streak alive. One set is enough.',
+  'reminder.channel': 'Workout reminders',
 
   // --- onboarding ---------------------------------------------------------
   'onboarding.title': 'Welcome to Hít Đất AI',
@@ -526,14 +557,20 @@ const en = {
   'workout.nextExercise': 'Next: {exercise}',
   'workout.programDay': 'Week {week} · Day {day}',
   'workout.summaryProgram': 'Week {week}, day {day} complete',
+  'workout.summaryProgramPartial': 'Week {week}, day {day}: saved, not finished',
+  'notice.saveFailed': 'The workout could not be saved ({reason}).',
+  'share.textProgram': 'I just did {n} exercises, {sets} sets in {time} with Hít Đất AI 💪',
+  'common.secShort': 's',
   'workout.exercisesDone': '{n} exercises',
   'btn.startProgramDay': 'Start week {week} · day {day}',
   'notice.savedHold': 'Saved {reps} seconds in {time}.',
+  'notice.savedHold.one': 'Saved {reps} second in {time}.',
   'notice.savedProgram': 'Saved {n} exercises in {time}.',
   'share.textHold': 'I just did {reps} {exercise} with Hít Đất AI 💪',
   'progress.weekTotalHold': '{reps}s held this week',
   'session.scheduleDay': 'W{week} · D{day}',
   'session.deleteHold': 'Delete workout of {reps} seconds',
+  'session.deleteHold.one': 'Delete workout of {reps} second',
   'program.chooseLevel': 'Choose your level',
   'program.level.beginner': 'Beginner',
   'program.level.intermediate': 'Intermediate',
@@ -543,6 +580,7 @@ const en = {
   'program.levelBody.advanced': 'Harder variations and more reps, 3 sets of each, 40 s of rest.',
   'program.start': 'Start the schedule',
   'program.weekProgress': '{done}/{total} workouts this week',
+  'program.weekDone': '{done}/{total} done',
   'program.overall': '{done} of {total} workouts',
   'program.focus.push': 'Push · chest & triceps',
   'program.focus.legs': 'Legs & glutes',
@@ -578,6 +616,7 @@ const vi = {
   'tab.progress': 'Tiến độ',
   'tab.blocker': 'Chặn app',
   'tab.settings': 'Cài đặt',
+  'brand.tagline': 'Đếm bài tập bằng AI',
 
   'common.cancel': 'Huỷ',
   'common.close': 'Đóng',
@@ -605,6 +644,7 @@ const vi = {
   'status.active': 'ĐANG TẬP',
   'status.paused': 'TẠM DỪNG',
   'status.rest': 'NGHỈ',
+  'status.saving': 'ĐANG LƯU',
 
   'workout.free': 'Tập tự do',
   'workout.set': 'Set {n}/{total}',
@@ -624,6 +664,7 @@ const vi = {
 
   'btn.start': 'Bắt đầu',
   'btn.calibrating': 'Đang hiệu chỉnh...',
+  'btn.saving': 'Đang lưu...',
   'btn.pause': 'Tạm dừng',
   'btn.resume': 'Tiếp tục',
   'btn.done': 'Xong',
@@ -700,9 +741,19 @@ const vi = {
     'Quyền camera đã bị từ chối. Bật lại trong cài đặt của máy, hoặc chuyển sang chế độ khác, ví dụ Chạm.',
   'pose.loadingModel': 'Đang tải mô hình… bạn có thể vào khung hình',
   'pose.problem': 'Lỗi nhận diện',
-  'pose.loadFailed': 'Không tải được bộ nhận diện ({reason}). Camera AI cần internet ở lần đầu.',
+  'pose.loadFailed': 'Không tải được bộ nhận diện. Camera AI cần kết nối internet.',
   'pose.httpFailed': 'Trang nhận diện trả về HTTP {code}. Thử lại sau ít phút.',
-  'pose.viewCrashed': 'Khung camera bị dừng đột ngột. Hãy kết thúc hiệp và bắt đầu lại.',
+  'pose.viewCrashed': 'Khung camera bị dừng đột ngột. Hãy thử lại, hoặc đếm cách khác, ví dụ Chạm.',
+  'pose.retry': 'Thử lại',
+  'pose.allowButton': 'Cho phép camera',
+  'pose.openSettings': 'Mở cài đặt',
+  'pose.err.denied': 'Camera bị từ chối. Hãy cho phép camera cho ứng dụng này trong cài đặt điện thoại, rồi thử lại.',
+  'pose.err.busy': 'Một ứng dụng khác đang dùng camera. Hãy đóng nó, rồi thử lại.',
+  'pose.err.cameraEnded': 'Camera đã dừng. Bấm Thử lại để bật lại.',
+  'pose.err.load': 'Không tải được bộ nhận diện. Camera AI cần kết nối internet.',
+  'pose.err.inference': 'Bộ nhận diện liên tục lỗi trên máy này. Hãy thử lại, hoặc đếm cách khác, ví dụ Chạm.',
+  'pose.err.timeout': 'Camera khởi động quá lâu. Hãy kiểm tra kết nối internet, rồi thử lại.',
+  'pose.err.generic': 'Bộ nhận diện đã dừng. Hãy thử lại, hoặc đếm cách khác, ví dụ Chạm.',
   'pose.outdated':
     'Trang nhận diện trực tuyến vẫn là bản cũ, chỉ đếm được hít đất. Tạm thời hãy chuyển sang chế độ khác, ví dụ Chạm; trang sẽ tự cập nhật khi bản mới được phát hành.',
 
@@ -717,17 +768,19 @@ const vi = {
 
   'confirm.discardTitle': 'Bỏ buổi tập này?',
   'confirm.discardBody': '{reps} cái sẽ không được lưu.',
+  'confirm.discardBodyHold': '{reps} giây giữ tư thế sẽ không được lưu.',
   'confirm.keep': 'Tập tiếp',
   'confirm.discard': 'Bỏ',
   'confirm.deleteTitle': 'Xoá buổi tập?',
   'confirm.deleteBody': '{reps} cái sẽ bị xoá khỏi lịch sử.',
+  'confirm.deleteBodyHold': '{reps} giây giữ tư thế sẽ bị xoá khỏi lịch sử.',
   'confirm.delete': 'Xoá',
   'confirm.clearTitle': 'Xoá toàn bộ dữ liệu?',
   'confirm.clearBody':
     'Toàn bộ lịch sử, tiến độ chương trình, cài đặt và thời gian giải trí sẽ bị xoá vĩnh viễn.',
   'confirm.deleteAll': 'Xoá tất cả',
   'confirm.restartTitle': 'Bắt đầu lại chương trình?',
-  'confirm.restartBody': 'Tiến độ ngày sẽ được đặt lại. Lịch sử tập vẫn giữ nguyên.',
+  'confirm.restartBody': 'Tiến độ lịch tập sẽ được đặt lại. Lịch sử tập và thành tích vẫn giữ nguyên.',
   'confirm.restart': 'Bắt đầu lại',
 
   'share.text': 'Tôi vừa tập {reps} cái {exercise} trong {time} với Hít Đất AI 💪',
@@ -743,6 +796,7 @@ const vi = {
   'program.done': 'Xong',
   'program.complete': 'Hoàn thành chương trình! 🎓',
   'program.completeBody': 'Lên cấp tiếp theo, hoặc tập lại bốn tuần.',
+  'program.completeBodyTop': 'Đây là cấp cao nhất. Tập lại bốn tuần bằng nút Bắt đầu lại bên dưới.',
   'program.restart': 'Bắt đầu lại',
 
   'progress.title': 'Tiến độ',
@@ -758,7 +812,7 @@ const vi = {
   'progress.history': 'Lịch sử',
   'progress.empty': 'Chưa có buổi tập nào',
   'progress.emptyBody': 'Tập xong một buổi, nó sẽ hiện ở đây.',
-  'progress.weekTotal': '{reps} cái tuần này',
+  'progress.weekTotal': '{reps} cái trong 7 ngày',
   'progress.filter': 'Lọc theo bài tập',
   'progress.filterAll': 'Tất cả',
 
@@ -902,6 +956,7 @@ const vi = {
   'blocker.sectionRate': 'Quy đổi',
   'blocker.rate': 'Mỗi cái hít đất đổi được',
   'blocker.ratePerExercise': 'Theo từng bài, mỗi cái đổi được: {list}',
+  'blocker.ratePerHold': 'Bài giữ tư thế tính theo giây: {name} {amount} mỗi giây.',
   'blocker.timer': 'Đồng hồ đếm ngược',
   'blocker.timerBody': 'Một đồng hồ nhỏ hiện trên ứng dụng bị chặn khi thời gian đang chạy.',
   'blocker.keepTitle': 'Giữ chặn luôn chạy',
@@ -931,7 +986,7 @@ const vi = {
   'blocker.disclosureBody':
     'Để chặn cả trang web, Hít Đất AI dùng dịch vụ Trợ năng (Accessibility) của Android để biết ứng dụng nào đang mở trên màn hình. Lưu ý: nhiều app ngân hàng không cho mở khi có app đang bật Trợ năng.',
   'blocker.disclosure1':
-    'Chỉ kiểm tra tên ứng dụng đang mở và, trong trình duyệt, tên miền của trang. Không đọc gì khác trên màn hình, tin nhắn hay những gì bạn gõ.',
+    'Chỉ kiểm tra tên ứng dụng đang mở và, trong trình duyệt, tên miền của trang. Không đọc gì khác trên màn hình, tin nhắn hay những gì bạn gõ. Khi hết giờ, dịch vụ có thể quay lại, về màn hình chính hoặc đóng cửa sổ hình-trong-hình của ứng dụng bị chặn.',
   'blocker.disclosure2': 'Không lưu lịch sử sử dụng, không gửi gì ra khỏi máy.',
   'blocker.disclosure3':
     'Bạn có thể tắt quyền bất cứ lúc nào trong Cài đặt › Trợ năng, và tắt chặn ngay tại đây.',
@@ -951,7 +1006,7 @@ const vi = {
   'blocker.usageDisclosureSteps':
     'Ở màn hình tiếp theo, tìm "Hít Đất AI" và bật lên, rồi quay lại đây để cấp quyền còn lại.',
 
-  'picker.title': 'Chọn ứng dụng cần chặn',
+  'appPicker.title': 'Chọn ứng dụng cần chặn',
   'picker.search': 'Tìm ứng dụng',
   'picker.loading': 'Đang tải danh sách ứng dụng…',
   'picker.suggested': 'Gợi ý',
@@ -980,7 +1035,7 @@ const vi = {
   'settings.data': 'Dữ liệu',
   'settings.about': 'Giới thiệu',
   'settings.dailyGoal': 'Mục tiêu mỗi ngày',
-  'settings.dailyGoalBody': 'Số cái mỗi ngày. Mọi bài tập và mọi chế độ đếm đều tính vào.',
+  'settings.dailyGoalBody': 'Số cái mỗi ngày, từ mọi bài tập và mọi chế độ đếm. Bài giữ tư thế như plank tính bằng giây nên không cộng vào.',
   'settings.countdown': 'Đếm ngược trước set',
   'settings.countdownBody': 'Thời gian để vào tư thế sau khi bấm Bắt đầu.',
   'settings.rest': 'Nghỉ giữa các set',
@@ -993,6 +1048,11 @@ const vi = {
   'settings.reminderBody': 'Một thông báo vào cùng giờ mỗi ngày.',
   'settings.reminderTime': 'Giờ nhắc',
   'settings.reminderDenied': 'Thông báo đang bị chặn cho ứng dụng này. Bật lại trong cài đặt hệ thống.',
+  'settings.openAppSettings': 'Mở cài đặt ứng dụng',
+  'settings.hour': 'Giờ',
+  'settings.minute': 'Phút',
+  'settings.less': 'giảm',
+  'settings.more': 'tăng',
   'settings.reminderWeb': 'Nhắc tập chỉ có trên ứng dụng di động.',
   'settings.reminderExpoGo': 'Nhắc tập không chạy trong Expo Go trên Android. Hãy dùng bản development build hoặc bản trên cửa hàng.',
   'settings.language': 'Ngôn ngữ',
@@ -1001,14 +1061,15 @@ const vi = {
   'settings.langVi': 'Tiếng Việt',
   'settings.howItWorks': 'Hướng dẫn sử dụng',
   'settings.clearAll': 'Xoá toàn bộ dữ liệu',
-  'settings.clearAllBody': 'Lịch sử, tiến độ chương trình, cài đặt và thời gian giải trí.',
+  'settings.clearAllBody': 'Lịch sử, tiến độ lịch tập, thách đấu, cài đặt, thời gian giải trí và nhật ký lỗi.',
   'settings.privacy': 'Chính sách quyền riêng tư',
   'settings.privacyNote': 'Mọi dữ liệu ở trên máy bạn. Không tài khoản, không quảng cáo, không theo dõi.',
   'settings.version': 'Phiên bản {version}',
   'settings.sourceCode': 'Mã nguồn',
 
-  'reminder.title': 'Đến giờ hít đất 💪',
+  'reminder.title': 'Đến giờ tập rồi 💪',
   'reminder.body': 'Giữ chuỗi ngày của bạn. Một set là đủ.',
+  'reminder.channel': 'Nhắc tập',
 
   'onboarding.title': 'Chào mừng đến Hít Đất AI',
   'onboarding.s1.title': 'Đếm không cần chạm',
@@ -1055,6 +1116,10 @@ const vi = {
   'workout.nextExercise': 'Tiếp theo: {exercise}',
   'workout.programDay': 'Tuần {week} · Ngày {day}',
   'workout.summaryProgram': 'Xong tuần {week}, ngày {day}',
+  'workout.summaryProgramPartial': 'Tuần {week}, ngày {day}: đã lưu, chưa xong',
+  'notice.saveFailed': 'Không lưu được buổi tập ({reason}).',
+  'share.textProgram': 'Tôi vừa tập {n} bài, {sets} set trong {time} với Hít Đất AI 💪',
+  'common.secShort': 's',
   'workout.exercisesDone': '{n} bài',
   'btn.startProgramDay': 'Bắt đầu tuần {week} · ngày {day}',
   'notice.savedHold': 'Đã lưu {reps} giây trong {time}.',
@@ -1072,6 +1137,7 @@ const vi = {
   'program.levelBody.advanced': 'Biến thể khó hơn, nhiều lần hơn, mỗi bài 3 set, nghỉ 40 giây.',
   'program.start': 'Bắt đầu lịch tập',
   'program.weekProgress': '{done}/{total} buổi tuần này',
+  'program.weekDone': 'Xong {done}/{total}',
   'program.overall': '{done}/{total} buổi',
   'program.focus.push': 'Đẩy · ngực & tay sau',
   'program.focus.legs': 'Chân & mông',
@@ -1097,7 +1163,7 @@ const vi = {
   'ach.explorer_25.body': 'Tập 25 bài khác nhau',
   'ach.hold_300.title': 'Vững vàng',
   'ach.hold_300.body': 'Tổng cộng 5 phút giữ tư thế',
-  'ach.program_week.title': 'Trọn tuần',
+  'ach.program_week.title': 'Xong tuần tập',
   'ach.program_week.body': 'Hoàn thành mọi buổi của một tuần',
 };
 
@@ -1125,6 +1191,10 @@ export function resolveLanguage(setting, deviceLanguageCodes = []) {
 export function translate(language, key, params) {
   const table = STRINGS[language] || STRINGS.en;
   let text = table[key] ?? STRINGS.en[key] ?? key;
+  // A count of one takes the `.one` form where the language has one
+  // ("1 rep", not "1 reps"); Vietnamese nouns do not change, so it has none.
+  const count = params?.reps ?? params?.n;
+  if (Number(count) === 1 && table[`${key}.one`]) text = table[`${key}.one`];
   if (params) {
     for (const [name, value] of Object.entries(params)) {
       text = text.split(`{${name}}`).join(String(value));

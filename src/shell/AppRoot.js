@@ -8,7 +8,7 @@ import { decodeChallenge, extractChallengeToken } from '../challenge/codec';
 import { TabBar } from '../components/TabBar';
 import { Toast } from '../components/Toast';
 import { useT } from '../i18n/I18nContext';
-import { configureNotifications, scheduleDailyReminder } from '../notifications/reminders';
+import { cancelDailyReminder, configureNotifications, scheduleDailyReminder } from '../notifications/reminders';
 import { BlockerScreen } from '../screens/BlockerScreen';
 import { ChallengeScreen } from '../screens/ChallengeScreen';
 import { OnboardingModal } from '../screens/OnboardingModal';
@@ -44,7 +44,12 @@ export function AppRoot() {
   const [tab, setTab] = useState('workout');
   const [plan, setPlan] = useState(null);
   const [workoutBusy, setWorkoutBusy] = useState(false);
+  // { id, text }: the id keeps two toasts with the same text apart.
   const [toasts, setToasts] = useState([]);
+  const toastId = useRef(0);
+  const pushToasts = useCallback((texts) => {
+    setToasts((prev) => [...prev, ...texts.map((text) => ({ id: (toastId.current += 1), text }))]);
+  }, []);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const workoutControls = useRef(null);
   // The challenge sheet: null, { mode: 'new', exerciseId } or { mode: 'received', challenge }.
@@ -70,14 +75,21 @@ export function AppRoot() {
   }, [settings.onboardingDone, updateSettings]);
 
   // --- reminder: re-schedule from settings so time and language stay current --
+  // Cancelled whenever settings say off, not only by the toggle: a restored
+  // backup can switch it off too.
   const { reminderEnabled, reminderHour, reminderMinute } = settings;
   useEffect(() => {
-    if (!settingsLoaded || !reminderEnabled) return;
+    if (!settingsLoaded) return;
+    if (!reminderEnabled) {
+      cancelDailyReminder();
+      return;
+    }
     scheduleDailyReminder({
       hour: reminderHour,
       minute: reminderMinute,
       title: t('reminder.title'),
       body: t('reminder.body'),
+      channelName: t('reminder.channel'),
     });
   }, [settingsLoaded, reminderEnabled, reminderHour, reminderMinute, t]);
 
@@ -87,33 +99,47 @@ export function AppRoot() {
   }, [earnSignal]);
 
   // --- challenge links: hitdat://challenge?c=..., or #c=... on the web build ------
-  const linkingUrl = Linking.useLinkingURL();
-  const handledToken = useRef(null);
-  useEffect(() => {
-    const token = extractChallengeToken(linkingUrl);
-    if (!token || token === handledToken.current) return;
-    handledToken.current = token;
+  const handleLink = (url) => {
+    const token = extractChallengeToken(url);
+    if (!token) return;
     const decoded = decodeChallenge(token);
     if (decoded.ok) {
       setPendingChallenge({ mode: 'received', challenge: decoded.challenge });
     } else {
-      setToasts((prev) => [...prev, t('challenge.badLink')]);
+      pushToasts([t('challenge.badLink')]);
     }
     // On the web the link lives in the address bar; drop it so a reload does
     // not open the same challenge again.
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.history?.replaceState) {
       window.history.replaceState(null, '', window.location.pathname);
     }
-  }, [linkingUrl, t]);
+  };
+  const handleLinkRef = useRef(handleLink);
+  handleLinkRef.current = handleLink;
+  useEffect(() => {
+    // The link the app was opened with, once: cleared after reading, so the
+    // error screen's Try again (which remounts this) does not open it again.
+    const initial = Linking.getLinkingURL();
+    Linking.clearInitialURL();
+    if (initial) handleLinkRef.current(initial);
+    // Every later link, the same one tapped again after "Later" included.
+    // Android also keeps each of these as the "initial" link; cleared too.
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      Linking.clearInitialURL();
+      handleLinkRef.current(url);
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     // After first-run onboarding, too: a friend's link is often how someone
     // first opens the app, and two sheets at once would fight for the screen.
-    if (pendingChallenge && ready && !workoutBusy && !onboardingOpen && settings.onboardingDone) {
+    // One sheet at a time: a second link waits until the open one is closed.
+    if (pendingChallenge && !challenge && ready && !workoutBusy && !onboardingOpen && settings.onboardingDone) {
       setChallenge(pendingChallenge);
       setPendingChallenge(null);
     }
-  }, [pendingChallenge, ready, workoutBusy, onboardingOpen, settings.onboardingDone]);
+  }, [pendingChallenge, challenge, ready, workoutBusy, onboardingOpen, settings.onboardingDone]);
 
   const openChallenge = useCallback((exerciseId) => setChallenge({ mode: 'new', exerciseId }), []);
   const closeChallenge = useCallback(() => setChallenge(null), []);
@@ -151,9 +177,7 @@ export function AppRoot() {
 
   const handleStatus = useCallback((status) => setWorkoutBusy(status !== 'idle'), []);
 
-  const celebrate = useCallback((messages) => {
-    setToasts((prev) => [...prev, ...messages]);
-  }, []);
+  const celebrate = useCallback((messages) => pushToasts(messages), [pushToasts]);
   const popToast = useCallback(() => setToasts((prev) => prev.slice(1)), []);
 
   const tabs = TAB_IDS.map((id) => ({ id, icon: TAB_ICONS[id], label: t(`tab.${id}`) }));
@@ -190,7 +214,7 @@ export function AppRoot() {
 
       {workoutBusy ? null : <TabBar tabs={tabs} activeId={tab} onSelect={setTab} />}
 
-      <Toast message={toasts[0] ?? null} onHide={popToast} />
+      <Toast message={toasts[0]?.text ?? null} id={toasts[0]?.id} onHide={popToast} />
       <OnboardingModal visible={onboardingOpen} onClose={closeOnboarding} />
       <ChallengeScreen request={challenge} onClose={closeChallenge} />
     </View>

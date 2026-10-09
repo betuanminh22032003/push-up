@@ -27,14 +27,19 @@ export async function shareTextFile(name, text, { mimeType = 'application/json',
 }
 
 /**
- * @returns {Promise<{name: string, text: string} | null>}  null when cancelled
+ * @param {object} [options]
+ *   maxBytes  a larger file is not read at all: { name, text: null, tooLarge: true }
+ * @returns {Promise<{name: string, text: string|null, tooLarge?: boolean} | null>}  null when cancelled
  */
-export async function pickTextFile() {
+export async function pickTextFile({ maxBytes = Infinity } = {}) {
   // Any type: Android providers label .json files every way from
   // application/json to application/octet-stream, and a filter would hide them.
   const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
   if (result.canceled || !result.assets?.length) return null;
   const asset = result.assets[0];
-  const text = await new File(asset.uri).text();
-  return { name: asset.name, text };
+  const file = new File(asset.uri);
+  // Checked before reading: a video picked by mistake would not fit in memory as text.
+  const size = Number.isFinite(asset.size) ? asset.size : file.size;
+  if (size > maxBytes) return { name: asset.name, text: null, tooLarge: true };
+  return { name: asset.name, text: await file.text() };
 }

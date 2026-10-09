@@ -237,6 +237,63 @@ await check('malformed records are dropped, valid ones kept', async () => {
   assert.equal(all[0].id, 'good');
 });
 
+await check('broken sets from a hand-edited backup are cleaned, never thrown on', async () => {
+  store.__mem.set(
+    'pupg:sessions:v1',
+    JSON.stringify([
+      { id: 'a', timestamp: 9, totalReps: 5, durationSeconds: 9, sets: [null, { reps: 5 }] },
+      { id: 'b', timestamp: 8, totalReps: 9, durationSeconds: 9, sets: [{ reps: 4 }, { reps: 5.2 }, 'x'] },
+      { id: 'c', timestamp: 7, totalReps: 3, durationSeconds: 9, sets: 'nope' },
+    ]),
+  );
+  const all = await store.loadSessions();
+  assert.deepEqual(all.map((s) => s.id), ['a', 'b', 'c']);
+  assert.equal(all[0].sets, undefined, 'one real set is stored without sets');
+  assert.deepEqual(all[1].sets.map((x) => x.reps), [4, 5]);
+  assert.equal(all[2].sets, undefined);
+  assert.doesNotThrow(() => computeStats(all, NOW));
+});
+
+await check('negative counts and dates past what a Date holds are refused', () => {
+  const base = { id: 'x', timestamp: 5, totalReps: 3, durationSeconds: 9 };
+  assert.ok(store.isValidSession(base));
+  assert.ok(!store.isValidSession({ ...base, totalReps: -1 }));
+  assert.ok(!store.isValidSession({ ...base, durationSeconds: -1 }));
+  assert.ok(!store.isValidSession({ ...base, timestamp: 9e15 }));
+  assert.ok(!store.isValidSession({ ...base, timestamp: 0 }));
+});
+
+await check('a history that does not parse is kept aside before a save starts a new one', async () => {
+  store.__mem.set('pupg:sessions:v1', '{not json');
+  await store.saveSession({ totalReps: 2, durationSeconds: 5 });
+  assert.equal(store.__mem.get('pupg:unreadable:v1'), '{not json');
+  assert.equal((await store.loadSessions()).length, 1);
+  store.__mem.delete('pupg:unreadable:v1');
+});
+
+await check('a failed read aborts the save instead of writing over the history', async () => {
+  const before = store.__mem.get('pupg:sessions:v1');
+  const realGet = store.__mem.get.bind(store.__mem);
+  store.__mem.get = (k) => {
+    if (k === 'pupg:sessions:v1') throw new Error('Row too big to fit into CursorWindow');
+    return realGet(k);
+  };
+  try {
+    await assert.rejects(store.saveSession({ totalReps: 2, durationSeconds: 5 }));
+    await assert.rejects(store.deleteSession('anything'));
+  } finally {
+    store.__mem.get = realGet;
+  }
+  assert.equal(store.__mem.get('pupg:sessions:v1'), before);
+});
+
+await check('sessions saved by one workout share its workoutId', async () => {
+  const { session: a } = await store.saveSession({ totalReps: 2, durationSeconds: 5, workoutId: 'w1' });
+  const { session: b } = await store.saveSession({ totalReps: 2, durationSeconds: 5 });
+  assert.equal(a.workoutId, 'w1');
+  assert.equal(b.workoutId, undefined);
+});
+
 await check('records from before exercises load beside tagged ones', async () => {
   store.__mem.set(
     'pupg:sessions:v1',

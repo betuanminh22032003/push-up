@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_blocker_service_label">Chặn ứng dụng của Hít Đất AI</string>
-  <string name="app_blocker_service_description">Chặn các ứng dụng bạn chọn trong Hít Đất AI cho tới khi bạn hít đất để đổi thời gian, và đếm ngược thời gian đó khi bạn dùng chúng. Dịch vụ chỉ kiểm tra ứng dụng nào đang mở, không đọc nội dung màn hình hay những gì bạn gõ, và không gửi gì ra khỏi máy.</string>
+  <string name="app_blocker_service_description">Chặn các ứng dụng và trang web bạn chọn trong Hít Đất AI cho tới khi bạn tập để đổi thời gian, và đếm ngược thời gian đó khi bạn dùng chúng. Dịch vụ kiểm tra ứng dụng nào đang mở và, trong trình duyệt, tên miền của trang; không đọc gì khác trên màn hình, tin nhắn hay những gì bạn gõ, và không gửi gì ra khỏi máy. Khi hết giờ, dịch vụ có thể quay lại, về màn hình chính hoặc đóng cửa sổ hình-trong-hình của ứng dụng bị chặn.</string>
 </resources>

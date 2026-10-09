@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { exportAppData, readBackup, restoreAppData } from '../backup/appData';
-import { backupFileName } from '../backup/backup';
+import { MAX_BACKUP_BYTES, backupFileName } from '../backup/backup';
 import { pickTextFile, shareTextFile } from '../backup/files';
 import { cleanName } from '../challenge/codec';
 import { Button } from '../components/Button';
@@ -14,13 +14,12 @@ import { appInfo, deviceInfo } from '../diagnostics/device';
 import { loadErrors } from '../diagnostics/errorLog';
 import { formatReport } from '../diagnostics/report';
 import { useI18n } from '../i18n/I18nContext';
-import { STORAGE_KEYS } from '../storage/sessions';
 import { useChallenges } from '../state/ChallengesContext';
 import { shareText } from '../utils/share';
 import {
   cancelDailyReminder,
   remindersSupported,
-  requestReminderPermission,
+  requestNotificationPermission,
 } from '../notifications/reminders';
 import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
@@ -75,9 +74,9 @@ export function SettingsScreen({ onShowOnboarding }) {
 
   const importBackup = useCallback(async () => {
     try {
-      const file = await pickTextFile();
+      const file = await pickTextFile({ maxBytes: MAX_BACKUP_BYTES });
       if (!file) return;
-      const result = readBackup(file.text);
+      const result = file.tooLarge ? { ok: false, error: 'tooLarge' } : readBackup(file.text);
       if (!result.ok) {
         setBackupNote({ tone: 'warn', text: t(`backup.error.${result.error}`) });
         return;
@@ -96,13 +95,13 @@ export function SettingsScreen({ onShowOnboarding }) {
       if (!pending) return;
       setBusy(true);
       try {
-        const { added } = await restoreAppData(pending.backup, mode);
+        const { addedWorkouts } = await restoreAppData(pending.backup, mode);
         await Promise.all([reloadSettings(), reloadSessions(), reloadChallenges()]);
         setBackupNote({
           tone: 'ok',
           text:
             mode === 'merge'
-              ? t('backup.merged', { n: added[STORAGE_KEYS.sessions] ?? 0 })
+              ? t('backup.merged', { n: addedWorkouts })
               : t('backup.replaced', { n: pending.summary.sessions }),
         });
       } catch (e) {
@@ -157,7 +156,7 @@ export function SettingsScreen({ onShowOnboarding }) {
         await cancelDailyReminder();
         return;
       }
-      const granted = await requestReminderPermission();
+      const granted = await requestNotificationPermission();
       setReminderDenied(!granted);
       // Scheduling itself happens in the app shell, which re-schedules from
       // settings so the text always matches the current language.
@@ -209,6 +208,7 @@ export function SettingsScreen({ onShowOnboarding }) {
             value={settings.dailyGoal}
             onDown={() => shiftGoal(-GOAL_STEP)}
             onUp={() => shiftGoal(GOAL_STEP)}
+            label={t('settings.dailyGoal')}
             downDisabled={settings.dailyGoal <= GOAL_MIN}
             upDisabled={settings.dailyGoal >= GOAL_MAX}
           />
@@ -277,6 +277,16 @@ export function SettingsScreen({ onShowOnboarding }) {
                 label={t('settings.reminderToggle')}
               />
             </Row>
+            {reminderDenied ? (
+              <Pressable
+                onPress={() => Linking.openSettings().catch(() => {})}
+                hitSlop={8}
+                accessibilityRole="button"
+                style={styles.inlineLink}
+              >
+                <Text style={styles.inlineLinkText}>{t('settings.openAppSettings')}</Text>
+              </Pressable>
+            ) : null}
             {settings.reminderEnabled ? (
               <Row title={t('settings.reminderTime')} stacked>
                 <View style={styles.clockRow}>
@@ -284,12 +294,14 @@ export function SettingsScreen({ onShowOnboarding }) {
                     value={formatClock(settings.reminderHour, 0).slice(0, 2)}
                     onDown={() => shiftHour(-1)}
                     onUp={() => shiftHour(1)}
+                    label={t('settings.hour')}
                   />
                   <Text style={styles.clockColon}>:</Text>
                   <Stepper
                     value={formatClock(0, settings.reminderMinute).slice(3)}
                     onDown={() => shiftMinute(-15)}
                     onUp={() => shiftMinute(15)}
+                    label={t('settings.minute')}
                   />
                 </View>
               </Row>
@@ -367,10 +379,10 @@ export function SettingsScreen({ onShowOnboarding }) {
 
 /** What a picked backup holds, and the choice of what to do with it. */
 function BackupPreview({ preview, onMerge, onReplace, onCancel }) {
-  const { t } = useI18n();
+  const { t, speechTag } = useI18n();
   if (!preview) return null;
   const s = preview.summary;
-  const date = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleDateString() : '—');
+  const date = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleDateString(speechTag) : '—');
   const exported = s.exportedAt ? new Date(s.exportedAt) : null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
@@ -386,7 +398,7 @@ function BackupPreview({ preview, onMerge, onReplace, onCancel }) {
           ) : null}
           <Text style={styles.sheetLine}>{t('backup.previewStreak', { n: s.streak })}</Text>
           {exported && !Number.isNaN(exported.getTime()) ? (
-            <Text style={styles.sheetLine}>{t('backup.previewExported', { date: exported.toLocaleString() })}</Text>
+            <Text style={styles.sheetLine}>{t('backup.previewExported', { date: exported.toLocaleString(speechTag) })}</Text>
           ) : null}
           {preview.dropped ? (
             <Text style={[styles.sheetLine, styles.backupNoteWarn]}>{t('backup.previewDropped', { n: preview.dropped })}</Text>
@@ -401,14 +413,15 @@ function BackupPreview({ preview, onMerge, onReplace, onCancel }) {
   );
 }
 
-function Stepper({ value, onDown, onUp, downDisabled, upDisabled }) {
+function Stepper({ value, onDown, onUp, label, downDisabled, upDisabled }) {
+  const { t } = useI18n();
   return (
     <View style={styles.stepper}>
       <Pressable
         onPress={onDown}
         disabled={downDisabled}
         accessibilityRole="button"
-        accessibilityLabel="−"
+        accessibilityLabel={`${label}: ${t('settings.less')}, ${value}`}
         style={({ pressed }) => [styles.stepBtn, (pressed || downDisabled) && styles.pressed]}
       >
         <Text style={styles.stepGlyph}>−</Text>
@@ -418,7 +431,7 @@ function Stepper({ value, onDown, onUp, downDisabled, upDisabled }) {
         onPress={onUp}
         disabled={upDisabled}
         accessibilityRole="button"
-        accessibilityLabel="+"
+        accessibilityLabel={`${label}: ${t('settings.more')}, ${value}`}
         style={({ pressed }) => [styles.stepBtn, (pressed || upDisabled) && styles.pressed]}
       >
         <Text style={styles.stepGlyph}>+</Text>
@@ -483,4 +496,6 @@ const styles = StyleSheet.create({
   },
   clockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   clockColon: { fontSize: 20, color: colors.textDim, marginHorizontal: spacing.xs },
+  inlineLink: { alignSelf: 'flex-start', paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  inlineLinkText: { fontSize: 14, fontWeight: '600', color: colors.accent },
 });

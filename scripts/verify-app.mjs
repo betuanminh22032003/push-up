@@ -25,16 +25,18 @@ const exercisesSrc = read('src/exercises/exercises.js');
 
 const program = await bundle(programSrc);
 const exercises = await bundle(exercisesSrc);
+const statsSrc = stripImport(read('src/utils/stats.js'), './time');
 const achievements = await bundle(
   timeSrc,
   programSrc,
   exercisesSrc,
-  ['../utils/time', '../program/program', '../exercises/exercises'].reduce(
+  statsSrc,
+  ['../utils/time', '../program/program', '../exercises/exercises', '../utils/stats'].reduce(
     stripImport,
     read('src/achievements/achievements.js'),
   ),
 );
-const stats = await bundle(timeSrc, stripImport(read('src/utils/stats.js'), './time'));
+const stats = await bundle(timeSrc, statsSrc);
 const strings = await bundle(
   read('src/i18n/exerciseStrings.js'),
   read('src/i18n/featureStrings.js'),
@@ -405,6 +407,28 @@ await check('program badges come from the old program or the schedule', () => {
   assert.ok(unlockedAchievements([session(0, 5)], {}, allDone()).includes('program_done'));
 });
 
+await check('a run that is restarted or levelled up from keeps its program badges', () => {
+  const earned = program.addEarnedRun(null, allDone());
+  assert.deepEqual(earned, { days: TRAINING_DAYS_TOTAL, weeks: PROGRAM_WEEKS, complete: 1 });
+  const list = unlockedAchievements([session(0, 5)], {}, {}, earned);
+  for (const id of ['program_day', 'program_week', 'program_done']) assert.ok(list.includes(id), id);
+  const partial = program.addEarnedRun(earned, { '1-1': 1 });
+  assert.deepEqual(partial, { days: TRAINING_DAYS_TOTAL + 1, weeks: PROGRAM_WEEKS, complete: 1 });
+  assert.ok(!unlockedAchievements([session(0, 5)], {}, {}, { days: 1, weeks: 0, complete: 0 }).includes('program_week'));
+});
+
+await check('a schedule day of several exercises is one workout, not one per exercise', () => {
+  const day = ['squat', 'lunge', 'wallsit', 'glutebridge', 'donkeykick', 'sumosquat'].map((exerciseId, i) =>
+    session(0, 10, { id: `d${i}`, exerciseId, workoutId: 'day1' }),
+  );
+  assert.equal(stats.countWorkouts(day), 1);
+  assert.equal(computeStats(day).sessionCount, 1);
+  const twoDays = [...day, ...day.map((s) => ({ ...s, id: `${s.id}b`, workoutId: 'day2' }))];
+  assert.ok(!unlockedAchievements(twoDays).includes('workouts_10'), '12 sessions are 2 workouts');
+  const ten = Array.from({ length: 10 }, (_, i) => session(i, 5, { id: `free${i}` }));
+  assert.ok(unlockedAchievements(ten).includes('workouts_10'));
+});
+
 await check('library badges: exercises tried, and time held', () => {
   const tried = (n) => EXERCISE_IDS.slice(0, n).map((exerciseId, i) => session(i % 3, 5, { exerciseId }));
   assert.ok(!unlockedAchievements(tried(9)).includes('explorer_10'));
@@ -593,15 +617,54 @@ await check('dailyTotals is a full week ending today, zeros included', () => {
 group('strings');
 
 await check('en and vi define exactly the same keys', () => {
-  const en = Object.keys(STRINGS.en).sort();
+  // `.one` is English grammar ("1 rep"): Vietnamese nouns have no plural.
+  const en = Object.keys(STRINGS.en).filter((k) => !k.endsWith('.one')).sort();
   const vi = Object.keys(STRINGS.vi).sort();
   assert.deepEqual(vi, en);
+  for (const k of Object.keys(STRINGS.en).filter((key) => key.endsWith('.one'))) {
+    assert.ok(STRINGS.en[k.slice(0, -4)], `${k} has a plural to go with`);
+  }
+});
+
+await check('a count of one is singular in English and unchanged in Vietnamese', () => {
+  assert.equal(translate('en', 'progress.weekTotal', { reps: 1 }), '1 rep in 7 days');
+  assert.equal(translate('en', 'progress.weekTotal', { reps: 2 }), '2 reps in 7 days');
+  assert.equal(translate('en', 'progress.weekTotal', { reps: 0 }), '0 reps in 7 days');
+  assert.equal(translate('en', 'backup.previewSessions', { n: 1 }), '1 workout');
+  assert.equal(translate('vi', 'progress.weekTotal', { reps: 1 }), '1 cái trong 7 ngày');
+});
+
+await check('no key is defined twice, where the later one would silently win', () => {
+  const src = read('src/i18n/strings.js');
+  for (const name of ['en', 'vi']) {
+    const block = src.slice(src.indexOf(`const ${name} = {`), src.indexOf('\n};', src.indexOf(`const ${name} = {`)));
+    const keys = [...block.matchAll(/^ {2}'([^']+)':/gm)].map((m) => m[1]);
+    const dupes = keys.filter((k, i) => keys.indexOf(k) !== i);
+    assert.deepEqual(dupes, [], `${name} in strings.js`);
+  }
+  // The other tables are spread over the base one: an overlap would hide a string.
+  const { EXERCISE_STRINGS, FEATURE_STRINGS, GUIDE_STRINGS } = strings;
+  for (const lang of LANGUAGES) {
+    const seen = new Map();
+    for (const [table, keys] of [
+      ['exerciseStrings', Object.keys(EXERCISE_STRINGS[lang])],
+      ['featureStrings', Object.keys(FEATURE_STRINGS[lang])],
+      ['guideStrings', Object.keys(GUIDE_STRINGS[lang])],
+    ]) {
+      for (const key of keys) {
+        assert.ok(!seen.has(key), `${lang} ${key} in ${seen.get(key)} and ${table}`);
+        seen.set(key, table);
+      }
+    }
+  }
 });
 
 await check('placeholders match between languages', () => {
   const params = (text) => (text.match(/\{[a-z]+\}/g) || []).sort();
   for (const key of Object.keys(STRINGS.en)) {
-    assert.deepEqual(params(STRINGS.vi[key]), params(STRINGS.en[key]), key);
+    // A singular form has the same placeholders as its plural.
+    const other = key.endsWith('.one') ? STRINGS.en[key.slice(0, -4)] : STRINGS.vi[key];
+    assert.deepEqual(params(other), params(STRINGS.en[key]), key);
   }
 });
 

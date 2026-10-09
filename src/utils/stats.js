@@ -15,12 +15,24 @@ function counts({ isHold = () => false, unit = 'reps' } = {}) {
 }
 
 /**
+ * How many workouts the sessions are. A workout of several exercises (a
+ * schedule day) saves one session per exercise, all with the same
+ * `workoutId`; every other session is a workout of its own.
+ */
+export function countWorkouts(sessions) {
+  const ids = new Set();
+  for (const s of sessions) ids.add(s.workoutId ? `w:${s.workoutId}` : `s:${s.id}`);
+  return ids.size;
+}
+
+/**
  * Derive all displayed stats from the raw session list in one pass.
  * Pure + synchronous so it can be memoised and unit-tested without RN.
  *
  * Totals, today, best set/session/day are in the chosen unit (see `counts`).
  * Streaks, active days, the workout count and the time trained count every
- * session: a day of planks is a day trained.
+ * session: a day of planks is a day trained. `sessionCount` is workouts, as
+ * `countWorkouts` counts them.
  */
 export function computeStats(sessions, now = Date.now(), options) {
   const counted = counts(options);
@@ -43,7 +55,7 @@ export function computeStats(sessions, now = Date.now(), options) {
     if (reps > bestSession) bestSession = reps;
     // Records written before sets existed are one set each.
     const sets = Array.isArray(s.sets) && s.sets.length ? s.sets : [{ reps }];
-    for (const set of sets) if ((set.reps || 0) > bestSet) bestSet = set.reps;
+    for (const set of sets) if ((set?.reps || 0) > bestSet) bestSet = set.reps;
     if (reps > 0) {
       const key = dayKey(s.timestamp);
       repsByDay.set(key, (repsByDay.get(key) || 0) + reps);
@@ -69,7 +81,7 @@ export function computeStats(sessions, now = Date.now(), options) {
     todayReps,
     streak,
     totalSeconds,
-    sessionCount: sessions.length,
+    sessionCount: countWorkouts(sessions),
     bestSession,
     bestSet,
     bestDay,

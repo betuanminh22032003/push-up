@@ -269,7 +269,8 @@ export function GuideDock({ exerciseId, open, onToggle, onDetails, upNext = fals
   );
 }
 
-const DOCK_W = 148;
+/** The open dock's width, exported so the stage can keep its figures clear of it. */
+export const DOCK_W = 148;
 const DOCK_H = 150;
 
 const dockStyles = StyleSheet.create({

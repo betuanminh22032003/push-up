@@ -9,7 +9,7 @@ import { SessionRow } from '../components/SessionRow';
 import { StatTile } from '../components/StatTile';
 import { WeeklyChart } from '../components/WeeklyChart';
 import { EXERCISES, exerciseOf, filterByExercise, getExercise, isHold, isHoldSession } from '../exercises/exercises';
-import { useT } from '../i18n/I18nContext';
+import { useI18n, useT } from '../i18n/I18nContext';
 import { useChallenges } from '../state/ChallengesContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
@@ -32,7 +32,7 @@ import { formatDuration, formatSessionDate } from '../utils/time';
 export function ProgressScreen({ onOpenChallenge }) {
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { sessions, stats, achievements, removeSession } = useSessions();
+  const { sessions, stats, achievements, removeSession, today } = useSessions();
   const { records: challengeRecords } = useChallenges();
   const { settings } = useSettings();
   const [filter, setFilter] = useState('all');
@@ -50,21 +50,29 @@ export function ProgressScreen({ onOpenChallenge }) {
   const filtered = useMemo(() => filterByExercise(sessions, shown), [sessions, shown]);
   const seconds = !all && isHold(shown);
   const options = useMemo(() => ({ isHold: isHoldSession, unit: seconds ? 'seconds' : 'reps' }), [seconds]);
+  // `today` is in the dependencies so the figures move on at midnight.
   const shownStats = useMemo(
     () => (all ? stats : computeStats(filtered, Date.now(), options)),
-    [all, stats, filtered, options],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [all, stats, filtered, options, today],
   );
   const unit = seconds ? t('common.secs') : undefined;
   const goal = all ? settings.dailyGoal : 0;
 
-  const week = useMemo(() => dailyTotals(filtered, 7, Date.now(), options), [filtered, options]);
+  const week = useMemo(
+    () => dailyTotals(filtered, 7, Date.now(), options),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtered, options, today],
+  );
   const weekTotal = week.reduce((sum, d) => sum + d.reps, 0);
   const streakRecord = useMemo(() => longestStreak(filtered), [filtered]);
 
   const confirmDelete = (session) => {
     confirm({
       title: t('confirm.deleteTitle'),
-      message: t('confirm.deleteBody', { reps: session.totalReps }),
+      message: t(isHoldSession(session) ? 'confirm.deleteBodyHold' : 'confirm.deleteBody', {
+        reps: session.totalReps,
+      }),
       confirmText: t('confirm.delete'),
       cancelText: t('common.cancel'),
       destructive: true,
@@ -191,7 +199,7 @@ const CHALLENGES_SHOWN = 5;
 
 /** One challenge sent or received: who, what, the scores and how it went. */
 function ChallengeRow({ record }) {
-  const t = useT();
+  const { t, speechTag } = useI18n();
   const exercise = getExercise(record.exerciseId);
   const unit = record.format === 'hold' ? t('common.secs') : t('common.reps');
   const what =
@@ -216,6 +224,7 @@ function ChallengeRow({ record }) {
           {formatSessionDate(record.at, Date.now(), {
             today: t('session.today'),
             yesterday: t('session.yesterday'),
+            locale: speechTag,
           })}
         </Text>
       </View>

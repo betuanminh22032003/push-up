@@ -1,6 +1,7 @@
 import { dayKey, shiftDayKey } from '../utils/time';
 import { countCompleted, isProgramComplete, weeksCompleted } from '../program/program';
 import { CLASSIC_EXERCISE_IDS, EXERCISE_IDS, exerciseOf, isHold } from '../exercises/exercises';
+import { countWorkouts } from '../utils/stats';
 
 /** Days in the old 6-week push-up program, whose progress still earns its badges. */
 const LEGACY_PROGRAM_DAYS = 18;
@@ -19,7 +20,10 @@ const LEGACY_PROGRAM_DAYS = 18;
  * Workouts, streaks, the time of day and the program count every exercise.
  *
  * The program badges are earned by the training schedule, or by the old 6-week
- * push-up program it replaced, so nobody loses a badge to the change.
+ * push-up program it replaced, so nobody loses a badge to the change. Runs of
+ * the schedule that were restarted or followed by the next level are kept as
+ * counts (`scheduleEarned`, src/storage/sessions.js), so starting over does
+ * not take their badges away either.
  */
 export const ACHIEVEMENTS = [
   { id: 'first_workout', icon: '🏁', test: (f) => f.sessions >= 1 },
@@ -51,7 +55,7 @@ export const ACHIEVEMENTS = [
   { id: 'explorer_10', icon: '🧭', test: (f) => f.exercisesTried >= 10 },
   { id: 'explorer_25', icon: '🗺️', test: (f) => f.exercisesTried >= 25 },
   { id: 'hold_300', icon: '⏱️', test: (f) => f.holdSeconds >= 300 },
-  { id: 'program_week', icon: '🗓', test: (f) => f.programWeeks >= 1 },
+  { id: 'program_week', icon: '📗', test: (f) => f.programWeeks >= 1 },
 ];
 
 /** Longest run of consecutive local days with at least one rep. */
@@ -76,7 +80,7 @@ export function bestSetReps(sessions) {
   let best = 0;
   for (const s of sessions) {
     const sets = Array.isArray(s.sets) && s.sets.length ? s.sets : [{ reps: s.totalReps || 0 }];
-    for (const set of sets) if ((set.reps || 0) > best) best = set.reps;
+    for (const set of sets) if ((set?.reps || 0) > best) best = set.reps;
   }
   return best;
 }
@@ -87,7 +91,13 @@ export function bestSetReps(sessions) {
  * included. Sessions saved before there were exercises carry no
  * `exerciseId` and are push-ups, the same rule as everywhere (`exerciseOf`).
  */
-export function computeFacts(sessions, completedProgramDays = {}, scheduleCompleted = {}) {
+export function computeFacts(
+  sessions,
+  completedProgramDays = {},
+  scheduleCompleted = {},
+  scheduleEarned = null,
+) {
+  const past = scheduleEarned || {};
   const repsByExercise = Object.fromEntries(EXERCISE_IDS.map((id) => [id, 0]));
   let holdSeconds = 0;
   const pushups = [];
@@ -105,7 +115,7 @@ export function computeFacts(sessions, completedProgramDays = {}, scheduleComple
     }
   }
   return {
-    sessions: sessions.length,
+    sessions: countWorkouts(sessions),
     totalReps: repsByExercise.pushup,
     bestSet: bestSetReps(pushups),
     repsByExercise,
@@ -114,16 +124,24 @@ export function computeFacts(sessions, completedProgramDays = {}, scheduleComple
     latestHour,
     holdSeconds,
     exercisesTried: EXERCISE_IDS.filter((id) => repsByExercise[id] > 0).length,
-    programDays: Object.keys(completedProgramDays).length + countCompleted(scheduleCompleted),
+    programDays:
+      Object.keys(completedProgramDays).length + countCompleted(scheduleCompleted) + (past.days || 0),
     programComplete:
-      Object.keys(completedProgramDays).length >= LEGACY_PROGRAM_DAYS || isProgramComplete(scheduleCompleted),
-    programWeeks: weeksCompleted(scheduleCompleted),
+      Object.keys(completedProgramDays).length >= LEGACY_PROGRAM_DAYS ||
+      isProgramComplete(scheduleCompleted) ||
+      (past.complete || 0) > 0,
+    programWeeks: weeksCompleted(scheduleCompleted) + (past.weeks || 0),
   };
 }
 
 /** Ids of every achievement earned by this history, in definition order. */
-export function unlockedAchievements(sessions, completedProgramDays = {}, scheduleCompleted = {}) {
-  const facts = computeFacts(sessions, completedProgramDays, scheduleCompleted);
+export function unlockedAchievements(
+  sessions,
+  completedProgramDays = {},
+  scheduleCompleted = {},
+  scheduleEarned = null,
+) {
+  const facts = computeFacts(sessions, completedProgramDays, scheduleCompleted, scheduleEarned);
   return ACHIEVEMENTS.filter((a) => a.test(facts)).map((a) => a.id);
 }
 

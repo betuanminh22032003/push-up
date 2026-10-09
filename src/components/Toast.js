@@ -9,9 +9,10 @@ const SHOW_MS = 2600;
 /**
  * A banner that drops in from the top for achievements and the daily goal.
  * Purely presentational: the parent owns the queue and hands over one
- * message at a time via `message`; `onHide` asks for the next.
+ * message at a time via `message`; `onHide` asks for the next. `id` tells two
+ * queued toasts with the same text apart, so the second one shows too.
  */
-export function Toast({ message, onHide }) {
+export function Toast({ message, id, onHide }) {
   const insets = useSafeAreaInsets();
   const y = useRef(new Animated.Value(-80)).current;
   const onHideRef = useRef(onHide);
@@ -29,7 +30,8 @@ export function Toast({ message, onHide }) {
       });
     }, SHOW_MS);
     return () => clearTimeout(timer);
-  }, [message, y]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, y]);
 
   if (!message) return null;
 

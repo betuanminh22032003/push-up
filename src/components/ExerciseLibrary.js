@@ -47,7 +47,7 @@ export function ExerciseLibraryButton({ selected, onSelect, disabled, style }) {
             {exercise.parts.map((p) => t(`part.${p}`)).join(' · ')}
           </Text>
         </View>
-        <Text style={styles.buttonChange}>{t('picker.change')} ▾</Text>
+        <Text style={styles.buttonChange}>▾</Text>
       </Pressable>
       <ExerciseGuideButton exerciseId={exercise.id} />
       <ExerciseLibrarySheet
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   buttonIcon: { fontSize: 24 },
   buttonName: { fontSize: 16, fontWeight: '600', color: colors.text },
   buttonMeta: { fontSize: 12, color: colors.textDim, marginTop: 1 },
-  buttonChange: { fontSize: 13, fontWeight: '600', color: colors.accent },
+  buttonChange: { fontSize: 18, fontWeight: '600', color: colors.accent },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   dismiss: { flex: 1 },

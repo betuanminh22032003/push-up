@@ -87,9 +87,10 @@ const LIST_KEYS = {
 
 await check('every storage key is pupg:*, and a backup carries all but the error log', () => {
   for (const key of Object.values(STORAGE_KEYS)) assert.match(key, /^pupg:[a-z]+:v\d+$/);
+  const local = [STORAGE_KEYS.errors, STORAGE_KEYS.unreadable];
   assert.deepEqual(
     [...BACKUP_KEYS].sort(),
-    Object.values(STORAGE_KEYS).filter((k) => k !== STORAGE_KEYS.errors).sort(),
+    Object.values(STORAGE_KEYS).filter((k) => !local.includes(k)).sort(),
   );
   assert.equal(errorLog.ERROR_LOG_KEY, STORAGE_KEYS.errors);
 });
@@ -451,7 +452,10 @@ await check('invalid input is refused, never thrown', () => {
     { s: -1 },
     { s: 10000 },
     { s: 1.5 },
+    { s: 301 }, // 60 s of reps: more than five a second
+    { f: 'hold', d: 0, s: 601 }, // a hold is capped at 600 s
     { t: -5 },
+    { t: 9e12 }, // past what a Date can show
     { i: 'x' },
     { i: 'UPPER1' },
     { n: 5 },
@@ -695,10 +699,24 @@ await check('every exercise opens on a full body and stays shut on an empty fram
 
 await check('the published pose page runs the gate and says so', () => {
   const page = readFileSync(path.join(root, 'docs', 'pose.html'), 'utf8');
-  assert.match(page, /const PAGE_PROTOCOL_VERSION = 3;/);
+  assert.match(page, /const PAGE_PROTOCOL_VERSION = 4;/);
   assert.match(page, /gate = createExerciseGate\(PAGE_EXERCISE\)/);
   assert.match(page, /type: 'visibility'/);
   assert.match(page, /gate: true/);
+});
+
+await check('the pose page names its errors and says when a rep completes', () => {
+  const page = readFileSync(path.join(root, 'docs', 'pose.html'), 'utf8');
+  for (const code of ['denied', 'busy', 'cameraEnded', 'load', 'inference']) {
+    assert.ok(page.includes(`'${code}'`), code);
+  }
+  assert.match(page, /repCompleted: !!result\.repCompleted/);
+  assert.match(page, /FORCE_CPU/);
+  // Every code the page sends has words in the app, in both languages.
+  const stage = readFileSync(path.join(root, 'src', 'pose', 'PoseStage.js'), 'utf8');
+  for (const key of stage.match(/'pose\.err\.[a-zA-Z]+'/g)) {
+    for (const lang of ['en', 'vi']) assert.ok(STRINGS[lang][key.slice(1, -1)], `${lang} ${key}`);
+  }
 });
 
 // --- camera setup card ----------------------------------------------------------------

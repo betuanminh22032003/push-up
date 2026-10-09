@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getExercise } from '../exercises/exercises';
-import { useT } from '../i18n/I18nContext';
+import { useI18n } from '../i18n/I18nContext';
 import { colors, radius, spacing } from '../theme/theme';
 import { formatDuration, formatSessionDate } from '../utils/time';
 
 export function SessionRow({ session, onDelete }) {
-  const t = useT();
+  const { t, speechTag } = useI18n();
   const { totalReps, durationSeconds, timestamp, sets, program } = session;
   // Sessions from before there was a choice carry no exerciseId: push-ups.
   const exercise = getExercise(session.exerciseId);
@@ -38,6 +38,7 @@ export function SessionRow({ session, onDelete }) {
             {formatSessionDate(timestamp, Date.now(), {
               today: t('session.today'),
               yesterday: t('session.yesterday'),
+              locale: speechTag,
             })}
           </Text>
           {tag ? <Text style={styles.tag}>{tag}</Text> : null}

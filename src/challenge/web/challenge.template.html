@@ -146,7 +146,10 @@ function render() {
   }
 
   const c = decoded.challenge;
-  const known = EXERCISE_NAMES[c.exerciseId];
+  // Own keys only: an id such as "constructor" passes the pattern.
+  const known = Object.prototype.hasOwnProperty.call(EXERCISE_NAMES, c.exerciseId)
+    ? EXERCISE_NAMES[c.exerciseId]
+    : null;
   $('challenge').hidden = false;
   $('title').textContent = fill(T.title, { name: c.name || T.someone });
   $('icon').textContent = known ? known.icon : '🏋️';

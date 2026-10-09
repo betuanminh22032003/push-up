@@ -27,11 +27,13 @@ export function shiftDayKey(timestamp, offset) {
 
 /**
  * "Today 14:32" / "Yesterday 08:05" / "12 Mar 18:44"
- * @param {{ today?: string, yesterday?: string }} words  translated day names
+ * @param {{ today?: string, yesterday?: string, locale?: string }} words
+ *   translated day names, and the app language's locale for the month name
+ *   (the device's own when left out)
  */
 export function formatSessionDate(timestamp, now = Date.now(), words = {}) {
   const key = dayKey(timestamp);
-  const time = new Date(timestamp).toLocaleTimeString(undefined, {
+  const time = new Date(timestamp).toLocaleTimeString(words.locale, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -39,7 +41,7 @@ export function formatSessionDate(timestamp, now = Date.now(), words = {}) {
   if (key === dayKey(now)) return `${words.today ?? 'Today'} ${time}`;
   if (key === shiftDayKey(now, -1)) return `${words.yesterday ?? 'Yesterday'} ${time}`;
   const d = new Date(timestamp);
-  const month = d.toLocaleDateString(undefined, { month: 'short' });
+  const month = d.toLocaleDateString(words.locale, { month: 'short' });
   return `${d.getDate()} ${month} ${time}`;
 }
 
