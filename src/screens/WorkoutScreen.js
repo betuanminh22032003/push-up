@@ -1204,9 +1204,12 @@ export function WorkoutScreen({
                     })}
                   </Text>
                   {nextUp ? <Text style={styles.subline}>{nextUp}</Text> : null}
-                  <Text style={styles.stageHint}>
-                    {planSets ? t('workout.nextIn') : t('workout.restHint')}
-                  </Text>
+                  {/* Beside the open figure there is no room for it; the figure says what is next. */}
+                  {besideDock ? null : (
+                    <Text style={styles.stageHint}>
+                      {planSets ? t('workout.nextIn') : t('workout.restHint')}
+                    </Text>
+                  )}
                 </>
               ) : (
                 <>
