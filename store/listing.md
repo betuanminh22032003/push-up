@@ -146,7 +146,7 @@ Play asks whether the app **collects** or **shares** user data, where "collect" 
 | Question | Answer | Why |
 | --- | --- | --- |
 | Does your app collect or share any of the required user data types? | **No** | Workouts, schedule, settings, challenges, miscount notes and the error log are stored only on the device. The app has no backend, no analytics SDK and no crash-reporting SDK. |
-| Is all user data encrypted in transit? | n/a (nothing collected) | The only network traffic the app makes itself is downloading static files over HTTPS: the pose detector page (GitHub Pages), the MediaPipe library (jsDelivr), the model (Google Cloud Storage) and three.js for the how-to guide's 3D figure (jsDelivr). |
+| Is all user data encrypted in transit? | n/a (nothing collected) | The only network traffic the app makes itself is downloading static files over HTTPS: the pose detector page (GitHub Pages), the MediaPipe library (jsDelivr), the model (Google Cloud Storage) and, for the how-to guide's 3D figure, three.js (jsDelivr) and the human model (GitHub Pages). |
 | Do you provide a way for users to request deletion? | n/a | "Delete all data" in Settings wipes local storage, including challenges, miscount notes and the error log. |
 
 ### What stays on the device, and what the user may share

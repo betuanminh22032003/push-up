@@ -33,7 +33,7 @@
   <h2>Camera</h2>
   <p>The optional <strong>AI camera</strong> mode uses your front camera to count your reps and time your holds (38 exercises, such as push-ups, squats and planks) by estimating body position. Frames are processed <strong>on your device</strong>, in real time, and are never recorded, stored or uploaded. The camera is only active while a camera-mode workout is running, and you can use the sensor, motion or tap modes instead without ever granting camera access.</p>
   <p>To run the pose model, the app loads the detector page and the model file over the internet (from GitHub Pages, the jsDelivr CDN and Google Cloud Storage). These are ordinary static file downloads; like any web request they expose your IP address to those hosts, which is not something the app controls or records. No workout data is sent anywhere.</p>
-  <p>The <strong>how-to guide</strong> for each exercise draws a 3D figure with the three.js library, which it downloads from the jsDelivr CDN the first time a guide is shown, in the same way. Without a connection the guide shows a flat figure instead.</p>
+  <p>The <strong>how-to guide</strong> for each exercise draws a 3D figure with the three.js library and a human model file, which it downloads (from the jsDelivr CDN and GitHub Pages) the first time a guide is shown, in the same way. Without a connection the guide shows a flat figure instead.</p>
 
   <h2>Motion sensors</h2>
   <p>The optional <strong>Motion</strong> mode reads the phone's motion sensors (its orientation) during a workout to count reps. The readings are processed on your device and never stored or sent.</p>
@@ -103,7 +103,7 @@
     <h2>Camera</h2>
     <p>Chế độ <strong>Camera AI</strong> (tuỳ chọn) dùng camera trước để đếm số cái và tính giờ giữ tư thế (38 bài tập, ví dụ hít đất, squat, plank) bằng cách ước lượng tư thế cơ thể. Khung hình được xử lý <strong>ngay trên thiết bị</strong>, theo thời gian thực, không bao giờ được ghi lại, lưu trữ hay tải lên. Camera chỉ hoạt động khi bạn đang tập ở chế độ camera; bạn có thể dùng chế độ Cảm biến, Chuyển động hoặc Chạm mà không cần cấp quyền camera.</p>
     <p>Để chạy mô hình nhận diện tư thế, ứng dụng tải trang nhận diện và tệp mô hình qua internet (từ GitHub Pages, CDN jsDelivr và Google Cloud Storage). Đây là các tệp tĩnh thông thường; như mọi yêu cầu web, địa chỉ IP của bạn được các máy chủ đó nhìn thấy — ứng dụng không kiểm soát hay ghi lại điều này. Không có dữ liệu tập luyện nào được gửi đi.</p>
-    <p><strong>Hướng dẫn tập</strong> của mỗi bài vẽ một hình người 3D bằng thư viện three.js, tải từ CDN jsDelivr ở lần đầu mở hướng dẫn, cũng theo cách đó. Khi không có mạng, hướng dẫn hiện hình phẳng thay thế.</p>
+    <p><strong>Hướng dẫn tập</strong> của mỗi bài vẽ một hình người 3D bằng thư viện three.js và một tệp mô hình người, tải từ CDN jsDelivr và GitHub Pages ở lần đầu mở hướng dẫn, cũng theo cách đó. Khi không có mạng, hướng dẫn hiện hình phẳng thay thế.</p>
 
     <h2>Cảm biến chuyển động</h2>
     <p>Chế độ <strong>Chuyển động</strong> (tuỳ chọn) đọc cảm biến chuyển động của máy (hướng nghiêng) trong lúc tập để đếm số cái. Dữ liệu chỉ xử lý trên máy, không lưu và không gửi đi.</p>

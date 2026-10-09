@@ -1,0 +1,10 @@
+human.glb — the figure in the app's exercise guide.
+
+Source: the human base mesh and rig of Mesh2Motion
+(https://github.com/scottpetrovic/mesh2motion-app, static/animations/
+human-base-animations.glb), built on Quaternius' Universal Animation Library
+character. Its art assets are released under CC0 1.0 (public domain):
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Changed here: the 87 animations removed, leaving the skinned mesh, its
+skeleton and its colour-palette texture. The app poses the bones itself.
