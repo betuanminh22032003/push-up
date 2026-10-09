@@ -245,7 +245,7 @@ async function captureLanguage(cdp, lang) {
   }
 
   // Back to the workout tab and run a tap-mode set for the live screens.
-  await cdp.eval(`await window.__press(window.__tab('💪'));`);
+  await cdp.eval(`await window.__press(document.querySelectorAll('[role=tab]')[0]);`);
   await sleep(300);
   await cdp.eval(`
     await window.__press(window.__btn(${JSON.stringify(L.tap)}));
