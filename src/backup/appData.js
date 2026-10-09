@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-import { BACKUP_KEYS, STORAGE_KEYS, isValidSession } from '../storage/sessions';
+import { BACKUP_KEYS, STORAGE_KEYS, isValidSession, normalizeSession } from '../storage/sessions';
 import { computeStats } from '../utils/stats';
 import { buildBackup, parseBackup, planRestore, summarizeBackup } from './backup';
 
@@ -28,6 +28,7 @@ export function readBackup(text) {
     keys: BACKUP_KEYS,
     sessionsKey: STORAGE_KEYS.sessions,
     isValidSession,
+    normalizeSession,
   });
   if (!result.ok) return result;
   const summary = summarizeBackup(result.backup, {

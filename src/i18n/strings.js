@@ -181,6 +181,7 @@ const en = {
   'confirm.discard': 'Discard',
   'confirm.deleteTitle': 'Delete workout?',
   'confirm.deleteBody': '{reps} reps will be removed from your history.',
+  'confirm.deleteBodyHold': '{reps} seconds held will be removed from your history.',
   'confirm.delete': 'Delete',
   'confirm.clearTitle': 'Delete all data?',
   'confirm.clearBody':
@@ -449,7 +450,7 @@ const en = {
   'settings.data': 'Data',
   'settings.about': 'About',
   'settings.dailyGoal': 'Daily goal',
-  'settings.dailyGoalBody': 'Reps per day. Every exercise and every counting mode counts toward it.',
+  'settings.dailyGoalBody': 'Reps per day, from every exercise and counting mode. Holds such as the plank are timed, so they do not count toward it.',
   'settings.countdown': 'Countdown before a set',
   'settings.countdownBody': 'Time to get into position after pressing Start.',
   'settings.rest': 'Rest between sets',
@@ -723,6 +724,7 @@ const vi = {
   'confirm.discard': 'Bỏ',
   'confirm.deleteTitle': 'Xoá buổi tập?',
   'confirm.deleteBody': '{reps} cái sẽ bị xoá khỏi lịch sử.',
+  'confirm.deleteBodyHold': '{reps} giây giữ tư thế sẽ bị xoá khỏi lịch sử.',
   'confirm.delete': 'Xoá',
   'confirm.clearTitle': 'Xoá toàn bộ dữ liệu?',
   'confirm.clearBody':
@@ -982,7 +984,7 @@ const vi = {
   'settings.data': 'Dữ liệu',
   'settings.about': 'Giới thiệu',
   'settings.dailyGoal': 'Mục tiêu mỗi ngày',
-  'settings.dailyGoalBody': 'Số cái mỗi ngày. Mọi bài tập và mọi chế độ đếm đều tính vào.',
+  'settings.dailyGoalBody': 'Số cái mỗi ngày, từ mọi bài tập và mọi chế độ đếm. Bài giữ tư thế như plank tính bằng giây nên không cộng vào.',
   'settings.countdown': 'Đếm ngược trước set',
   'settings.countdownBody': 'Thời gian để vào tư thế sau khi bấm Bắt đầu.',
   'settings.rest': 'Nghỉ giữa các set',

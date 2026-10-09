@@ -2,14 +2,17 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import { unlockedAchievements } from '../achievements/achievements';
 import { isHoldSession } from '../exercises/exercises';
-import { normalizeLevel, programDayKey } from '../program/program';
+import { useDayKey } from '../hooks/useDayKey';
+import { addEarnedRun, countCompleted, normalizeLevel, programDayKey } from '../program/program';
 import {
   clearAllData,
   deleteSession,
   loadProgram,
   loadSchedule,
+  loadScheduleEarned,
   loadSessions,
   saveSchedule,
+  saveScheduleEarned,
   saveSession,
 } from '../storage/sessions';
 import { computeStats } from '../utils/stats';
@@ -31,25 +34,30 @@ export function SessionsProvider({ children }) {
   const [sessions, setSessions] = useState([]);
   const [program, setProgram] = useState(null);
   const [schedule, setSchedule] = useState(null);
+  // Badge counts of schedule runs that were restarted or levelled up from.
+  const [scheduleEarned, setScheduleEarned] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const readStored = useCallback(async () => {
-    const [loadedSessions, loadedProgram, loadedSchedule] = await Promise.all([
+    const [loadedSessions, loadedProgram, loadedSchedule, loadedEarned] = await Promise.all([
       loadSessions(),
       loadProgram(),
       loadSchedule(),
+      loadScheduleEarned(),
     ]);
-    return { loadedSessions, loadedProgram, loadedSchedule };
+    return { loadedSessions, loadedProgram, loadedSchedule, loadedEarned };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { loadedSessions, loadedProgram, loadedSchedule } = await readStored();
+      const { loadedSessions, loadedProgram, loadedSchedule, loadedEarned } = await readStored();
       if (cancelled) return;
       setSessions(loadedSessions);
       setProgram(loadedProgram);
       setSchedule(loadedSchedule);
+      setScheduleEarned(loadedEarned);
+      earnedRef.current = loadedEarned;
       setIsLoaded(true);
     })();
     return () => {
@@ -59,11 +67,13 @@ export function SessionsProvider({ children }) {
 
   /** Read everything again, after a backup was restored underneath us. */
   const reload = useCallback(async () => {
-    const { loadedSessions, loadedProgram, loadedSchedule } = await readStored();
+    const { loadedSessions, loadedProgram, loadedSchedule, loadedEarned } = await readStored();
     scheduleRef.current = loadedSchedule;
+    earnedRef.current = loadedEarned;
     setSessions(loadedSessions);
     setProgram(loadedProgram);
     setSchedule(loadedSchedule);
+    setScheduleEarned(loadedEarned);
   }, [readStored]);
 
   const addSession = useCallback(async (payload) => {
@@ -82,10 +92,24 @@ export function SessionsProvider({ children }) {
   useEffect(() => {
     scheduleRef.current = schedule;
   }, [schedule]);
+  const earnedRef = useRef(null);
+
+  /**
+   * The run in progress is about to be dropped (restart, next level): keep
+   * the badges it earned. A run with no day done earned nothing to keep.
+   */
+  const keepEarned = useCallback(async (prev) => {
+    if (!prev || countCompleted(prev.completed) === 0) return;
+    const next = addEarnedRun(earnedRef.current, prev.completed);
+    earnedRef.current = next;
+    setScheduleEarned(next);
+    await saveScheduleEarned(next);
+  }, []);
 
   /** Start (or restart, or change the level of) the training schedule. */
   const startSchedule = useCallback(async (level, { keepProgress = false } = {}) => {
     const prev = scheduleRef.current;
+    if (!keepProgress) await keepEarned(prev);
     const next = {
       level: normalizeLevel(level),
       startedAt: keepProgress && prev ? prev.startedAt : Date.now(),
@@ -95,7 +119,7 @@ export function SessionsProvider({ children }) {
     setSchedule(next);
     await saveSchedule(next);
     return next;
-  }, []);
+  }, [keepEarned]);
 
   const completeScheduleDay = useCallback(async (week, day) => {
     const prev = scheduleRef.current;
@@ -107,26 +131,37 @@ export function SessionsProvider({ children }) {
   }, []);
 
   const resetSchedule = useCallback(async () => {
+    const prev = scheduleRef.current;
     scheduleRef.current = null;
     setSchedule(null);
+    await keepEarned(prev);
     await saveSchedule(null);
-  }, []);
+  }, [keepEarned]);
 
   const eraseEverything = useCallback(async () => {
     await clearAllData();
+    scheduleRef.current = null;
+    earnedRef.current = null;
     setSessions([]);
     setProgram(null);
     setSchedule(null);
+    setScheduleEarned(null);
   }, []);
 
   // `sessions` is replaced wholesale on every write, so identity is a sound
-  // cache key — stats only recompute when the data really changed.
-  const stats = useMemo(() => computeStats(sessions, Date.now(), STATS_OPTIONS), [sessions]);
+  // cache key — stats only recompute when the data really changed, or when
+  // the day does: "today" and the streak move at midnight on their own.
+  const today = useDayKey();
+  const stats = useMemo(
+    () => computeStats(sessions, Date.now(), STATS_OPTIONS),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessions, today],
+  );
   const completedDays = program?.completedDays;
   const scheduleCompleted = schedule?.completed;
   const achievements = useMemo(
-    () => unlockedAchievements(sessions, completedDays || {}, scheduleCompleted || {}),
-    [sessions, completedDays, scheduleCompleted],
+    () => unlockedAchievements(sessions, completedDays || {}, scheduleCompleted || {}, scheduleEarned),
+    [sessions, completedDays, scheduleCompleted, scheduleEarned],
   );
 
   const value = useMemo(
@@ -136,6 +171,8 @@ export function SessionsProvider({ children }) {
       achievements,
       program,
       schedule,
+      scheduleEarned,
+      today,
       isLoaded,
       addSession,
       removeSession,
@@ -151,6 +188,8 @@ export function SessionsProvider({ children }) {
       achievements,
       program,
       schedule,
+      scheduleEarned,
+      today,
       isLoaded,
       addSession,
       removeSession,

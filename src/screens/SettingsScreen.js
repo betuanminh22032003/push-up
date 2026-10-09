@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { exportAppData, readBackup, restoreAppData } from '../backup/appData';
-import { backupFileName } from '../backup/backup';
+import { MAX_BACKUP_BYTES, backupFileName } from '../backup/backup';
 import { pickTextFile, shareTextFile } from '../backup/files';
 import { cleanName } from '../challenge/codec';
 import { Button } from '../components/Button';
@@ -75,9 +75,9 @@ export function SettingsScreen({ onShowOnboarding }) {
 
   const importBackup = useCallback(async () => {
     try {
-      const file = await pickTextFile();
+      const file = await pickTextFile({ maxBytes: MAX_BACKUP_BYTES });
       if (!file) return;
-      const result = readBackup(file.text);
+      const result = file.tooLarge ? { ok: false, error: 'tooLarge' } : readBackup(file.text);
       if (!result.ok) {
         setBackupNote({ tone: 'warn', text: t(`backup.error.${result.error}`) });
         return;

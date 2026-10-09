@@ -87,9 +87,10 @@ const LIST_KEYS = {
 
 await check('every storage key is pupg:*, and a backup carries all but the error log', () => {
   for (const key of Object.values(STORAGE_KEYS)) assert.match(key, /^pupg:[a-z]+:v\d+$/);
+  const local = [STORAGE_KEYS.errors, STORAGE_KEYS.unreadable];
   assert.deepEqual(
     [...BACKUP_KEYS].sort(),
-    Object.values(STORAGE_KEYS).filter((k) => k !== STORAGE_KEYS.errors).sort(),
+    Object.values(STORAGE_KEYS).filter((k) => !local.includes(k)).sort(),
   );
   assert.equal(errorLog.ERROR_LOG_KEY, STORAGE_KEYS.errors);
 });

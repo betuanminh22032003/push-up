@@ -25,16 +25,18 @@ const exercisesSrc = read('src/exercises/exercises.js');
 
 const program = await bundle(programSrc);
 const exercises = await bundle(exercisesSrc);
+const statsSrc = stripImport(read('src/utils/stats.js'), './time');
 const achievements = await bundle(
   timeSrc,
   programSrc,
   exercisesSrc,
-  ['../utils/time', '../program/program', '../exercises/exercises'].reduce(
+  statsSrc,
+  ['../utils/time', '../program/program', '../exercises/exercises', '../utils/stats'].reduce(
     stripImport,
     read('src/achievements/achievements.js'),
   ),
 );
-const stats = await bundle(timeSrc, stripImport(read('src/utils/stats.js'), './time'));
+const stats = await bundle(timeSrc, statsSrc);
 const strings = await bundle(
   read('src/i18n/exerciseStrings.js'),
   read('src/i18n/featureStrings.js'),
@@ -403,6 +405,28 @@ await check('program badges come from the old program or the schedule', () => {
   assert.ok(unlockedAchievements([session(0, 5)], {}, week1).includes('program_week'));
   assert.ok(!unlockedAchievements([session(0, 5)], {}, week1).includes('program_done'));
   assert.ok(unlockedAchievements([session(0, 5)], {}, allDone()).includes('program_done'));
+});
+
+await check('a run that is restarted or levelled up from keeps its program badges', () => {
+  const earned = program.addEarnedRun(null, allDone());
+  assert.deepEqual(earned, { days: TRAINING_DAYS_TOTAL, weeks: PROGRAM_WEEKS, complete: 1 });
+  const list = unlockedAchievements([session(0, 5)], {}, {}, earned);
+  for (const id of ['program_day', 'program_week', 'program_done']) assert.ok(list.includes(id), id);
+  const partial = program.addEarnedRun(earned, { '1-1': 1 });
+  assert.deepEqual(partial, { days: TRAINING_DAYS_TOTAL + 1, weeks: PROGRAM_WEEKS, complete: 1 });
+  assert.ok(!unlockedAchievements([session(0, 5)], {}, {}, { days: 1, weeks: 0, complete: 0 }).includes('program_week'));
+});
+
+await check('a schedule day of several exercises is one workout, not one per exercise', () => {
+  const day = ['squat', 'lunge', 'wallsit', 'glutebridge', 'donkeykick', 'sumosquat'].map((exerciseId, i) =>
+    session(0, 10, { id: `d${i}`, exerciseId, workoutId: 'day1' }),
+  );
+  assert.equal(stats.countWorkouts(day), 1);
+  assert.equal(computeStats(day).sessionCount, 1);
+  const twoDays = [...day, ...day.map((s) => ({ ...s, id: `${s.id}b`, workoutId: 'day2' }))];
+  assert.ok(!unlockedAchievements(twoDays).includes('workouts_10'), '12 sessions are 2 workouts');
+  const ten = Array.from({ length: 10 }, (_, i) => session(i, 5, { id: `free${i}` }));
+  assert.ok(unlockedAchievements(ten).includes('workouts_10'));
 });
 
 await check('library badges: exercises tried, and time held', () => {

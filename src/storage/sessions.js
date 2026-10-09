@@ -7,6 +7,8 @@ const SCHEDULE_KEY = 'pupg:schedule:v1';
 const CHALLENGES_KEY = 'pupg:challenges:v1';
 const MISCOUNTS_KEY = 'pupg:miscounts:v1';
 const ERRORS_KEY = 'pupg:errors:v1';
+const SCHEDULE_EARNED_KEY = 'pupg:earned:v1';
+const UNREADABLE_KEY = 'pupg:unreadable:v1';
 
 /**
  * Every AsyncStorage key the app owns. Other modules read and write the newer
@@ -21,11 +23,14 @@ export const STORAGE_KEYS = {
   challenges: CHALLENGES_KEY,
   miscounts: MISCOUNTS_KEY,
   errors: ERRORS_KEY,
+  scheduleEarned: SCHEDULE_EARNED_KEY,
+  unreadable: UNREADABLE_KEY,
 };
 
 /**
  * What a backup file carries: everything but the local error log, which
- * describes this phone and means nothing on another one. The app blocker's
+ * describes this phone and means nothing on another one, and the copy of an
+ * unreadable history kept aside by `readSessionsForWrite`. The app blocker's
  * state lives natively (modules/app-blocker) and is not in AsyncStorage.
  */
 export const BACKUP_KEYS = [
@@ -35,6 +40,7 @@ export const BACKUP_KEYS = [
   SCHEDULE_KEY,
   CHALLENGES_KEY,
   MISCOUNTS_KEY,
+  SCHEDULE_EARNED_KEY,
 ];
 
 /**
@@ -48,15 +54,43 @@ const LEGACY_EXERCISE_ID = 'pushup';
 
 /** Sessions are stored newest-first, so reads and prepends are both O(1)-ish. */
 
+/** Latest instant a JS Date can hold; a timestamp past it reads as "Invalid Date". */
+const MAX_TIME = 8.64e15;
+
 export function isValidSession(value) {
   return (
-    value &&
+    !!value &&
     typeof value === 'object' &&
     typeof value.id === 'string' &&
     Number.isFinite(value.timestamp) &&
+    value.timestamp > 0 &&
+    value.timestamp <= MAX_TIME &&
     Number.isFinite(value.totalReps) &&
-    Number.isFinite(value.durationSeconds)
+    value.totalReps >= 0 &&
+    Number.isFinite(value.durationSeconds) &&
+    value.durationSeconds >= 0
   );
+}
+
+/**
+ * A valid session with its sets cleaned as `saveSession` writes them. Sets
+ * only ever come from this app, but a backup file can be edited by hand, and
+ * one `null` among them would throw in every tally on every launch.
+ */
+export function normalizeSession(session) {
+  if (!('sets' in session)) return session;
+  const { sets, ...rest } = session;
+  const cleaned = cleanSets(sets);
+  return cleaned.length > 1 ? { ...rest, sets: cleaned } : rest;
+}
+
+const newestFirst = (a, b) => b.timestamp - a.timestamp;
+
+/** The stored list, checked record by record. */
+function parseSessions(raw) {
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error('sessions are not a list');
+  return parsed.filter(isValidSession).map(normalizeSession).sort(newestFirst);
 }
 
 export function createSessionId() {
@@ -70,11 +104,25 @@ export function createSessionId() {
 export async function loadSessions() {
   try {
     const raw = await AsyncStorage.getItem(SESSIONS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidSession).sort((a, b) => b.timestamp - a.timestamp);
+    return raw ? parseSessions(raw) : [];
   } catch {
+    return [];
+  }
+}
+
+/**
+ * The list a write builds on. Unlike `loadSessions`, a failed read throws:
+ * writing `[newSession]` over a history that could not be read this once
+ * would destroy it for good. A value that reads but does not parse is copied
+ * aside before the list starts again, so nothing is ever thrown away.
+ */
+async function readSessionsForWrite() {
+  const raw = await AsyncStorage.getItem(SESSIONS_KEY);
+  if (!raw) return [];
+  try {
+    return parseSessions(raw);
+  } catch {
+    await AsyncStorage.setItem(UNREADABLE_KEY, raw);
     return [];
   }
 }
@@ -110,6 +158,10 @@ export function cleanSets(sets) {
  * a missing one as a push-up (`exerciseOf`). Any other id is stored as given:
  * which exercises exist is src/exercises/exercises.js's business, and it
  * reads an id it does not know as a push-up as well.
+ *
+ * `workoutId` ties together the sessions one workout saved, one per exercise
+ * (a schedule day of six exercises is six sessions, but one workout). Only
+ * those carry it; any other session is a workout of its own.
  */
 export async function saveSession({
   totalReps,
@@ -120,6 +172,7 @@ export async function saveSession({
   sets,
   restSeconds,
   program,
+  workoutId,
 }) {
   const session = {
     id: createSessionId(),
@@ -142,14 +195,15 @@ export async function saveSession({
       ? { level: program.level, week: program.week, day: program.day }
       : { level: program.level, day: program.day };
   }
-  const existing = await loadSessions();
+  if (typeof workoutId === 'string' && workoutId) session.workoutId = workoutId;
+  const existing = await readSessionsForWrite();
   const next = [session, ...existing];
   await writeSessions(next);
   return { session, sessions: next };
 }
 
 export async function deleteSession(id) {
-  const existing = await loadSessions();
+  const existing = await readSessionsForWrite();
   const next = existing.filter((s) => s.id !== id);
   await writeSessions(next);
   return next;
@@ -311,6 +365,35 @@ export async function saveSchedule(schedule) {
     /* non-fatal: progress is re-derived from the in-memory copy next write */
   }
   return schedule;
+}
+
+/**
+ * Program badges earned by schedule runs that were restarted or replaced by
+ * the next level, so starting over never takes a badge away:
+ *   { days, weeks, complete }  training days, full weeks and finished runs
+ * `null` when no run has ended yet.
+ */
+export async function loadScheduleEarned() {
+  try {
+    const raw = await AsyncStorage.getItem(SCHEDULE_EARNED_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!isPlainObject(parsed)) return null;
+    const count = (v) => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+    return { days: count(parsed.days), weeks: count(parsed.weeks), complete: count(parsed.complete) };
+  } catch {
+    return null;
+  }
+}
+
+export async function saveScheduleEarned(earned) {
+  try {
+    if (!earned) await AsyncStorage.removeItem(SCHEDULE_EARNED_KEY);
+    else await AsyncStorage.setItem(SCHEDULE_EARNED_KEY, JSON.stringify(earned));
+  } catch {
+    /* non-fatal: the in-memory copy is written again with the next run */
+  }
+  return earned;
 }
 
 /** Everything the app stores, for "delete all data". */

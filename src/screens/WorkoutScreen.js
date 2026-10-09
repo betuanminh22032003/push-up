@@ -32,6 +32,7 @@ import { SOURCES, getSourceById } from '../sensors/sources';
 import { useBlocker } from '../state/BlockerContext';
 import { useSessions } from '../state/SessionsContext';
 import { useSettings } from '../state/SettingsContext';
+import { createSessionId } from '../storage/sessions';
 import { colors, radius, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { shareText } from '../utils/share';
@@ -156,6 +157,7 @@ export function WorkoutScreen({
     achievements,
     program,
     schedule,
+    scheduleEarned,
     addSession,
     completeScheduleDay,
   } = useSessions();
@@ -404,6 +406,8 @@ export function WorkoutScreen({
     // stay its own: a schedule day of six exercises saves six. A hold's reps
     // are its seconds. Rest is the workout's, so it goes on the first.
     const groups = groupByExercise(sets);
+    // Sessions saved together are one workout in the counts and badges.
+    const workoutId = groups.length > 1 ? createSessionId() : undefined;
     const saved = [];
     let earnedSeconds = 0;
     for (const [i, group] of groups.entries()) {
@@ -420,6 +424,7 @@ export function WorkoutScreen({
           followed?.kind === 'program'
             ? { level: followed.level, week: followed.week, day: followed.day }
             : null,
+        workoutId,
       });
       saved.push(session);
       // Credited with the save, so fun time always matches the history: a
@@ -449,6 +454,7 @@ export function WorkoutScreen({
       [...saved.slice().reverse(), ...sessions],
       program?.completedDays ?? {},
       scheduleCompleted,
+      scheduleEarned,
     );
     for (const id of newlyUnlocked(achievementsBefore, achievementsAfter)) {
       celebrations.push(t('notice.achievement', { name: t(`ach.${id}.title`) }));
@@ -499,6 +505,7 @@ export function WorkoutScreen({
     addSession,
     program,
     schedule,
+    scheduleEarned,
     completeScheduleDay,
     sessions,
     onCelebrate,

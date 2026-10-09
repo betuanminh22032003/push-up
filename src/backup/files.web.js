@@ -18,8 +18,8 @@ export async function shareTextFile(name, text, { mimeType = 'application/json' 
   return 'shared';
 }
 
-/** @returns {Promise<{name: string, text: string} | null>} */
-export function pickTextFile() {
+/** @returns {Promise<{name: string, text: string|null, tooLarge?: boolean} | null>} */
+export function pickTextFile({ maxBytes = Infinity } = {}) {
   if (typeof document === 'undefined') return Promise.resolve(null);
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
@@ -31,6 +31,10 @@ export function pickTextFile() {
       input.remove();
       if (!file) {
         resolve(null);
+        return;
+      }
+      if (file.size > maxBytes) {
+        resolve({ name: file.name, text: null, tooLarge: true });
         return;
       }
       try {

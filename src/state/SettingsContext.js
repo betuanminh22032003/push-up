@@ -34,8 +34,11 @@ export function SettingsProvider({ children }) {
     });
   }, []);
 
+  /** Back to the defaults after "delete all data", written so it lasts past a restart. */
   const resetSettings = useCallback(() => {
-    setSettings({ ...DEFAULT_SETTINGS, onboardingDone: true });
+    const next = { ...DEFAULT_SETTINGS, onboardingDone: true };
+    setSettings(next);
+    saveSettings(next);
   }, []);
 
   /** Read the stored settings again, after a backup was restored underneath us. */

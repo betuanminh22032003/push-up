@@ -8,7 +8,7 @@ import { decodeChallenge, extractChallengeToken } from '../challenge/codec';
 import { TabBar } from '../components/TabBar';
 import { Toast } from '../components/Toast';
 import { useT } from '../i18n/I18nContext';
-import { configureNotifications, scheduleDailyReminder } from '../notifications/reminders';
+import { cancelDailyReminder, configureNotifications, scheduleDailyReminder } from '../notifications/reminders';
 import { BlockerScreen } from '../screens/BlockerScreen';
 import { ChallengeScreen } from '../screens/ChallengeScreen';
 import { OnboardingModal } from '../screens/OnboardingModal';
@@ -70,9 +70,15 @@ export function AppRoot() {
   }, [settings.onboardingDone, updateSettings]);
 
   // --- reminder: re-schedule from settings so time and language stay current --
+  // Cancelled whenever settings say off, not only by the toggle: a restored
+  // backup can switch it off too.
   const { reminderEnabled, reminderHour, reminderMinute } = settings;
   useEffect(() => {
-    if (!settingsLoaded || !reminderEnabled) return;
+    if (!settingsLoaded) return;
+    if (!reminderEnabled) {
+      cancelDailyReminder();
+      return;
+    }
     scheduleDailyReminder({
       hour: reminderHour,
       minute: reminderMinute,

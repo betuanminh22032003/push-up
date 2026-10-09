@@ -62,10 +62,11 @@ export function backupFileName(now = Date.now()) {
  *   keys            storage keys a backup may carry; anything else is dropped
  *   sessionsKey     the key holding the workout history
  *   isValidSession  the storage layer's own record check
+ *   normalizeSession  (optional) cleans a valid record as the storage layer does
  * @returns {{ok: true, backup: object, dropped: number} | {ok: false, error: string}}
  *   error is one of 'empty', 'tooLarge', 'json', 'format', 'version', 'data'
  */
-export function parseBackup(text, { keys, sessionsKey, isValidSession }) {
+export function parseBackup(text, { keys, sessionsKey, isValidSession, normalizeSession = (s) => s }) {
   if (typeof text !== 'string' || !text.trim()) return { ok: false, error: 'empty' };
   if (text.length > MAX_BACKUP_BYTES) return { ok: false, error: 'tooLarge' };
 
@@ -91,7 +92,7 @@ export function parseBackup(text, { keys, sessionsKey, isValidSession }) {
       if (!Array.isArray(value)) return { ok: false, error: 'data' };
       const valid = value.filter((s) => isValidSession(s));
       dropped += value.length - valid.length;
-      data[key] = valid;
+      data[key] = valid.map((s) => normalizeSession(s));
     } else if (value !== null && typeof value === 'object') {
       // Everything else is an object or a list the storage layer re-checks
       // field by field when it loads it, as it does for its own writes.
