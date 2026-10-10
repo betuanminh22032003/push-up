@@ -139,6 +139,9 @@ export const EXERCISES = [
   camera('diamondpushup', '💎', ['arms', 'chest'], 'side', 1, UNDER_CHEST),
   camera('inclinepushup', '📐', ['chest', 'arms'], 'side', 0.6),
   camera('declinepushup', '⛰️', ['chest', 'shoulders'], 'side', 1, UNDER_CHEST),
+  // One arm takes most of the weight, filmed from the front where both elbows
+  // show. The chest drops off to one side of the phone, so no light sensor.
+  camera('archerpushup', '🏹', ['chest', 'arms', 'shoulders'], 'front', 1.2),
   camera('dip', '🪑', ['arms', 'chest'], 'side', 0.6),
 
   // --- shoulders and arms
@@ -148,6 +151,8 @@ export const EXERCISES = [
   camera('frontraise', '🙋', ['shoulders'], 'side', 0.3),
   camera('bicepcurl', '🥤', ['arms'], 'side', 0.3),
   hold('armcircles', '🌀', ['shoulders', 'arms'], 'front', 0.05),
+  // Lying face down: the no-equipment pull for the upper back.
+  camera('snowangel', '👼', ['back', 'shoulders'], 'side', 0.3),
 
   // --- legs and glutes
   camera('sumosquat', '🐸', ['legs', 'glutes'], 'front', 0.5),
@@ -160,6 +165,7 @@ export const EXERCISES = [
   camera('donkeykick', '🐴', ['glutes'], 'side', 0.25),
   camera('firehydrant', '🚒', ['glutes'], 'front', 0.25),
   camera('goodmorning', '🙇‍♂️', ['back', 'legs', 'glutes'], 'side', 0.3),
+  camera('singlelegrdl', '⚖️', ['glutes', 'legs', 'back'], 'side', 0.5),
 
   // --- core
   camera('crunch', '🔥', ['core'], 'side', 0.3),

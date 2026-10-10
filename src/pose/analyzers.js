@@ -3,20 +3,25 @@ import { SQUAT_DEFAULTS, createSquatAnalyzer } from './squatAnalyzer';
 import { SITUP_DEFAULTS, createSitupAnalyzer } from './situpAnalyzer';
 import { JUMPING_JACK_DEFAULTS, createJumpingJackAnalyzer } from './jumpingJackAnalyzer';
 import {
+  ARCHER_DEFAULTS,
   CURL_DEFAULTS,
   DIP_DEFAULTS,
   PIKE_DEFAULTS,
   PRESS_DEFAULTS,
   RAISE_DEFAULTS,
+  SNOW_ANGEL_DEFAULTS,
+  createArcherPushupAnalyzer,
   createCurlAnalyzer,
   createDipAnalyzer,
   createPikePushupAnalyzer,
   createPressAnalyzer,
   createRaiseAnalyzer,
+  createSnowAngelAnalyzer,
 } from './upperBodyAnalyzers';
 import {
   BRIDGE_DEFAULTS,
   GOOD_MORNING_DEFAULTS,
+  SINGLE_LEG_RDL_DEFAULTS,
   THIGH_LIFT_DEFAULTS,
   createBridgeAnalyzer,
   createGoodMorningAnalyzer,
@@ -90,6 +95,9 @@ const POSE_TABLE = {
     (o) => createPushupAnalyzer({ maxTorsoTilt: 65, ...o }, 'inclinepushup'),
   ],
   declinepushup: [DEFAULTS, (o) => createPushupAnalyzer(o, 'declinepushup')],
+  // One elbow at a time, filmed from the front: the more bent elbow, and a
+  // push-up position read from either view.
+  archerpushup: [ARCHER_DEFAULTS, (o) => createArcherPushupAnalyzer(o)],
   dip: [DIP_DEFAULTS, (o) => createDipAnalyzer(o)],
 
   // --- shoulders and arms
@@ -102,6 +110,7 @@ const POSE_TABLE = {
   ],
   bicepcurl: [CURL_DEFAULTS, (o) => createCurlAnalyzer(o)],
   armcircles: [ARM_CIRCLE_DEFAULTS, (o) => createArmCircleAnalyzer(o)],
+  snowangel: [SNOW_ANGEL_DEFAULTS, (o) => createSnowAngelAnalyzer(o)],
 
   // --- legs and glutes: the squat's hip height, under each variant's own id
   sumosquat: [SQUAT_DEFAULTS, (o) => createSquatAnalyzer(o, 'sumosquat')],
@@ -114,6 +123,11 @@ const POSE_TABLE = {
   donkeykick: [THIGH_LIFT_DEFAULTS, (o) => createThighLiftAnalyzer(o, 'donkeykick')],
   firehydrant: [THIGH_LIFT_DEFAULTS, (o) => createThighLiftAnalyzer(o, 'firehydrant')],
   goodmorning: [GOOD_MORNING_DEFAULTS, (o) => createGoodMorningAnalyzer(o)],
+  // The good morning's hinge on one leg, its gates read on the standing leg.
+  singlelegrdl: [
+    SINGLE_LEG_RDL_DEFAULTS,
+    (o) => createGoodMorningAnalyzer({ ...SINGLE_LEG_RDL_DEFAULTS, ...o }, 'singlelegrdl'),
+  ],
 
   // --- core
   crunch: [CRUNCH_DEFAULTS, (o) => createSitupAnalyzer({ ...CRUNCH_DEFAULTS, ...o }, 'crunch')],
@@ -182,6 +196,7 @@ export const POSE_NEEDS = {
   diamondpushup: PUSHUP_NEEDS,
   inclinepushup: PUSHUP_NEEDS,
   declinepushup: PUSHUP_NEEDS,
+  archerpushup: [ARMS_BOTH],
   dip: [ARM_SIDE, HIPS],
 
   pikepushup: [ARM_SIDE, need(['Hip', 'Knee'], 'any')],
@@ -190,6 +205,7 @@ export const POSE_NEEDS = {
   frontraise: [ARM_SIDE, HIPS],
   bicepcurl: [ARM_SIDE, HIPS],
   armcircles: [need(['Shoulder', 'Elbow'], 'both'), HIPS],
+  snowangel: [need(['Shoulder', 'Elbow', 'Hip'], 'either')],
 
   sumosquat: SQUAT_NEEDS,
   lunge: SQUAT_NEEDS,
@@ -201,6 +217,7 @@ export const POSE_NEEDS = {
   donkeykick: [need(['Shoulder', 'Hip', 'Knee'], 'either')],
   firehydrant: [need(['Shoulder', 'Hip', 'Knee'], 'either')],
   goodmorning: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+  singlelegrdl: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
 
   crunch: LYING_NEEDS,
   legraise: LYING_NEEDS,

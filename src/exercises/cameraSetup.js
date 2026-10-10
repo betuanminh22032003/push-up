@@ -13,9 +13,9 @@ import { getExercise } from './exercises';
  */
 
 const FLOOR = new Set([
-  'pushup', 'kneepushup', 'widepushup', 'diamondpushup', 'declinepushup', 'pikepushup',
+  'pushup', 'kneepushup', 'widepushup', 'diamondpushup', 'declinepushup', 'archerpushup', 'pikepushup',
   'situp', 'crunch', 'legraise', 'bicyclecrunch', 'mountainclimber',
-  'plank', 'sideplank', 'hollowhold', 'superman',
+  'plank', 'sideplank', 'hollowhold', 'superman', 'snowangel',
   'glutebridge', 'singlelegbridge', 'donkeykick', 'firehydrant',
 ]);
 const SEATED = new Set(['russiantwist', 'dip']);

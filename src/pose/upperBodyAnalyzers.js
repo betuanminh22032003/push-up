@@ -1,3 +1,4 @@
+import { distance } from './geometry';
 import { DEFAULTS, measureFrame } from './pushupAnalyzer';
 import { ISSUES, createRepEngine, poseAnalyzer } from './repEngine';
 import {
@@ -7,12 +8,13 @@ import {
   midlineOf,
   perSide,
   sideAngle,
+  torsoLengthOf,
   torsoTiltOf,
 } from './readings';
 
 /**
- * Upper-body exercises: pike push-ups, chair dips, bicep curls, the overhead
- * press, and lateral and front raises.
+ * Upper-body exercises: archer and pike push-ups, chair dips, bicep curls, the
+ * overhead press, lateral and front raises, and the prone snow angel.
  *
  * Each is a rep-engine signal (high at rest, low at the effort, as the
  * push-up's elbow) plus the gates that tell it from its look-alikes: a curl
@@ -34,6 +36,65 @@ function uprightGate(opts) {
     issue: ISSUES.NOT_UPRIGHT,
     veto: true,
   };
+}
+
+/* --- archer push-up ------------------------------------------------------- */
+
+/**
+ * Hands far wider than the shoulders; the body shifts over one hand, bending
+ * that elbow deep while the other arm stays nearly straight, then back up
+ * through the middle and over to the other side. Each side is one rep.
+ *
+ * Filmed from the front (the phone on the floor ahead of the head), where both
+ * arms bend in the picture's plane: side-on, the near arm reaches out toward
+ * the lens and the far one hides behind the body. Signal: the more bent elbow,
+ * so whichever side is working is read; a straight arm stays straight in any
+ * projection, so it never pulls the reading down.
+ *
+ * Gate: in a push-up position. Side-on that is the push-up's torso near
+ * horizontal; from the front the torso points at the lens, so shoulders and
+ * hips sit at about the same height on the picture instead of a torso length
+ * apart, as standing. Either view passing is enough. The push-up's body-line
+ * reading means nothing from the front, so it is not reported.
+ */
+export const ARCHER_DEFAULTS = {
+  ...DEFAULTS,
+  /** From the front: hips at most this many shoulder widths above or below the shoulders. */
+  maxFrontDrop: 0.8,
+};
+
+export function measureArcherFrame(pose, options = {}) {
+  const opts = { ...ARCHER_DEFAULTS, ...options };
+  const none = { tracking: false, elbow: null, torsoTilt: null, frontDrop: null, level: null };
+  if (!pose) return none;
+  const elbow = eitherSide(perSide((s) => sideAngle(pose, s, ELBOW, opts)), Math.min);
+  if (elbow === null) return none;
+  const line = midlineOf(pose, opts);
+  const torsoTilt = torsoTiltOf(line, opts);
+  const seen = (j) => (pose[j] && pose[j].score >= opts.minVisibility ? pose[j] : null);
+  const width = distance(seen('leftShoulder'), seen('rightShoulder'), opts.aspect);
+  const frontDrop = width > 0 && line.hip && line.shoulder ? Math.abs(line.hip.y - line.shoulder.y) / width : null;
+  // How far from a push-up position, by whichever view reads closer: 1 is the limit.
+  const ratios = [
+    torsoTilt === null ? null : torsoTilt / opts.maxTorsoTilt,
+    frontDrop === null ? null : frontDrop / opts.maxFrontDrop,
+  ].filter((v) => v !== null);
+  const level = ratios.length ? Math.min(...ratios) : null;
+  return { tracking: true, elbow, torsoTilt, frontDrop, level };
+}
+
+export function createArcherPushupAnalyzer(options = {}) {
+  const opts = { ...ARCHER_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => frame.level,
+      keep: 'min',
+      fails: (level) => level > 1,
+      issue: ISSUES.NOT_HORIZONTAL,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('archerpushup', engine, (pose) => measureArcherFrame(pose, opts), 'elbow');
 }
 
 /* --- pike push-up --------------------------------------------------------- */
@@ -255,4 +316,83 @@ export function createPressAnalyzer(options = {}) {
     },
   ]);
   return poseAnalyzer('shoulderpress', engine, (pose) => measurePressFrame(pose, opts), 'armGap');
+}
+
+/* --- prone snow angel ----------------------------------------------------- */
+
+/**
+ * Lying face down, arms lifted just off the floor, the straight arms sweep
+ * from the hips out and around to overhead and back: rear shoulders, mid and
+ * lower traps, the muscles between the shoulder blades. Filmed side-on.
+ * Signal: 180 minus the raise at the shoulder (hip-shoulder-elbow), so it is
+ * high at rest and low at the effort as the engine wants: about 160 with the
+ * arms by the hips, 10-30 with them overhead. Halfway, out to the sides, the
+ * arm points at the lens and the reading wanders, but that is inside the
+ * hysteresis band; the ends are what count.
+ *
+ * Gates: lying, the rep's flattest frame within maxLyingTilt of the floor (a
+ * standing jumping jack sweeps the same arc), and the elbows straight (bent,
+ * it is a different, easier move). An elbow is only judged while its upper
+ * arm shows most of its length: pointing at the camera, three nearly coincident
+ * joints make an angle out of noise.
+ */
+export const SNOW_ANGEL_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  minRangeDeg: 40,
+  /** The arms must get within 50 degrees of straight overhead... */
+  downAngleCeiling: 50,
+  /** ...and back to within 50 degrees of the hips. */
+  upAngleFloor: 130,
+  downAngle: 40,
+  upAngle: 140,
+  partialAngle: 90,
+  /** The torso's flattest frame of the rep must lie within this of the floor. */
+  maxLyingTilt: 35,
+  /** The elbows' most bent (readable) frame of the rep must be at least this straight. */
+  minElbow: 120,
+  /** An elbow is read only while the upper arm shows this share of a torso length. */
+  minUpperArmShown: 0.4,
+};
+
+export function measureSnowAngelFrame(pose, options = {}) {
+  const opts = { ...SNOW_ANGEL_DEFAULTS, ...options };
+  const none = { tracking: false, sweep: null, elbow: null, torsoTilt: null };
+  if (!pose) return none;
+  const raise = eitherSide(perSide((s) => sideAngle(pose, s, RAISE, opts)), Math.max);
+  if (raise === null) return none;
+  const line = midlineOf(pose, opts);
+  const torso = torsoLengthOf(line, opts);
+  const elbows = perSide((s) => {
+    const shoulder = pose[s + 'Shoulder'];
+    const elbowAt = pose[s + 'Elbow'];
+    const shown = torso && shoulder && elbowAt ? distance(shoulder, elbowAt, opts.aspect) / torso : 0;
+    return shown >= opts.minUpperArmShown ? sideAngle(pose, s, ELBOW, opts) : null;
+  });
+  return {
+    tracking: true,
+    sweep: 180 - raise,
+    elbow: eitherSide(elbows, Math.min),
+    torsoTilt: torsoTiltOf(line, opts),
+  };
+}
+
+export function createSnowAngelAnalyzer(options = {}) {
+  const opts = { ...SNOW_ANGEL_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => frame.torsoTilt,
+      keep: 'min',
+      fails: (tilt) => tilt > opts.maxLyingTilt,
+      issue: ISSUES.NOT_LYING,
+      veto: true,
+    },
+    {
+      read: (frame) => frame.elbow,
+      keep: 'min',
+      fails: (elbow) => elbow < opts.minElbow,
+      issue: ISSUES.NOT_IN_POSITION,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('snowangel', engine, (pose) => measureSnowAngelFrame(pose, opts), 'sweep');
 }
