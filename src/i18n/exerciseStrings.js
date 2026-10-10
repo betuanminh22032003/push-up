@@ -156,6 +156,34 @@ const LIBRARY = {
       coach: { shallow: 'Hạ ngực thấp hơn' },
     },
   },
+  archerpushup: {
+    en: {
+      name: 'Archer push-ups',
+      noun: 'archer push-ups',
+      cue: 'Hands very wide. Lower over one hand, the other arm nearly straight, push back up to the middle, then the other side. Each side counts.',
+      hint: {
+        ai: 'Phone on the floor 2 m in front of your head, facing you, both arms in frame. Each side counts.',
+        tap: 'Phone on the floor, screen up. Touch the screen with your nose at the bottom of each side, then release.',
+      },
+      coach: {
+        shallow: 'Lower over the bent arm',
+        notHorizontal: 'Hands on the floor, body straight',
+      },
+    },
+    vi: {
+      name: 'Hít đất cung thủ',
+      noun: 'hít đất cung thủ',
+      cue: 'Hai tay đặt thật rộng. Hạ người về phía một tay, tay kia gần như thẳng, đẩy về giữa rồi sang bên kia. Mỗi bên tính một lần.',
+      hint: {
+        ai: 'Đặt điện thoại trên sàn cách đầu 2 m, quay về phía bạn, thấy cả hai tay. Mỗi bên tính một lần.',
+        tap: 'Đặt điện thoại dưới sàn, màn hình ngửa. Chạm mũi vào màn hình khi xuống thấp nhất ở mỗi bên rồi nhả.',
+      },
+      coach: {
+        shallow: 'Hạ thấp hơn về phía tay gập',
+        notHorizontal: 'Chống tay xuống sàn, thân thẳng',
+      },
+    },
+  },
   dip: {
     en: {
       name: 'Chair dips',
@@ -310,6 +338,36 @@ const LIBRARY = {
         timer: 'Đồng hồ bấm giờ: đếm số giây của set. Dang tay ngang vai, xong thì bấm Xong.',
       },
       coach: { shallow: 'Nâng tay ngang vai', notInPosition: 'Tay thẳng, ngang vai' },
+    },
+  },
+  snowangel: {
+    en: {
+      name: 'Snow angels',
+      noun: 'snow angels',
+      cue: 'Face down, arms just off the floor. Sweep the straight arms from your hips around to overhead, then back.',
+      hint: {
+        ai: 'Lie face down with the phone propped on the floor 2 m to your side, whole body in frame side-on.',
+        tap: 'Phone on the floor by your hand. Tap it each time your arms come back to your hips.',
+      },
+      coach: {
+        shallow: 'Sweep all the way overhead',
+        notLying: 'Lie face down on the floor',
+        notInPosition: 'Keep the arms straight',
+      },
+    },
+    vi: {
+      name: 'Thiên thần tuyết',
+      noun: 'thiên thần tuyết',
+      cue: 'Nằm sấp, nhấc tay khỏi sàn một chút. Giữ thẳng tay, vòng từ hông lên quá đầu rồi về lại.',
+      hint: {
+        ai: 'Nằm sấp, điện thoại đặt trên sàn cách 2 m bên hông, thấy cả người từ bên cạnh.',
+        tap: 'Đặt điện thoại dưới sàn cạnh tay. Chạm màn hình mỗi lần tay về lại bên hông.',
+      },
+      coach: {
+        shallow: 'Vòng tay lên hẳn quá đầu',
+        notLying: 'Nằm sấp xuống sàn',
+        notInPosition: 'Giữ thẳng tay',
+      },
     },
   },
 
@@ -532,6 +590,36 @@ const LIBRARY = {
         tap: 'Áp điện thoại lên ngực. Chạm màn hình khi gập xuống thấp nhất.',
       },
       coach: { shallow: 'Gập người sâu hơn', bentKnees: 'Giữ chân gần như thẳng' },
+    },
+  },
+  singlelegrdl: {
+    en: {
+      name: 'Single-leg deadlifts',
+      noun: 'single-leg deadlifts',
+      cue: 'On one leg, knee soft, hinge forward with a flat back as the free leg reaches back, until near level. Do one side, then the other.',
+      hint: {
+        ai: 'Stand side-on to the phone, 2–3 m away, whole body in frame. A wall or chair nearby helps balance.',
+        tap: 'Hold the phone to your chest. Tap the screen at the bottom of each hinge.',
+      },
+      coach: {
+        shallow: 'Hinge further, chest toward level',
+        bentKnees: 'Standing knee only slightly bent',
+        notUpright: 'Stand tall on one leg',
+      },
+    },
+    vi: {
+      name: 'Deadlift một chân',
+      noun: 'deadlift một chân',
+      cue: 'Đứng một chân, gối hơi chùng, gập người về trước với lưng phẳng, chân kia duỗi ra sau, tới gần ngang sàn. Làm hết một bên rồi đổi.',
+      hint: {
+        ai: 'Đứng nghiêng so với điện thoại, cách 2–3 m, thấy cả người. Đứng gần tường hoặc ghế để giữ thăng bằng.',
+        tap: 'Áp điện thoại lên ngực. Chạm màn hình khi gập xuống thấp nhất.',
+      },
+      coach: {
+        shallow: 'Gập sâu hơn, ngực gần ngang sàn',
+        bentKnees: 'Gối chân trụ chỉ hơi chùng',
+        notUpright: 'Đứng thẳng trên một chân',
+      },
     },
   },
 

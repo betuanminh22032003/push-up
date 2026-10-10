@@ -182,6 +182,24 @@ const GUIDE = {
       mistakes: ['Hông võng xuống sàn', 'Cúi đầu chúi xuống trước'],
     },
   },
+  archerpushup: {
+    en: {
+      steps: [
+        'Push-up position with your hands about twice shoulder-width apart, fingers turned out a little.',
+        'Shift over one hand and bend that elbow, lowering your chest toward it while the other arm stays nearly straight.',
+        'Push back up to the middle, then lower over the other hand. Each side is one rep.',
+      ],
+      mistakes: ['Bending both elbows into a wide push-up', 'Hips sagging or twisting toward the floor'],
+    },
+    vi: {
+      steps: [
+        'Vào tư thế chống đẩy, hai tay rộng khoảng gấp đôi vai, ngón tay hơi xoay ra ngoài.',
+        'Dồn người sang một tay và gập khuỷu bên đó, hạ ngực về phía tay ấy, tay kia gần như duỗi thẳng.',
+        'Đẩy người về lại giữa rồi hạ sang tay bên kia. Mỗi bên tính một lần.',
+      ],
+      mistakes: ['Gập cả hai khuỷu thành hít đất tay rộng', 'Hông võng hoặc vặn xuống sàn'],
+    },
+  },
   dip: {
     en: {
       steps: [
@@ -310,6 +328,24 @@ const GUIDE = {
         'Đổi chiều xoay khi được nửa thời gian.',
       ],
       mistakes: ['Để tay rơi thấp hơn vai', 'Nhún vai lên sát tai'],
+    },
+  },
+  snowangel: {
+    en: {
+      steps: [
+        'Lie face down, forehead just off the floor, arms by your sides with the palms down.',
+        'Lift your straight arms a few centimetres and sweep them out to the sides and on up past your head.',
+        'Sweep them back down to your hips the same way, keeping them off the floor the whole time.',
+      ],
+      mistakes: ['Bending the elbows to make it easier', 'Shrugging the shoulders up to your ears'],
+    },
+    vi: {
+      steps: [
+        'Nằm sấp, trán hơi nhấc khỏi sàn, hai tay xuôi bên hông, lòng bàn tay úp.',
+        'Nhấc hai tay thẳng lên vài cm, vòng sang hai bên rồi lên quá đầu.',
+        'Vòng tay theo đường cũ về lại bên hông, tay không chạm sàn suốt động tác.',
+      ],
+      mistakes: ['Gập khuỷu cho đỡ mỏi', 'Nhún vai lên sát tai'],
     },
   },
 
@@ -504,6 +540,24 @@ const GUIDE = {
         'Siết mông, đưa người đứng thẳng lên.',
       ],
       mistakes: ['Cong gù lưng', 'Gập gối thành squat'],
+    },
+  },
+  singlelegrdl: {
+    en: {
+      steps: [
+        'Stand on one leg, knee slightly bent, hands on your hips or hanging in front.',
+        'Hinge at the hip with a flat back as the free leg reaches straight back, until your body is near level.',
+        'Squeeze the glute of the standing leg to come back up. Finish one side, then switch.',
+      ],
+      mistakes: ['Rounding your back to reach lower', 'Hips twisting open as the leg lifts'],
+    },
+    vi: {
+      steps: [
+        'Đứng trên một chân, gối hơi chùng, tay chống hông hoặc buông thả phía trước.',
+        'Gập ở hông, lưng phẳng, đồng thời duỗi chân kia thẳng ra sau tới khi người gần ngang sàn.',
+        'Siết mông chân trụ để đứng thẳng lên. Làm hết một bên rồi đổi chân.',
+      ],
+      mistakes: ['Cong lưng để với xuống thấp hơn', 'Hông xoay mở khi nâng chân'],
     },
   },
 

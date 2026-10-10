@@ -1,6 +1,6 @@
 # Hít Đất AI
 
-Hands-free workout counter for Android (Expo / React Native): 38 exercises, from
+Hands-free workout counter for Android (Expo / React Native): 41 exercises, from
 push-ups, squats and lunges to burpees and holds such as the plank. Dark, set in Be
 Vietnam Pro (a Vietnamese typeface, bundled and loaded before the first frame), pure
 `StyleSheet`, no navigation library.
@@ -85,9 +85,10 @@ cadence and the motion rule. Screens, stats, the schedule and the pose page read
 it, so a new exercise starts there; each one has a camera analyser with the same id
 (`src/pose/analyzers.js`).
 
-There are 38: the four below, push-up variations (knee, wide, diamond, incline,
-decline, pike), dips, presses, raises and curls, squat and lunge variations, bridges,
-kicks and hydrants, crunches, leg raises, mountain climbers, high knees, butt kicks,
+There are 41: the four below, push-up variations (knee, wide, diamond, incline,
+decline, archer, pike), dips, presses, raises and curls, prone snow angels, squat and
+lunge variations, bridges, kicks and hydrants, good mornings and single-leg Romanian
+deadlifts, crunches, leg raises, mountain climbers, high knees, butt kicks,
 burpees, and six holds (plank, side plank, hollow hold, superman, wall sit, arm
 circles). Beyond the four, rep exercises count with the camera or a tap (push-up
 variations done over the phone also with the light sensor), and holds with the camera

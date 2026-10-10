@@ -264,7 +264,9 @@ await check('the registry is well-formed', () => {
     assert.ok(!(e.kind === 'hold' && e.sources.includes('tap')), `${e.id}: a hold cannot be tapped`);
     assert.ok(e.parts.length > 0 && e.parts.every((p) => BODY_PARTS.includes(p)), `${e.id} parts`);
     assert.ok(['side', 'front'].includes(e.view), `${e.id} view`);
-    assert.ok(e.creditWeight > 0 && e.creditWeight <= 1, `${e.id} creditWeight ${e.creditWeight}`);
+    // Relative to a push-up: a harder variant (the archer push-up) may earn a
+    // little more, never a windfall.
+    assert.ok(e.creditWeight > 0 && e.creditWeight <= 1.5, `${e.id} creditWeight ${e.creditWeight}`);
     assert.ok(Number.isFinite(e.minRepMs) && e.minRepMs > 0, `${e.id} minRepMs`);
     if (e.sources.includes('motion')) {
       const { nearDeg, farDeg } = e.motion ?? {};

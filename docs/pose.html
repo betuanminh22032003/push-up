@@ -1463,9 +1463,10 @@ function createJumpingJackAnalyzer(options = {}) {
 
 
 
+
 /**
- * Upper-body exercises: pike push-ups, chair dips, bicep curls, the overhead
- * press, and lateral and front raises.
+ * Upper-body exercises: archer and pike push-ups, chair dips, bicep curls, the
+ * overhead press, lateral and front raises, and the prone snow angel.
  *
  * Each is a rep-engine signal (high at rest, low at the effort, as the
  * push-up's elbow) plus the gates that tell it from its look-alikes: a curl
@@ -1487,6 +1488,65 @@ function uprightGate(opts) {
     issue: ISSUES.NOT_UPRIGHT,
     veto: true,
   };
+}
+
+/* --- archer push-up ------------------------------------------------------- */
+
+/**
+ * Hands far wider than the shoulders; the body shifts over one hand, bending
+ * that elbow deep while the other arm stays nearly straight, then back up
+ * through the middle and over to the other side. Each side is one rep.
+ *
+ * Filmed from the front (the phone on the floor ahead of the head), where both
+ * arms bend in the picture's plane: side-on, the near arm reaches out toward
+ * the lens and the far one hides behind the body. Signal: the more bent elbow,
+ * so whichever side is working is read; a straight arm stays straight in any
+ * projection, so it never pulls the reading down.
+ *
+ * Gate: in a push-up position. Side-on that is the push-up's torso near
+ * horizontal; from the front the torso points at the lens, so shoulders and
+ * hips sit at about the same height on the picture instead of a torso length
+ * apart, as standing. Either view passing is enough. The push-up's body-line
+ * reading means nothing from the front, so it is not reported.
+ */
+const ARCHER_DEFAULTS = {
+  ...DEFAULTS,
+  /** From the front: hips at most this many shoulder widths above or below the shoulders. */
+  maxFrontDrop: 0.8,
+};
+
+function measureArcherFrame(pose, options = {}) {
+  const opts = { ...ARCHER_DEFAULTS, ...options };
+  const none = { tracking: false, elbow: null, torsoTilt: null, frontDrop: null, level: null };
+  if (!pose) return none;
+  const elbow = eitherSide(perSide((s) => sideAngle(pose, s, ELBOW, opts)), Math.min);
+  if (elbow === null) return none;
+  const line = midlineOf(pose, opts);
+  const torsoTilt = torsoTiltOf(line, opts);
+  const seen = (j) => (pose[j] && pose[j].score >= opts.minVisibility ? pose[j] : null);
+  const width = distance(seen('leftShoulder'), seen('rightShoulder'), opts.aspect);
+  const frontDrop = width > 0 && line.hip && line.shoulder ? Math.abs(line.hip.y - line.shoulder.y) / width : null;
+  // How far from a push-up position, by whichever view reads closer: 1 is the limit.
+  const ratios = [
+    torsoTilt === null ? null : torsoTilt / opts.maxTorsoTilt,
+    frontDrop === null ? null : frontDrop / opts.maxFrontDrop,
+  ].filter((v) => v !== null);
+  const level = ratios.length ? Math.min(...ratios) : null;
+  return { tracking: true, elbow, torsoTilt, frontDrop, level };
+}
+
+function createArcherPushupAnalyzer(options = {}) {
+  const opts = { ...ARCHER_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => frame.level,
+      keep: 'min',
+      fails: (level) => level > 1,
+      issue: ISSUES.NOT_HORIZONTAL,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('archerpushup', engine, (pose) => measureArcherFrame(pose, opts), 'elbow');
 }
 
 /* --- pike push-up --------------------------------------------------------- */
@@ -1710,13 +1770,93 @@ function createPressAnalyzer(options = {}) {
   return poseAnalyzer('shoulderpress', engine, (pose) => measurePressFrame(pose, opts), 'armGap');
 }
 
+/* --- prone snow angel ----------------------------------------------------- */
+
+/**
+ * Lying face down, arms lifted just off the floor, the straight arms sweep
+ * from the hips out and around to overhead and back: rear shoulders, mid and
+ * lower traps, the muscles between the shoulder blades. Filmed side-on.
+ * Signal: 180 minus the raise at the shoulder (hip-shoulder-elbow), so it is
+ * high at rest and low at the effort as the engine wants: about 160 with the
+ * arms by the hips, 10-30 with them overhead. Halfway, out to the sides, the
+ * arm points at the lens and the reading wanders, but that is inside the
+ * hysteresis band; the ends are what count.
+ *
+ * Gates: lying, the rep's flattest frame within maxLyingTilt of the floor (a
+ * standing jumping jack sweeps the same arc), and the elbows straight (bent,
+ * it is a different, easier move). An elbow is only judged while its upper
+ * arm shows most of its length: pointing at the camera, three nearly coincident
+ * joints make an angle out of noise.
+ */
+const SNOW_ANGEL_DEFAULTS = {
+  ...REP_BASE_DEFAULTS,
+  minRangeDeg: 40,
+  /** The arms must get within 50 degrees of straight overhead... */
+  downAngleCeiling: 50,
+  /** ...and back to within 50 degrees of the hips. */
+  upAngleFloor: 130,
+  downAngle: 40,
+  upAngle: 140,
+  partialAngle: 90,
+  /** The torso's flattest frame of the rep must lie within this of the floor. */
+  maxLyingTilt: 35,
+  /** The elbows' most bent (readable) frame of the rep must be at least this straight. */
+  minElbow: 120,
+  /** An elbow is read only while the upper arm shows this share of a torso length. */
+  minUpperArmShown: 0.4,
+};
+
+function measureSnowAngelFrame(pose, options = {}) {
+  const opts = { ...SNOW_ANGEL_DEFAULTS, ...options };
+  const none = { tracking: false, sweep: null, elbow: null, torsoTilt: null };
+  if (!pose) return none;
+  const raise = eitherSide(perSide((s) => sideAngle(pose, s, RAISE, opts)), Math.max);
+  if (raise === null) return none;
+  const line = midlineOf(pose, opts);
+  const torso = torsoLengthOf(line, opts);
+  const elbows = perSide((s) => {
+    const shoulder = pose[s + 'Shoulder'];
+    const elbowAt = pose[s + 'Elbow'];
+    const shown = torso && shoulder && elbowAt ? distance(shoulder, elbowAt, opts.aspect) / torso : 0;
+    return shown >= opts.minUpperArmShown ? sideAngle(pose, s, ELBOW, opts) : null;
+  });
+  return {
+    tracking: true,
+    sweep: 180 - raise,
+    elbow: eitherSide(elbows, Math.min),
+    torsoTilt: torsoTiltOf(line, opts),
+  };
+}
+
+function createSnowAngelAnalyzer(options = {}) {
+  const opts = { ...SNOW_ANGEL_DEFAULTS, ...options };
+  const engine = createRepEngine(opts, [
+    {
+      read: (frame) => frame.torsoTilt,
+      keep: 'min',
+      fails: (tilt) => tilt > opts.maxLyingTilt,
+      issue: ISSUES.NOT_LYING,
+      veto: true,
+    },
+    {
+      read: (frame) => frame.elbow,
+      keep: 'min',
+      fails: (elbow) => elbow < opts.minElbow,
+      issue: ISSUES.NOT_IN_POSITION,
+      veto: true,
+    },
+  ]);
+  return poseAnalyzer('snowangel', engine, (pose) => measureSnowAngelFrame(pose, opts), 'sweep');
+}
+
 
 
 
 /**
  * Glutes and the back of the legs: glute bridges (two legs or one), donkey
- * kicks, fire hydrants and good mornings. The squat family — squats, sumo
- * squats, lunges, side lunges, split squats — is ./squatAnalyzer.
+ * kicks, fire hydrants, good mornings and single-leg Romanian deadlifts. The
+ * squat family — squats, sumo squats, lunges, side lunges, split squats — is
+ * ./squatAnalyzer.
  */
 
 /* --- glute bridge (and single-leg bridge) --------------------------------- */
@@ -1856,13 +1996,19 @@ function createThighLiftAnalyzer(options = {}, exercise = 'donkeykick') {
   return poseAnalyzer(exercise, engine, (pose) => measureThighLiftFrame(pose, opts), 'thigh');
 }
 
-/* --- good morning --------------------------------------------------------- */
+/* --- good morning (and single-leg Romanian deadlift) ---------------------- */
 
 /**
  * Side-on, standing, hinging forward at the hips with the back flat. Signal:
  * the torso's tilt from horizontal, 90 standing and 10-30 at the bottom.
  * Gates: the knees stay nearly straight through the rep (bent, it is a squat)
  * and the legs stay upright (lying down and sitting up is a sit-up).
+ *
+ * A single-leg Romanian deadlift is the same hinge on one leg, the free leg
+ * swinging back in line with the torso. The two legs' midpoint would lean
+ * back with it and weaken the upright-legs gate, and a free leg held a little
+ * bent would trip the knee gate, so with `stanceLeg` both gates read the
+ * standing leg alone: the side whose hip-to-ankle line is the more upright.
  */
 const GOOD_MORNING_DEFAULTS = {
   ...REP_BASE_DEFAULTS,
@@ -1875,18 +2021,55 @@ const GOOD_MORNING_DEFAULTS = {
   minKnee: 140,
   /** The legs' most upright frame in the rep must be at least this steep. */
   minLegTilt: 60,
+  /** Judge the knee and the legs' tilt on the standing leg only (single-leg hinges). */
+  stanceLeg: false,
 };
+
+/**
+ * The single-leg hinge: balance on one leg, not the hamstrings, is what
+ * limits it, so the torso only has to get within about 50 degrees of level,
+ * and the standing knee may be softer than a good morning's.
+ */
+const SINGLE_LEG_RDL_DEFAULTS = {
+  ...GOOD_MORNING_DEFAULTS,
+  downAngleCeiling: 50,
+  upAngleFloor: 70,
+  downAngle: 45,
+  upAngle: 78,
+  partialAngle: 62,
+  minKnee: 130,
+  stanceLeg: true,
+};
+
+/** The standing leg, the more upright side: its knee angle and hip-to-ankle tilt. */
+function stanceLegOf(pose, opts) {
+  let best = null;
+  for (const side of ['left', 'right']) {
+    if (!allVisible(pose, [side + 'Hip', side + 'Ankle'], opts.minVisibility)) continue;
+    const tilt = tiltFromHorizontal(pose[side + 'Hip'], pose[side + 'Ankle'], opts.aspect);
+    if (tilt === null || (best && best.tilt >= tilt)) continue;
+    best = { tilt, knee: sideAngle(pose, side, ['Hip', 'Knee', 'Ankle'], opts) };
+  }
+  return best;
+}
 
 function measureGoodMorningFrame(pose, options = {}) {
   const opts = { ...GOOD_MORNING_DEFAULTS, ...options };
   if (!pose) return { tracking: false, torsoTilt: null, knee: null, legTilt: null };
   const line = midlineOf(pose, opts);
   const torsoTilt = torsoTiltOf(line, opts);
+  const stance = opts.stanceLeg ? stanceLegOf(pose, opts) : null;
+  if (stance) return { tracking: torsoTilt !== null, torsoTilt, knee: stance.knee, legTilt: stance.tilt };
   const knee = eitherSide(perSide((s) => sideAngle(pose, s, ['Hip', 'Knee', 'Ankle'], opts)), Math.min);
   return { tracking: torsoTilt !== null, torsoTilt, knee, legTilt: legTiltOf(line, opts) };
 }
 
-function createGoodMorningAnalyzer(options = {}) {
+/**
+ * @param {object} [options]   overrides for GOOD_MORNING_DEFAULTS
+ * @param {string} [exercise]  the id it reports: 'goodmorning', or
+ *   'singlelegrdl' (with SINGLE_LEG_RDL_DEFAULTS as its options)
+ */
+function createGoodMorningAnalyzer(options = {}, exercise = 'goodmorning') {
   const opts = { ...GOOD_MORNING_DEFAULTS, ...options };
   const engine = createRepEngine(opts, [
     {
@@ -1904,7 +2087,7 @@ function createGoodMorningAnalyzer(options = {}) {
       veto: true,
     },
   ]);
-  return poseAnalyzer('goodmorning', engine, (pose) => measureGoodMorningFrame(pose, opts), 'torsoTilt');
+  return poseAnalyzer(exercise, engine, (pose) => measureGoodMorningFrame(pose, opts), 'torsoTilt');
 }
 
 
@@ -2673,6 +2856,9 @@ const POSE_TABLE = {
     (o) => createPushupAnalyzer({ maxTorsoTilt: 65, ...o }, 'inclinepushup'),
   ],
   declinepushup: [DEFAULTS, (o) => createPushupAnalyzer(o, 'declinepushup')],
+  // One elbow at a time, filmed from the front: the more bent elbow, and a
+  // push-up position read from either view.
+  archerpushup: [ARCHER_DEFAULTS, (o) => createArcherPushupAnalyzer(o)],
   dip: [DIP_DEFAULTS, (o) => createDipAnalyzer(o)],
 
   // --- shoulders and arms
@@ -2685,6 +2871,7 @@ const POSE_TABLE = {
   ],
   bicepcurl: [CURL_DEFAULTS, (o) => createCurlAnalyzer(o)],
   armcircles: [ARM_CIRCLE_DEFAULTS, (o) => createArmCircleAnalyzer(o)],
+  snowangel: [SNOW_ANGEL_DEFAULTS, (o) => createSnowAngelAnalyzer(o)],
 
   // --- legs and glutes: the squat's hip height, under each variant's own id
   sumosquat: [SQUAT_DEFAULTS, (o) => createSquatAnalyzer(o, 'sumosquat')],
@@ -2697,6 +2884,11 @@ const POSE_TABLE = {
   donkeykick: [THIGH_LIFT_DEFAULTS, (o) => createThighLiftAnalyzer(o, 'donkeykick')],
   firehydrant: [THIGH_LIFT_DEFAULTS, (o) => createThighLiftAnalyzer(o, 'firehydrant')],
   goodmorning: [GOOD_MORNING_DEFAULTS, (o) => createGoodMorningAnalyzer(o)],
+  // The good morning's hinge on one leg, its gates read on the standing leg.
+  singlelegrdl: [
+    SINGLE_LEG_RDL_DEFAULTS,
+    (o) => createGoodMorningAnalyzer({ ...SINGLE_LEG_RDL_DEFAULTS, ...o }, 'singlelegrdl'),
+  ],
 
   // --- core
   crunch: [CRUNCH_DEFAULTS, (o) => createSitupAnalyzer({ ...CRUNCH_DEFAULTS, ...o }, 'crunch')],
@@ -2765,6 +2957,7 @@ const POSE_NEEDS = {
   diamondpushup: PUSHUP_NEEDS,
   inclinepushup: PUSHUP_NEEDS,
   declinepushup: PUSHUP_NEEDS,
+  archerpushup: [ARMS_BOTH],
   dip: [ARM_SIDE, HIPS],
 
   pikepushup: [ARM_SIDE, need(['Hip', 'Knee'], 'any')],
@@ -2773,6 +2966,7 @@ const POSE_NEEDS = {
   frontraise: [ARM_SIDE, HIPS],
   bicepcurl: [ARM_SIDE, HIPS],
   armcircles: [need(['Shoulder', 'Elbow'], 'both'), HIPS],
+  snowangel: [need(['Shoulder', 'Elbow', 'Hip'], 'either')],
 
   sumosquat: SQUAT_NEEDS,
   lunge: SQUAT_NEEDS,
@@ -2784,6 +2978,7 @@ const POSE_NEEDS = {
   donkeykick: [need(['Shoulder', 'Hip', 'Knee'], 'either')],
   firehydrant: [need(['Shoulder', 'Hip', 'Knee'], 'either')],
   goodmorning: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
+  singlelegrdl: [need(['Shoulder', 'Hip', 'Knee', 'Ankle'], 'either')],
 
   crunch: LYING_NEEDS,
   legraise: LYING_NEEDS,

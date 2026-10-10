@@ -11,7 +11,7 @@ const ELEVATION = 8 * (Math.PI / 180);
  * An exercise drawn as its own figure: one still frame of the 3D demo
  * (src/exercises/demoPoses.js), its most telling pose, in a single
  * colour on a tinted disc. Every exercise gets a mark that shows the movement
- * itself, where an emoji could only hint at it, and all 38 share one style.
+ * itself, where an emoji could only hint at it, and every one shares one style.
  *
  * Plain Views, computed once per exercise, so a list of them costs little.
  */

@@ -256,6 +256,21 @@ const DEMOS = {
     props: [{ kind: 'box', under: 'toe', size: [0.6, 0.4] }],
     yaw: 70,
   },
+  archerpushup: (() => {
+    // Hands about twice shoulder-width. The body pivots on the feet over one
+    // hand (the pelvis' yaw) and drops, that elbow bending out and back while
+    // the planted far hand keeps its arm long.
+    const top = pose({ rot: [72, 0, 0], world: 'arms', ...both([0, 30, 0, 30]) });
+    const left = pose({ rot: [80, 0, 9], world: 'arms', lArm: [-55, 60, 0, 25], rArm: [0, 50, 0, 50] });
+    return {
+      poses: [top, left, mirror(left)],
+      loop: [[1, 900], [0, 700], [2, 900], [0, 700]],
+      // The feet turn a little on the floor with the pivot rather than bend a knee.
+      plant: HANDS,
+      anchor: 'ankleL',
+      yaw: 35,
+    };
+  })(),
   dip: {
     plant: [...HANDS, ...FEET],
     poses: [
@@ -293,6 +308,18 @@ const DEMOS = {
     ],
     loop: [[1, 220], [2, 220], [3, 220], [0, 220]],
     yaw: 25,
+  },
+  snowangel: {
+    // Face down, straight arms a little off the floor, swept along it from the
+    // hips (abduction 8) round to overhead (172). The slight backward flex by
+    // the hips and forward flex overhead both lift the hands off the floor,
+    // so easing between the two ends keeps them up the whole way round.
+    poses: [
+      pose({ pointed: true, rot: [90, 0, 0], spine: [-6, 0, 0], ...both([-10, 8, -10, 8]), ...legs([0, 5, 0, 5]) }),
+      pose({ pointed: true, rot: [90, 0, 0], spine: [-6, 0, 0], ...both([6, 172, 6, 172]), ...legs([0, 5, 0, 5]) }),
+    ],
+    loop: [[1, 1400], [0, 1400]],
+    yaw: 120,
   },
 
   squat: {
@@ -376,6 +403,18 @@ const DEMOS = {
       pose(both(HANDS_ON_HEAD)),
       pose({ rot: [78, 0, 0], world: 'legs', ...both(HANDS_ON_HEAD), ...legs([12, 6, -8, 6]) }),
     ],
+    anchor: 'ankleL',
+    yaw: 80,
+  },
+  singlelegrdl: {
+    // Standing on the left leg, knee soft; the right foot just off the floor,
+    // then reaching back in line with the torso as it hinges toward level.
+    plant: ['ankleL'],
+    poses: [
+      pose({ world: 'all', ...both([0, 10, 0, 10]), lLeg: [3, 4, -3, 4], rLeg: [-6, 4, -40, 4] }),
+      pose({ rot: [78, 0, 0], world: 'all', ...both([4, 10, 4, 10]), lLeg: [12, 4, -6, 4], rLeg: [-80, 4, -80, 4] }),
+    ],
+    loop: [[1, 1100], [0, 1000]],
     anchor: 'ankleL',
     yaw: 80,
   },

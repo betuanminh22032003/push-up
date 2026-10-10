@@ -1341,6 +1341,57 @@ const archPose = ({ lift = 25, torsoLift = lift, ...view }) =>
 /** Front-on, arms straight out at `raise` degrees from the sides. */
 const circlesPose = ({ raise = 90, elbow = 180, ...view }) =>
   project(body3d({ upperArm: out(raise), forearm: out(raise + (180 - elbow)) }), view);
+/**
+ * Archer push-up from the front (the phone ahead of the head): a plank with
+ * the hands wide, one elbow bending to 70 as the body shifts over it (`alt`
+ * as for `alternating`), the other arm straight. `depth` scales the bend;
+ * `standing` does the same arms upright.
+ */
+const archerPose = ({ alt = 0, depth = 1, standing = false, ...view }) => {
+  const bend = (s) => depth * sideAmount(alt, s);
+  return project(
+    body3d({
+      torso: standing ? sag(180) : sag(90),
+      thigh: standing ? sag(0) : sag(-90),
+      upperArm: (s) => out(30 + 70 * bend(s))(s),
+      forearm: (s) => out(30 - 40 * bend(s))(s),
+    }),
+    { yaw: 0, ...view },
+  );
+};
+/**
+ * Single-leg Romanian deadlift side-on: standing on the left leg, its knee
+ * bent `knee` degrees; the torso bows `bow` degrees and the right leg swings
+ * back in line with it, bent `freeKnee` degrees. `squat` bends the standing
+ * knee with the bow instead (a single-leg squat).
+ */
+const rdlPose = ({ bow = 0, knee = 15, freeKnee = 0, squat: squatting = false, ...view }) => {
+  const stanceKnee = squatting ? knee + bow : knee;
+  return project(
+    body3d({
+      torso: sag(180 - bow),
+      thigh: (s) => (s === 1 ? sag(squatting ? 8 + bow / 2 : 8) : sag(-bow)),
+      shin: (s) => (s === 1 ? sag((squatting ? 8 + bow / 2 : 8) - stanceKnee) : sag(-bow - freeKnee)),
+    }),
+    { yaw: 90, ...view },
+  );
+};
+/**
+ * Prone snow angel: lying face down, head toward +z, the straight arms lifted
+ * `lift` off the floor and swept `sweep` degrees from by the hips (0) out and
+ * round to overhead (180). `bent` holds the forearms up off the floor instead.
+ */
+const angelPose = ({ sweep: deg = 0, lift = 0.15, bent = false, ...view }) => {
+  const arm = (s) => {
+    const v = [s * Math.sin(rad(deg)), lift, -Math.cos(rad(deg))];
+    const n = Math.hypot(...v);
+    return [v[0] / n, v[1] / n, v[2] / n];
+  };
+  return project(
+    body3d({ torso: sag(90), thigh: sag(-90), upperArm: arm, forearm: bent ? [0, 1, 0] : arm }),
+    { yaw: 90, ...view },
+  );
+};
 
 /** Seconds counted by a hold analyser for frames at `step` ms apart. */
 const timeHeld = (id, poseOf, frames, step = STEP, startAt = 0) => play(createAnalyzer(id), poseOf, frames, startAt, step).reps;
@@ -1369,6 +1420,21 @@ await check('pike push-ups count with the hips piked, not from a flat plank', ()
   const { reps, events } = play(createAnalyzer('pikepushup'), pikePose, repeat(2, flat));
   assert.equal(reps, 0);
   assert.ok(issuesIn(events).includes(ISSUES.NOT_IN_POSITION));
+});
+
+await check('archer push-ups count each side from the front; the same arms standing do not', () => {
+  const a = createAnalyzer('archerpushup');
+  assert.equal(a.exercise, 'archerpushup');
+  assert.equal(play(a, archerPose, alternating(6, 900)).reps, 6, 'alternating sides');
+  // Side-on, the push-up gate reads the torso as for any push-up.
+  assert.equal(run(createAnalyzer('archerpushup'), [...cycle(), ...cycle({ tilt: 20 })]).reps, 2, 'side-on');
+  assert.equal(run(createAnalyzer('archerpushup'), cycle({ tilt: 85 })).reps, 0, 'side-on, standing');
+  const standing = (f) => archerPose({ ...f, standing: true });
+  const { reps, events } = play(createAnalyzer('archerpushup'), standing, alternating(4, 900));
+  assert.equal(reps, 0, 'standing');
+  assert.ok(issuesIn(events).includes(ISSUES.NOT_HORIZONTAL));
+  const shallow = (f) => archerPose({ ...f, depth: 0.25 });
+  assert.equal(play(createAnalyzer('archerpushup'), shallow, alternating(4, 900)).reps, 0, 'a shift without the bend');
 });
 
 await check('chair dips count seated; bending the arms standing does not', () => {
@@ -1424,6 +1490,32 @@ await check('arm circles: time counts only with both arms out straight at should
   assert.equal(timeHeld('armcircles', circlesPose, hold(5000, { raise: 10 })), 0, 'arms down');
   assert.equal(timeHeld('armcircles', circlesPose, hold(5000, { raise: 90, elbow: 90 })), 0, 'elbows bent');
   assert.equal(timeHeld('armcircles', (f) => circlesPose({ ...f, roll: 90 }), hold(5000, { raise: 90 })), 0, 'lying');
+});
+
+await check('snow angels count a full sweep lying face down, from either side', () => {
+  const angel = repOf('sweep', { rest: 5, effort: 175, downMs: 1000, upMs: 1000 });
+  for (const yaw of [90, -90]) {
+    const a = createAnalyzer('snowangel');
+    assert.equal(a.exercise, 'snowangel');
+    assert.equal(play(a, (f) => angelPose({ ...f, yaw }), repeat(4, angel)).reps, 4, `yaw ${yaw}`);
+  }
+  const hidden = (f) => angelPose({ ...f, hide: ['rightShoulder', 'rightElbow', 'rightWrist'] });
+  assert.equal(play(createAnalyzer('snowangel'), hidden, repeat(3, angel)).reps, 3, 'far arm hidden');
+});
+
+await check('snow angels: half a sweep, bent arms or the sweep standing count nothing', () => {
+  const half = play(createAnalyzer('snowangel'), angelPose, repeat(3, repOf('sweep', { rest: 5, effort: 90, downMs: 800, upMs: 800 })));
+  assert.equal(half.reps, 0, 'out to the sides only');
+  assert.ok(issuesIn(half.events).includes(ISSUES.SHALLOW));
+  const bent = (f) => angelPose({ ...f, bent: true });
+  const b = play(createAnalyzer('snowangel'), bent, repeat(3, repOf('sweep', { rest: 5, effort: 175, downMs: 1000, upMs: 1000 })));
+  assert.equal(b.reps, 0, 'elbows bent');
+  assert.ok(issuesIn(b.events).includes(ISSUES.NOT_IN_POSITION));
+  const jacks = play(createAnalyzer('snowangel'), jackPose, repeat(4, withLegs(jack())));
+  assert.equal(jacks.reps, 0, 'jumping jacks');
+  assert.ok(issuesIn(jacks.events).includes(ISSUES.NOT_LYING));
+  const raises = repeat(3, repOf('raise', { rest: 5, effort: 170, forward: true, downMs: 600, upMs: 600 }));
+  assert.equal(play(createAnalyzer('snowangel'), raisePose, raises).reps, 0, 'arms raised overhead standing, side-on');
 });
 
 group('library: legs and glutes');
@@ -1487,6 +1579,31 @@ await check('good mornings count a flat-back hinge; squats and sit-ups do not', 
   assert.equal(sq.reps, 0, 'a squat');
   assert.ok(issuesIn(sq.events).includes(ISSUES.BENT_KNEES));
   assert.equal(play(createAnalyzer('goodmorning'), situpPose, repeat(3, situp())).reps, 0, 'a sit-up');
+});
+
+await check('single-leg deadlifts count the hinge on one leg, the free leg swinging back', () => {
+  const hinge = repOf('bow', { rest: 0, effort: 75, downMs: 800, upMs: 800 });
+  for (const yaw of [90, -90]) {
+    const a = createAnalyzer('singlelegrdl');
+    assert.equal(a.exercise, 'singlelegrdl');
+    assert.equal(play(a, (f) => rdlPose({ ...f, yaw }), repeat(4, hinge)).reps, 4, `yaw ${yaw}`);
+  }
+  // A free leg held bent does not trip the knee gate: only the standing knee is judged.
+  const bentFree = (f) => rdlPose({ ...f, freeKnee: 60 });
+  assert.equal(play(createAnalyzer('singlelegrdl'), bentFree, repeat(3, hinge)).reps, 3, 'free knee bent');
+  // A balance-limited hinge, torso to about 45 degrees off level, still counts.
+  const partial = repOf('bow', { rest: 0, effort: 48, downMs: 700, upMs: 700 });
+  assert.equal(play(createAnalyzer('singlelegrdl'), rdlPose, repeat(3, partial)).reps, 3, 'to 42 degrees');
+});
+
+await check('single-leg deadlifts: a single-leg squat, a shallow bow or a sit-up count nothing', () => {
+  const hinge = repOf('bow', { rest: 0, effort: 75, downMs: 800, upMs: 800 });
+  const sq = play(createAnalyzer('singlelegrdl'), (f) => rdlPose({ ...f, squat: true }), repeat(3, hinge));
+  assert.equal(sq.reps, 0, 'the standing knee bends: a single-leg squat');
+  assert.ok(issuesIn(sq.events).includes(ISSUES.BENT_KNEES));
+  const nod = repOf('bow', { rest: 0, effort: 25, downMs: 600, upMs: 600 });
+  assert.equal(play(createAnalyzer('singlelegrdl'), rdlPose, repeat(3, nod)).reps, 0, 'a nod forward');
+  assert.equal(play(createAnalyzer('singlelegrdl'), situpPose, repeat(3, situp())).reps, 0, 'a sit-up');
 });
 
 group('library: core');
@@ -1632,6 +1749,10 @@ await check('every exercise survives noisy landmarks at 15fps', () => {
     ['highknees', (f) => kneesPose({ ...f, view: { jitter: 0.01 } }), scissoring(5, 500)],
     ['buttkicks', (f) => kicksPose({ ...f, view: { jitter: 0.01 } }), scissoring(5, 500)],
     ['burpee', (f) => burpeePose({ ...f, jitter: 0.01 }), repeat(5, burpee())],
+    // Added later, so last: the earlier sets keep the noise they were tuned on.
+    ['singlelegrdl', (f) => rdlPose({ ...f, jitter: 0.01 }), repeat(5, repOf('bow', { rest: 0, effort: 75, downMs: 800, upMs: 800 }))],
+    ['archerpushup', (f) => archerPose({ ...f, jitter: 0.01 }), alternating(5, 900)],
+    ['snowangel', (f) => angelPose({ ...f, jitter: 0.01 }), repeat(5, repOf('sweep', { rest: 5, effort: 175, downMs: 1000, upMs: 1000 }))],
   ];
   for (const [id, poseOf, frames] of sets) {
     const sparse = frames.filter((_, i) => i % 2 === 0);
