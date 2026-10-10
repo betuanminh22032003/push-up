@@ -221,6 +221,10 @@ export const DEFAULT_SETTINGS = {
   voiceEnabled: true,
   coachVoiceEnabled: true, // say form mistakes the camera sees out loud
   cameraFullScreen: false, // the camera fills the whole screen during a workout
+  // The pre-exercise health check (src/program/healthCheck.js): null until
+  // answered, then { at, anyYes, lowImpact }. A yes asks the user to see a
+  // doctor first and keeps maximal efforts out of the placement test.
+  healthCheck: null,
   countdownSeconds: 5,
   restSeconds: 60,
   dailyGoal: 50,
@@ -334,9 +338,14 @@ export async function saveProgram(program) {
 }
 
 /**
- * Training schedule progress (src/program/program.js): the level picked and
- * which days are done. `null` means no schedule has been started.
- *   { level, startedAt, completed: { [programDayKey]: timestamp } }
+ * Training schedule progress (src/program/program.js): the level, which days
+ * are done, and where each exercise slot stands. `null` means no schedule has
+ * been started.
+ *   { level, startedAt, completed: { [programDayKey]: timestamp },
+ *     slots: { [slotId]: { rung, target, top, misses, lastAt } } | null,
+ *     cycle: 1, 2...  (a later cycle opens with a lighter week),
+ *     tested: timestamp of the last placement test | null }
+ * Slots are checked by program.js's slotsFor when used, not here.
  */
 export async function loadSchedule() {
   try {
@@ -352,6 +361,9 @@ export async function loadSchedule() {
       level: parsed.level,
       startedAt: Number.isFinite(parsed.startedAt) ? parsed.startedAt : Date.now(),
       completed,
+      slots: isPlainObject(parsed.slots) ? parsed.slots : null,
+      cycle: Number.isFinite(parsed.cycle) && parsed.cycle >= 1 ? Math.floor(parsed.cycle) : 1,
+      tested: Number.isFinite(parsed.tested) ? parsed.tested : null,
     };
   } catch {
     return null;

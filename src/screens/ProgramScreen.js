@@ -11,20 +11,25 @@ import { useT } from '../i18n/I18nContext';
 import {
   PROGRAM_LEVELS,
   PROGRAM_WEEKS,
+  SLOTS,
   TRAINING_DAYS_TOTAL,
   countCompleted,
   currentWeek,
   dayPlan,
   isProgramComplete,
+  needsRetest,
   nextProgramDay,
   normalizeLevel,
   planSets,
   planTotals,
   programDayKey,
+  testPlan,
   weekPlan,
   weekProgress,
 } from '../program/program';
 import { useSessions } from '../state/SessionsContext';
+import { useSettings } from '../state/SettingsContext';
+import { HealthCheckCard, HealthNote, MethodCard } from '../components/TrainingInfo';
 import { colors, font, radius, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { ExerciseGlyph } from '../components/ExerciseGlyph';
@@ -53,7 +58,9 @@ function LevelBars({ level }) {
 export function ProgramScreen({ onStartPlan }) {
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { schedule, startSchedule, resetSchedule } = useSessions();
+  const { schedule, startSchedule, startNextCycle, resetSchedule } = useSessions();
+  const { settings, updateSettings } = useSettings();
+  const health = settings.healthCheck;
 
   const level = schedule ? normalizeLevel(schedule.level) : null;
   const completed = schedule?.completed ?? {};
@@ -65,11 +72,26 @@ export function ProgramScreen({ onStartPlan }) {
   // The week on show: the current one, until another is picked.
   const [shownWeek, setShownWeek] = useState(thisWeek);
   useEffect(() => setShownWeek(thisWeek), [thisWeek]);
-  const days = useMemo(() => (level ? weekPlan(level, shownWeek) : []), [level, shownWeek]);
+  // What a day plan needs besides the level: where each exercise stands, the
+  // comeback rule's clock, jump-free cardio, and the lighter first week of a
+  // later cycle.
+  const slots = schedule?.slots;
+  const cycle = schedule?.cycle ?? 1;
+  const lowImpact = !!health?.lowImpact;
+  const optionsFor = (week) => ({ slots, now: Date.now(), lowImpact, light: cycle > 1 && week === 1 });
+  const days = useMemo(
+    () => (level ? weekPlan(level, shownWeek, optionsFor(shownWeek)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [level, shownWeek, slots, cycle, lowImpact],
+  );
+  const retestDue = !!schedule && !finished && needsRetest(slots, Date.now());
   const [openDay, setOpenDay] = useState(null);
 
   /** The workout tab runs every set of the day in order. */
   const startDay = (plan) => onStartPlan({ kind: 'program', ...plan, sets: planSets(plan) });
+  /** The placement test; a yes on the health check leaves the maximal plank out. */
+  const startTest = () => onStartPlan(testPlan({ cautious: !!health?.anyYes }));
+  const redoHealth = () => updateSettings({ healthCheck: null });
 
   const pickLevel = (next) => {
     if (!schedule) {
@@ -103,7 +125,7 @@ export function ProgramScreen({ onStartPlan }) {
     label: i + 1 === thisWeek && !finished ? `${t('program.week', { week: i + 1 })} •` : t('program.week', { week: i + 1 }),
   }));
   const week = weekProgress(completed, shownWeek);
-  const nextPlan = upcoming ? dayPlan(level, upcoming.week, upcoming.day) : null;
+  const nextPlan = upcoming ? dayPlan(level, upcoming.week, upcoming.day, optionsFor(upcoming.week)) : null;
 
   return (
     <ScrollView
@@ -114,9 +136,18 @@ export function ProgramScreen({ onStartPlan }) {
       <Text style={styles.title}>{t('program.title')}</Text>
       <Text style={styles.intro}>{t('program.intro')}</Text>
 
-      {!schedule ? (
+      {!schedule && !health ? (
+        <HealthCheckCard onDone={(check) => updateSettings({ healthCheck: check })} />
+      ) : !schedule ? (
+        <>
+          <HealthNote check={health} onRedo={redoHealth} />
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>{t('program.test.title')}</Text>
+            <Text style={styles.cardBody}>{t('program.test.body')}</Text>
+            <Button label={t('program.test.start')} onPress={startTest} style={styles.cardButton} />
+          </View>
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('program.chooseLevel')}</Text>
+          <Text style={styles.cardTitle}>{t('program.test.or')}</Text>
           {PROGRAM_LEVELS.map((id) => (
             <Pressable
               key={id}
@@ -134,6 +165,7 @@ export function ProgramScreen({ onStartPlan }) {
           ))}
           <Text style={styles.note}>{t('program.progression')}</Text>
         </View>
+        </>
       ) : (
         <>
           <View style={styles.card}>
@@ -159,16 +191,28 @@ export function ProgramScreen({ onStartPlan }) {
                 <Text style={styles.cardBody}>
                   {t(level === 'advanced' ? 'program.completeBodyTop' : 'program.completeBody')}
                 </Text>
-                {level !== 'advanced' ? (
-                  <Button
-                    label={t('program.levelUp')}
-                    onPress={() => startSchedule(PROGRAM_LEVELS[PROGRAM_LEVELS.indexOf(level) + 1])}
-                    style={styles.cardButton}
-                  />
-                ) : null}
+                <Button label={t('program.retest')} onPress={startTest} style={styles.cardButton} />
+                <Button
+                  label={t('program.levelUp')}
+                  variant="secondary"
+                  onPress={() => startNextCycle()}
+                  style={styles.cardButton}
+                />
               </>
             ) : nextPlan ? (
               <>
+                {retestDue ? (
+                  <>
+                    <Text style={styles.warnLine}>{t('program.retestDue')}</Text>
+                    <Button
+                      label={t('program.retest')}
+                      variant="secondary"
+                      onPress={startTest}
+                      style={styles.cardButton}
+                    />
+                  </>
+                ) : null}
+                {nextPlan.light ? <Text style={styles.nextLine}>{t('program.light')}</Text> : null}
                 <Text style={styles.nextLine}>
                   {`${t('program.next')}: ${t('workout.programDay', nextPlan)} · ${t(`program.focus.${nextPlan.focus}`)}`}
                 </Text>
@@ -256,16 +300,47 @@ export function ProgramScreen({ onStartPlan }) {
 
                 {open ? (
                   <View style={styles.items}>
-                    {plan.items.map((item) => {
+                    {plan.items.some((item) => item.warmup) ? (
+                      <View style={styles.item}>
+                        <View style={styles.grow}>
+                          <Text style={styles.itemName}>{t('program.warmup')}</Text>
+                          <Text style={styles.itemCue}>
+                            {plan.items
+                              .filter((item) => item.warmup)
+                              .map((item) => t(`exercise.${item.exerciseId}`))
+                              .join(' · ')}
+                          </Text>
+                          <Text style={styles.itemWhy}>{t('program.why.warmup')}</Text>
+                        </View>
+                      </View>
+                    ) : null}
+                    {plan.items.filter((item) => !item.warmup).map((item, i) => {
                       const e = getExercise(item.exerciseId);
+                      const ladder = item.slot ? SLOTS[item.slot].ladder : null;
+                      let why = null;
+                      if (item.role === 'cardio') why = i === 0 ? 'program.why.cardio' : null;
+                      else if (item.role === 'hold') why = 'program.why.hold';
+                      else if (i === 0) why = 'program.why.main';
                       return (
-                        <View key={item.exerciseId} style={styles.item}>
+                        <View key={`${item.exerciseId}-${i}`} style={styles.item}>
                           <ExerciseGlyph exerciseId={e.id} size={36} />
                           <View style={styles.grow}>
                             <Text style={styles.itemName}>{t(`exercise.${e.id}`)}</Text>
+                            {ladder && ladder.length > 1 ? (
+                              <Text style={styles.itemStep}>
+                                {t('program.rung', {
+                                  n: ladder.indexOf(item.exerciseId) + 1,
+                                  total: ladder.length,
+                                })}
+                              </Text>
+                            ) : null}
                             <Text style={styles.itemCue} numberOfLines={2}>
                               {t(`exercise.${e.id}.cue`)}
                             </Text>
+                            {item.slot && !item.hold ? (
+                              <Text style={styles.itemStep}>{t('program.amrap')}</Text>
+                            ) : null}
+                            {why ? <Text style={styles.itemWhy}>{t(why)}</Text> : null}
                           </View>
                           <ExerciseGuideButton exerciseId={e.id} compact />
                           <Text style={styles.itemTarget}>
@@ -290,12 +365,14 @@ export function ProgramScreen({ onStartPlan }) {
           })}
 
           <Text style={styles.note}>{t('program.progression')}</Text>
+          <HealthNote check={health} onRedo={redoHealth} />
 
           <Pressable onPress={confirmRestart} hitSlop={8} accessibilityRole="button" style={styles.restart}>
             <Text style={styles.restartText}>{t('program.restart')}</Text>
           </Pressable>
         </>
       )}
+      <MethodCard />
     </ScrollView>
   );
 }
@@ -322,6 +399,7 @@ const styles = StyleSheet.create({
   progressText: { ...font('400'), fontSize: 13, color: colors.textDim },
   progressBar: { marginTop: spacing.md },
   complete: { fontSize: 17, ...font('600'), color: colors.accent, marginTop: spacing.md },
+  warnLine: { ...font('500'), fontSize: 14, color: colors.warn, marginTop: spacing.md, lineHeight: 20 },
   nextLine: { ...font('400'), fontSize: 14, color: colors.text, marginTop: spacing.md },
 
   levelRow: {
@@ -406,6 +484,8 @@ const styles = StyleSheet.create({
   },
   itemName: { fontSize: 14, ...font('600'), color: colors.text },
   itemCue: { ...font('400'), fontSize: 12, color: colors.textDim, marginTop: 1, lineHeight: 16 },
+  itemStep: { ...font('600'), fontSize: 11, color: colors.accent, marginTop: 1 },
+  itemWhy: { ...font('400'), fontSize: 11, color: colors.textFaint, marginTop: 2, lineHeight: 15 },
   itemTarget: { fontSize: 15, ...font('600'), color: colors.accent, fontVariant: ['tabular-nums'] },
   dayButton: { marginTop: spacing.sm },
 

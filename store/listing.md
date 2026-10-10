@@ -26,7 +26,7 @@ Hít Đất AI: Push-up Counter
 **Short description** (80)
 
 ```
-AI camera counts 38 exercises hands-free. 4-week plan, streaks and challenges.
+AI camera counts 41 exercises hands-free. 4-week plan, streaks and challenges.
 ```
 
 **Full description**
@@ -35,14 +35,18 @@ AI camera counts 38 exercises hands-free. 4-week plan, streaks and challenges.
 Put the phone down and just train. Hít Đất AI counts every rep for you — with the camera, the sensor, or a tap — and turns it into a habit.
 
 COUNTS HANDS-FREE
-• 38 exercises: push-ups and their variations, squats, lunges, sit-ups, crunches, bridges, burpees, jumping jacks, and holds such as the plank and wall sit, timed in seconds of good form.
+• 41 exercises: push-ups and their variations, squats, lunges, sit-ups, crunches, bridges, burpees, jumping jacks, and holds such as the plank and wall sit, timed in seconds of good form.
 • AI camera: prop the phone up and the camera counts your reps and coaches your form ("go lower", "keep your body straight").
 • A setup card shows where to put the phone for each exercise — side or front, how far, how high — and counting only starts once the camera can see every body part it needs. It tells you what is out of frame.
 • Sensor mode for push-ups, motion mode for squats, sit-ups and jumping jacks, and tap mode on every phone.
 • Voice count says each number out loud so you never look at the screen.
 
-A REAL TRAINING PLAN
-• 4-week schedule at three levels — beginner, intermediate, advanced — mixing exercises for the whole body.
+A TRAINING PLAN BUILT ON EXERCISE SCIENCE
+• No equipment: just the floor and your body.
+• A 10-minute placement test, counted by the camera, sets where you start.
+• Three full-body strength days and two short cardio days a week, so every muscle group is trained at least twice a week, as the WHO guideline asks.
+• Each exercise climbs a ladder of harder variations — incline, knee, full, diamond, decline, archer push-up — and its target follows the reps the camera actually counted.
+• Warm-up first, the hardest move while you are fresh, holds and core last, longer rest after the hard sets. Every rule is explained in the app, with its sources.
 • Countdown before every set, rest timer between sets, sound, vibration and voice cues.
 
 CHALLENGE YOUR FRIENDS
@@ -64,6 +68,8 @@ YOUR DATA, YOUR PHONE
 • Something counted wrong or crashed? Send a report through your share sheet — you read it first, and nothing is sent automatically.
 
 Available in English and Vietnamese.
+
+Hít Đất AI is a fitness app, not a medical device: it does not diagnose, treat, cure or prevent any condition. Check with a healthcare professional before starting a new exercise programme, especially if you have a health condition or are pregnant.
 ```
 
 ## Vietnamese (vi)
@@ -77,7 +83,7 @@ Hít Đất AI: Đếm bằng camera
 **Short description** (80)
 
 ```
-Camera AI đếm 38 bài tập rảnh tay. Lịch tập 4 tuần, chuỗi ngày và thách đấu.
+Camera AI đếm 41 bài tập rảnh tay. Lịch tập 4 tuần, chuỗi ngày và thách đấu.
 ```
 
 **Full description**
@@ -86,14 +92,18 @@ Camera AI đếm 38 bài tập rảnh tay. Lịch tập 4 tuần, chuỗi ngày 
 Đặt điện thoại xuống và chỉ việc tập. Hít Đất AI đếm từng cái cho bạn — bằng camera, cảm biến hoặc chạm — và biến nó thành thói quen.
 
 ĐẾM RẢNH TAY
-• 38 bài tập: hít đất và các biến thể, squat, lunge, gập bụng, crunch, cầu mông, burpee, bật nhảy, và các bài giữ tư thế như plank, ngồi dựa tường — tính bằng số giây giữ đúng tư thế.
+• 41 bài tập: hít đất và các biến thể, squat, lunge, gập bụng, crunch, cầu mông, burpee, bật nhảy, và các bài giữ tư thế như plank, ngồi dựa tường — tính bằng số giây giữ đúng tư thế.
 • Camera AI: dựng điện thoại lên, camera đếm số cái và nhắc tư thế ("xuống thấp hơn", "giữ thẳng người").
 • Thẻ hướng dẫn cho từng bài: đặt máy bên hông hay trước mặt, cách bao xa, cao bao nhiêu. Máy chỉ bắt đầu đếm khi camera đã thấy đủ các phần cơ thể cần thiết, và báo phần nào đang ra khỏi khung hình.
 • Chế độ cảm biến cho hít đất, chuyển động cho squat, gập bụng, bật nhảy, và chạm màn hình trên mọi máy.
 • Đọc số bằng giọng nói, không cần nhìn màn hình.
 
-LỊCH TẬP THỰC SỰ
-• Lịch tập 4 tuần với ba cấp độ — mới tập, trung bình, nâng cao — kết hợp các bài cho toàn thân.
+LỊCH TẬP DỰA TRÊN KHOA HỌC THỂ THAO
+• Không cần dụng cụ: chỉ cần sàn nhà và cơ thể.
+• Bài kiểm tra 10 phút, camera đếm, để xếp điểm bắt đầu cho bạn.
+• Mỗi tuần 3 buổi sức mạnh toàn thân và 2 buổi cardio ngắn, để mọi nhóm cơ được tập ít nhất 2 lần/tuần như khuyến nghị của WHO.
+• Mỗi bài có các bậc khó dần — hít đất dựa, quỳ, thường, kim cương, dốc, archer — và mục tiêu đi theo số rep camera đếm được thật.
+• Khởi động trước, bài khó nhất làm lúc còn sung sức, bài giữ và bụng để cuối, nghỉ lâu hơn sau hiệp nặng. Mỗi quy tắc đều được giải thích trong app, kèm nguồn.
 • Đếm ngược trước mỗi set, đồng hồ nghỉ giữa các set, âm thanh, rung và giọng nói.
 
 THÁCH ĐẤU BẠN BÈ
@@ -115,6 +125,8 @@ DỮ LIỆU CỦA BẠN, TRÊN MÁY BẠN
 • Đếm sai hay app bị lỗi? Gửi báo cáo qua bảng chia sẻ — bạn đọc trước, không có gì tự động gửi đi.
 
 Có tiếng Việt và tiếng Anh.
+
+Hít Đất AI là ứng dụng tập luyện, không phải thiết bị y tế: không chẩn đoán, điều trị, chữa khỏi hay phòng ngừa bệnh nào. Hãy hỏi ý kiến nhân viên y tế trước khi bắt đầu một chương trình tập mới, nhất là khi bạn có bệnh hoặc đang mang thai.
 ```
 
 ---

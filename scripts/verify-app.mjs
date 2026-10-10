@@ -37,6 +37,11 @@ const achievements = await bundle(
   ),
 );
 const stats = await bundle(timeSrc, statsSrc);
+const weekly = await bundle(
+  timeSrc,
+  exercisesSrc,
+  stripImport(stripImport(read('src/utils/weekly.js'), '../exercises/exercises'), './time'),
+);
 const strings = await bundle(
   read('src/i18n/exerciseStrings.js'),
   read('src/i18n/featureStrings.js'),
@@ -70,6 +75,17 @@ const {
   weeksCompleted,
   countCompleted,
   programExerciseIds,
+  SLOTS,
+  progressSlot,
+  applyDayResults,
+  slotExercise,
+  slotsFor,
+  startingSlots,
+  normalizeSlot,
+  slotsFromTest,
+  testPlan,
+  targetToday,
+  needsRetest,
 } = program;
 const {
   DEFAULT_EXERCISE_ID,
@@ -142,19 +158,35 @@ const allDone = () => {
   for (let w = 1; w <= PROGRAM_WEEKS; w += 1) for (const d of TRAINING_DAYS) done[programDayKey(w, d)] = 1;
   return done;
 };
+const strengthItems = (plan) => plan.items.filter((i) => !i.warmup);
 
-await check('a week is five training days and two rest days, every muscle group covered', () => {
+await check('a week is three full-body days, two cardio days and two rest days', () => {
   assert.equal(WEEK_FOCUS.length, 7);
   assert.equal(WEEK_FOCUS.filter((f) => f === 'rest').length, 2);
+  assert.equal(WEEK_FOCUS.filter((f) => f === 'cardio').length, 2);
   assert.deepEqual(TRAINING_DAYS, [1, 2, 3, 5, 6]);
   assert.equal(TRAINING_DAYS_TOTAL, 5 * PROGRAM_WEEKS);
+  assert.deepEqual(weekPlan('beginner', 1).map((p) => p.focus), WEEK_FOCUS);
+  // Even weeks swap A and B, so each leads twice in a fortnight.
+  assert.deepEqual(weekPlan('beginner', 2).map((p) => p.focus).filter((f) => f.startsWith('full')), ['fullB', 'fullA', 'fullB']);
+});
+
+await check('every muscle group is trained on two days or more, every week, at every level', () => {
   for (const level of PROGRAM_LEVELS) {
-    const parts = new Set();
-    for (const plan of weekPlan(level, 1)) {
-      assert.equal(plan.rest, plan.items.length === 0, `${level} day ${plan.day}`);
-      for (const item of plan.items) for (const p of getExercise(item.exerciseId).parts) parts.add(p);
+    for (let week = 1; week <= PROGRAM_WEEKS; week += 1) {
+      for (const lowImpact of [false, true]) {
+        const days = {};
+        for (const plan of weekPlan(level, week, { lowImpact })) {
+          assert.equal(plan.rest, plan.items.length === 0, `${level} day ${plan.day}`);
+          for (const item of strengthItems(plan)) {
+            for (const p of getExercise(item.exerciseId).parts) (days[p] = days[p] || new Set()).add(plan.day);
+          }
+        }
+        for (const part of BODY_PARTS) {
+          assert.ok((days[part]?.size ?? 0) >= 2, `${level} w${week}${lowImpact ? ' low impact' : ''}: ${part} on ${days[part]?.size ?? 0} days`);
+        }
+      }
     }
-    assert.deepEqual([...parts].sort(), [...BODY_PARTS].sort(), `${level} trains every part`);
   }
 });
 
@@ -172,46 +204,188 @@ await check('every exercise in the schedule is one the app counts, holds marked 
       for (const item of plan.items) assert.equal(item.hold, isHold(item.exerciseId), item.exerciseId);
     }
   }
+  // The slots' ladders need nothing but the floor: no dips off a chair, no unloaded curls.
+  for (const def of Object.values(SLOTS)) {
+    for (const id of def.ladder) assert.ok(!['dip', 'bicepcurl', 'lateralraise', 'frontraise', 'shoulderpress'].includes(id), id);
+  }
 });
 
-await check('levels differ: more sets and bigger targets as the level rises', () => {
-  const volume = (level) =>
-    weekPlan(level, 1).reduce((sum, p) => {
-      const t = planTotals(p);
-      return sum + t.reps + t.seconds;
-    }, 0);
-  assert.ok(volume('beginner') < volume('intermediate'));
-  assert.ok(volume('intermediate') < volume('advanced'));
-  assert.equal(dayPlan('beginner', 1, 1).items[0].sets, 2);
-  assert.equal(dayPlan('advanced', 1, 1).items[0].sets, 3);
-});
-
-await check('targets grow week over week and never shrink', () => {
+await check('a strength day: warm-up first, the main move next, holds last', () => {
   for (const level of PROGRAM_LEVELS) {
-    for (const day of TRAINING_DAYS) {
-      for (let w = 2; w <= PROGRAM_WEEKS; w += 1) {
-        const before = dayPlan(level, w - 1, day).items;
-        const now = dayPlan(level, w, day).items;
-        now.forEach((item, i) => assert.ok(item.target >= before[i].target, `${level} w${w} d${day} ${item.exerciseId}`));
-      }
-      const first = planTotals(dayPlan(level, 1, day));
-      const last = planTotals(dayPlan(level, PROGRAM_WEEKS, day));
-      assert.ok(last.reps + last.seconds > (first.reps + first.seconds) * 1.2, `${level} day ${day} grows`);
+    for (const plan of weekPlan(level, 1).filter((p) => p.focus.startsWith('full'))) {
+      const firstStrength = plan.items.findIndex((i) => !i.warmup);
+      assert.ok(firstStrength >= 3, 'a warm-up of a few moves');
+      assert.ok(plan.items.slice(0, firstStrength).every((i) => i.warmup && i.sets === 1));
+      // The last warm-up move is an easy set of the first exercise.
+      assert.equal(plan.items[firstStrength - 1].exerciseId, plan.items[firstStrength].exerciseId);
+      assert.ok(plan.items[firstStrength - 1].target < plan.items[firstStrength].target);
+      assert.equal(plan.items[firstStrength].role, 'main');
+      const roles = strengthItems(plan).map((i) => i.role);
+      const firstHold = roles.indexOf('hold');
+      if (firstHold >= 0) assert.ok(roles.slice(firstHold).every((r) => r === 'hold' || r === 'aux'), roles.join());
+      const lastNonHold = roles.length - 1 - [...roles].reverse().findIndex((r) => r !== 'hold');
+      assert.ok(firstHold < 0 || firstHold > roles.indexOf('main'), roles.join());
+      assert.ok(lastNonHold >= 0);
+      // Rest follows effort: longest after the main move, shortest after the warm-up.
+      const main = strengthItems(plan).find((i) => i.role === 'main');
+      const hold = strengthItems(plan).find((i) => i.role === 'hold');
+      if (hold) assert.ok(main.rest > hold.rest);
+      assert.ok(plan.items[0].rest < hold?.rest ?? main.rest);
     }
   }
-  // Holds move in whole 5-second steps.
-  assert.ok(weekPlan('intermediate', 3).flatMap((p) => p.items).filter((i) => i.hold).every((i) => i.target % 5 === 0));
 });
 
-await check('a day runs as every set of each exercise, in order', () => {
+await check('levels differ: more sets and longer rest after the main moves as the level rises', () => {
+  const sets = (level) => weekPlan(level, 1).reduce((sum, p) => sum + planTotals(p).sets, 0);
+  assert.ok(sets('beginner') < sets('intermediate'));
+  assert.ok(sets('intermediate') < sets('advanced'));
+  const main = (level) => strengthItems(dayPlan(level, 1, 1))[0];
+  assert.equal(main('beginner').sets, 2);
+  assert.equal(main('intermediate').sets, 3);
+  assert.equal(main('advanced').sets, 4);
+  assert.ok(main('beginner').rest <= main('advanced').rest);
+  // The level's starting point: an easier push-up for a beginner.
+  assert.equal(main('beginner').exerciseId, 'inclinepushup');
+  assert.equal(main('intermediate').exerciseId, 'pushup');
+});
+
+await check('a lighter week has one set fewer; cardio grows week over week', () => {
+  const normal = dayPlan('intermediate', 1, 1);
+  const light = dayPlan('intermediate', 1, 1, { light: true });
+  strengthItems(light).forEach((item, i) => assert.equal(item.sets, Math.max(1, strengthItems(normal)[i].sets - 1)));
+  assert.equal(light.light, true);
+  const cardio = (w) => planTotals(dayPlan('beginner', w, 2)).reps;
+  assert.ok(cardio(4) > cardio(1) * 1.2);
+  // Jump-free cardio leaves out every jump.
+  const jumps = ['jumpingjack', 'burpee', 'highknees', 'buttkicks'];
+  for (const level of PROGRAM_LEVELS) {
+    for (const plan of weekPlan(level, 1, { lowImpact: true })) {
+      for (const item of plan.items) assert.ok(!jumps.includes(item.exerciseId), `${level} ${item.exerciseId}`);
+    }
+  }
+});
+
+await check('a day runs as every set in order; the last set of a rep exercise is as many as you can', () => {
   const plan = dayPlan('intermediate', 2, 1);
   const sets = planSets(plan);
-  assert.equal(sets.length, planTotals(plan).sets);
+  assert.equal(sets.length, plan.items.reduce((n, i) => n + i.sets, 0));
   assert.deepEqual(
     sets.map((s) => s.exerciseId),
     plan.items.flatMap((i) => Array(i.sets).fill(i.exerciseId)),
   );
-  assert.ok(sets.every((s) => s.target > 0 && s.max === false));
+  assert.ok(sets.every((s) => s.target > 0 && s.rest > 0));
+  for (const item of plan.items) {
+    const own = sets.filter((s) => s.exerciseId === item.exerciseId && s.warmup === !!item.warmup && s.slot === (item.slot ?? null));
+    const amraps = own.filter((s) => s.max);
+    if (item.warmup || item.hold || !item.slot) assert.equal(amraps.length, 0, item.exerciseId);
+    else {
+      assert.equal(amraps.length, 1, item.exerciseId);
+      assert.equal(own[own.length - 1].max, true);
+    }
+  }
+});
+
+await check('progression: beat the target with reps to spare and it rises', () => {
+  const s = (target, rung = 2, extra = {}) => ({ rung, target, top: 0, misses: 0, lastAt: null, ...extra });
+  let r = progressSlot('hpush', s(8), [8, 8, 11]);
+  assert.equal(r.change, 'up');
+  assert.equal(r.state.target, 9);
+  r = progressSlot('hpush', s(8), [8, 8, 14]);
+  assert.equal(r.state.target, 10, '6+ to spare: two reps');
+  r = progressSlot('hpush', s(8), [8, 8, 9]);
+  assert.equal(r.change, 'same', 'made it, nothing to spare');
+  assert.equal(r.state.target, 8);
+  // Holds add five seconds once every set held.
+  r = progressSlot('coreHold', s(30, 0), [30, 30]);
+  assert.equal(r.state.target, 35);
+});
+
+await check('progression: two sessions at the top of the range bring the next, harder variation', () => {
+  let state = { rung: 2, target: 12, top: 0, misses: 0 };
+  let r = progressSlot('hpush', state, [12, 12, 16]);
+  assert.equal(r.change, 'same');
+  assert.equal(r.state.top, 1);
+  r = progressSlot('hpush', r.state, [12, 12, 15]);
+  assert.equal(r.change, 'rung');
+  assert.equal(r.state.rung, 3);
+  assert.equal(r.state.target, SLOTS.hpush.range[0]);
+  assert.equal(slotExercise('hpush', r.state), 'diamondpushup');
+  // On the last rung there is nowhere harder to go: the target keeps rising, up to a ceiling.
+  state = { rung: SLOTS.hpush.ladder.length - 1, target: 12, top: 0, misses: 0 };
+  r = progressSlot('hpush', state, [12, 12, 16]);
+  assert.equal(r.change, 'up');
+  assert.equal(r.state.target, 13);
+});
+
+await check('progression: fall short and the target waits; twice running, it eases or steps down', () => {
+  let r = progressSlot('squat', { rung: 1, target: 15, top: 0, misses: 0 }, [15, 12]);
+  assert.equal(r.change, 'same');
+  assert.equal(r.state.misses, 1);
+  r = progressSlot('squat', r.state, [14, 11]);
+  assert.equal(r.change, 'down');
+  assert.ok(r.state.target < 15 && r.state.target >= SLOTS.squat.range[0]);
+  r = progressSlot('squat', { rung: 1, target: 10, top: 0, misses: 1 }, [7, 6]);
+  assert.equal(r.change, 'rungDown');
+  assert.equal(r.state.rung, 0);
+  // Never below an easiest rung's floor of a few reps.
+  r = progressSlot('hpush', { rung: 0, target: 6, top: 0, misses: 1 }, [2, 1]);
+  assert.ok(r.state.target >= 3 && r.state.rung === 0);
+  assert.equal(progressSlot('hpush', { rung: 2, target: 8 }, []).change, 'same', 'no sets, no change');
+});
+
+await check('a finished day moves each slot by its own sets; warm-ups do not count', () => {
+  const plan = dayPlan('intermediate', 1, 1);
+  const planned = planSets(plan);
+  const counted = planned.map((s) => (s.max ? s.target + 4 : s.target));
+  const { slots, changes } = applyDayResults('intermediate', null, planned, counted, 1000);
+  const hpush = changes.find((c) => c.slot === 'hpush');
+  assert.equal(hpush.change, 'up');
+  assert.equal(slots.hpush.target, hpush.from.target + 1);
+  assert.equal(slots.hpush.lastAt, 1000);
+  assert.ok(!changes.some((c) => c.slot === undefined));
+  // A day cut short moves only what was done.
+  const partial = applyDayResults('intermediate', null, planned, counted.slice(0, 5), 1000);
+  assert.ok(partial.changes.every((c) => planned.slice(0, 5).some((s) => s.slot === c.slot)));
+});
+
+await check('after time off the target eases; after two weeks a retest is due', () => {
+  const day = 24 * 60 * 60 * 1000;
+  const t0 = Date.UTC(2026, 0, 1);
+  const state = { rung: 2, target: 10, lastAt: t0 };
+  assert.equal(targetToday('hpush', state, t0 + 3 * day), 10);
+  assert.equal(targetToday('hpush', state, t0 + 10 * day), 9);
+  assert.equal(targetToday('hpush', state, t0 + 20 * day), 8);
+  assert.equal(needsRetest({ hpush: state }, t0 + 10 * day), false);
+  assert.equal(needsRetest({ hpush: state }, t0 + 15 * day), true);
+  assert.equal(needsRetest(null, 15 * day), false);
+});
+
+await check('the placement test sets the level and where each exercise starts', () => {
+  assert.equal(slotExercise('hpush', slotsFromTest({ pushup: 0 }).slots.hpush), 'inclinepushup');
+  assert.equal(slotExercise('hpush', slotsFromTest({ pushup: 3 }).slots.hpush), 'kneepushup');
+  let placed = slotsFromTest({ pushup: 12, squat: 20, glutebridge: 15, plank: 50 });
+  assert.equal(placed.level, 'intermediate');
+  assert.equal(slotExercise('hpush', placed.slots.hpush), 'pushup');
+  assert.equal(placed.slots.hpush.target, 7);
+  assert.equal(placed.slots.squat.target, 12);
+  assert.equal(placed.slots.coreHold.target, 25);
+  // 60% of a big max is past the range: start a rung up.
+  placed = slotsFromTest({ pushup: 30, squat: 50 });
+  assert.equal(placed.level, 'advanced');
+  assert.equal(slotExercise('hpush', placed.slots.hpush), 'diamondpushup');
+  assert.equal(slotExercise('squat', placed.slots.squat), 'splitsquat');
+  assert.equal(slotsFromTest({ pushup: 4 }).level, 'beginner');
+  // The test itself: one maximal set of each; a yes on the health check drops the plank.
+  assert.ok(testPlan().sets.every((s) => s.max));
+  assert.ok(!testPlan({ cautious: true }).sets.some((s) => s.exerciseId === 'plank'));
+});
+
+await check('stored slots are cleaned up; a missing one starts from the level', () => {
+  const slots = slotsFor('beginner', { hpush: { rung: 99, target: -5 }, squat: 'junk' });
+  assert.equal(slots.hpush.rung, SLOTS.hpush.ladder.length - 1);
+  assert.ok(slots.hpush.target >= 3);
+  assert.deepEqual(slots.squat, startingSlots('beginner').squat);
+  assert.equal(normalizeSlot('coreHold', { target: 33 }).target % 5, 0);
 });
 
 await check('weeks and days are clamped; unknown levels are beginner', () => {
@@ -1054,6 +1228,41 @@ await check('new settings have defaults and clearAllData wipes everything', asyn
   assert.equal(await store.loadProgram(), null);
   assert.equal(await store.loadSchedule(), null);
   assert.deepEqual(await store.loadSessions(), []);
+});
+
+await check('a schedule keeps its slots, cycle and test date through storage; junk is dropped', async () => {
+  await store.saveSchedule({ level: 'beginner', completed: {}, slots: { hpush: { rung: 2, target: 9 } }, cycle: 2, tested: 5 });
+  let loaded = await store.loadSchedule();
+  assert.deepEqual(loaded.slots, { hpush: { rung: 2, target: 9 } });
+  assert.equal(loaded.cycle, 2);
+  assert.equal(loaded.tested, 5);
+  await store.saveSchedule({ level: 'beginner', completed: {}, slots: [1], cycle: -3 });
+  loaded = await store.loadSchedule();
+  assert.equal(loaded.slots, null);
+  assert.equal(loaded.cycle, 1);
+  assert.equal(loaded.tested, null);
+  await store.clearAllData();
+});
+
+// --- the last seven days against the WHO guideline ------------------------------
+group('weekly training');
+
+await check('strength days, minutes and sets per main muscle over the last seven days', () => {
+  const now = at(0, 20);
+  const sessions = [
+    session(0, 20, { exerciseId: 'squat', sets: [{ reps: 10 }, { reps: 10 }], durationSeconds: 120 }),
+    session(1, 30, { durationSeconds: 90 }), // push-ups, one set
+    session(1, 40, { exerciseId: 'jumpingjack', durationSeconds: 60 }), // cardio: minutes only
+    session(9, 50, { exerciseId: 'squat' }), // too old
+  ];
+  const week = weekly.weekTraining(sessions, now);
+  assert.equal(week.strengthDays, 2);
+  assert.equal(week.minutes, 4);
+  assert.equal(week.sets.legs, 2);
+  assert.equal(week.sets.chest, 1);
+  assert.equal(week.sets.glutes, 0, 'only the main muscle is credited');
+  assert.ok(!('cardio' in week.sets));
+  assert.deepEqual(weekly.weekTraining([], now), { strengthDays: 0, minutes: 0, sets: Object.fromEntries(weekly.MUSCLE_PARTS.map((p) => [p, 0])) });
 });
 
 // --- report ------------------------------------------------------------------

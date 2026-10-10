@@ -30,7 +30,7 @@ import {
   isHold,
   supportsSource,
 } from '../exercises/exercises';
-import { programDayKey } from '../program/program';
+import { applyDayResults, isProgramComplete, programDayKey, slotsFromTest } from '../program/program';
 import { useCountdown } from '../hooks/useCountdown';
 import { useFeedback } from '../hooks/useFeedback';
 import { useRepDetector } from '../hooks/useRepDetector';
@@ -94,10 +94,12 @@ const HOLD_SPEAK_EVERY = 10;
  */
 function setOfExercise(sets, index) {
   const id = sets[index].exerciseId;
+  const warmup = !!sets[index].warmup;
+  const same = (set) => set.exerciseId === id && !!set.warmup === warmup;
   let first = index;
-  while (first > 0 && sets[first - 1].exerciseId === id) first -= 1;
+  while (first > 0 && same(sets[first - 1])) first -= 1;
   let last = index;
-  while (last < sets.length - 1 && sets[last + 1].exerciseId === id) last += 1;
+  while (last < sets.length - 1 && same(sets[last + 1])) last += 1;
   return { n: index - first + 1, total: last - first + 1 };
 }
 
@@ -186,6 +188,8 @@ export function WorkoutScreen({
     scheduleEarned,
     addSession,
     completeScheduleDay,
+    startSchedule,
+    startNextCycle,
   } = useSessions();
 
   // `statusRef` is the status as of the last change, read by handlers that
@@ -290,7 +294,11 @@ export function WorkoutScreen({
 
   const currentTarget = planSets ? planSets[planIndex] : null;
   const isLastSet = !!planSets && setIndex === planSets.length - 1;
-  const restSeconds = planSets ? activePlan.restSeconds : settings.restSeconds;
+  // Rest after a set is that set's own: longer after the main moves, short
+  // after holds and the warm-up.
+  const restSeconds = planSets
+    ? planSets[Math.max(0, setIndex - 1)]?.rest ?? activePlan.restSeconds
+    : settings.restSeconds;
   // A source that measures from where the phone is put (motion) always gets
   // time to put it there, even with the countdown switched off.
   const countdownSeconds = Math.max(settings.countdownSeconds || 0, source?.settleSeconds || 0);
@@ -467,7 +475,7 @@ export function WorkoutScreen({
           sets: group.sets,
           restSeconds: i === 0 ? restTotal : 0,
           program:
-            followed?.kind === 'program'
+            followed?.kind === 'program' && !followed.test
               ? { level: followed.level, week: followed.week, day: followed.day }
               : null,
           workoutId,
@@ -487,15 +495,45 @@ export function WorkoutScreen({
       return;
     }
 
-    // A schedule day is done once every one of its sets is.
+    // A schedule day is done once every one of its sets is. Either way the
+    // exercises that were done move their targets on by what was counted.
     let scheduleCompleted = schedule?.completed ?? {};
-    const dayDone = followed?.kind === 'program' && sets.length >= followed.sets.length;
-    if (dayDone) {
-      await completeScheduleDay(followed.week, followed.day);
-      scheduleCompleted = {
-        ...scheduleCompleted,
-        [programDayKey(followed.week, followed.day)]: Date.now(),
-      };
+    const isTest = followed?.kind === 'program' && !!followed.test;
+    const dayDone = followed?.kind === 'program' && !isTest && sets.length >= followed.sets.length;
+    let progress = null;
+    let testResult = null;
+    if (isTest) {
+      // The placement test sets where every exercise starts.
+      const results = {};
+      sets.forEach((set, i) => {
+        const id = followed.sets[i]?.exerciseId;
+        if (id) results[id] = set.reps;
+      });
+      const placed = slotsFromTest(results);
+      const now = Date.now();
+      if (!schedule) await startSchedule(placed.level, { slots: placed.slots, tested: now });
+      else if (isProgramComplete(schedule.completed)) {
+        await startNextCycle({ slots: placed.slots, level: placed.level, tested: now });
+      } else {
+        await startSchedule(placed.level, { keepProgress: true, slots: placed.slots, tested: now });
+      }
+      testResult = { level: placed.level, results };
+    } else if (followed?.kind === 'program' && schedule) {
+      const applied = applyDayResults(
+        followed.level,
+        schedule.slots,
+        followed.sets,
+        sets.map((set) => set.reps),
+        Date.now(),
+      );
+      progress = applied.changes;
+      await completeScheduleDay(followed.week, followed.day, { slots: applied.slots, done: dayDone });
+      if (dayDone) {
+        scheduleCompleted = {
+          ...scheduleCompleted,
+          [programDayKey(followed.week, followed.day)]: Date.now(),
+        };
+      }
     }
 
     // The daily goal counts reps; a hold's seconds are not reps.
@@ -517,8 +555,10 @@ export function WorkoutScreen({
     resetWorkout();
     const only = groups.length === 1 ? groups[0].exerciseId : null;
     setSummary({
-      kind: followed?.kind === 'program' ? 'program' : 'free',
+      kind: isTest ? 'test' : followed?.kind === 'program' ? 'program' : 'free',
       dayDone,
+      progress,
+      testResult,
       week: followed?.week,
       day: followed?.day,
       exerciseId: only ?? groups[0].exerciseId,
@@ -562,6 +602,8 @@ export function WorkoutScreen({
     schedule,
     scheduleEarned,
     completeScheduleDay,
+    startSchedule,
+    startNextCycle,
     sessions,
     onCelebrate,
     creditReps,
@@ -645,6 +687,20 @@ export function WorkoutScreen({
     if (currentTarget && !currentTarget.max && next >= currentTarget.target) endSet();
   }, [repFeedback, currentTarget, endSet, holdMode]);
 
+  const timerDriven = !!source?.isTimerDriven;
+
+  // "As many as you can" is over when the reps stop: once the target is
+  // reached, a few seconds without a rep (a hold: without a counted second)
+  // end the set, so nobody has to walk back to the phone to press Done.
+  const amrapIdleMs = holdMode ? 3000 : 6000;
+  useEffect(() => {
+    if (status !== 'active' || !currentTarget?.max || timerDriven) return undefined;
+    if (reps < currentTarget.target) return undefined;
+    const id = setTimeout(() => endSet(), amrapIdleMs);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, reps, currentTarget, endSet, amrapIdleMs]);
+
   const handleRepRef = useRef(handleRep);
   useEffect(() => {
     handleRepRef.current = handleRep;
@@ -652,7 +708,6 @@ export function WorkoutScreen({
 
   // The timer source: a hold without the camera is a stopwatch, a "rep" each
   // second the set is active.
-  const timerDriven = !!source?.isTimerDriven;
   useEffect(() => {
     if (!timerDriven || status !== 'active') return undefined;
     const id = setInterval(() => handleRepRef.current?.(), 1000);
@@ -1007,7 +1062,8 @@ export function WorkoutScreen({
       : target.max
         ? t('workout.maxSet', { n: target.target })
         : t('workout.target', { n: target.target });
-    return `${t(`exercise.${exercise.id}`)} · ${which} · ${goal}`;
+    const line = `${t(`exercise.${exercise.id}`)} · ${which} · ${goal}`;
+    return target.warmup ? `${t('workout.warmupLabel')} · ${line}` : line;
   })();
   // In the rest before a different exercise, what comes next.
   const lastSet = completedSets[setsDone - 1];
@@ -1152,12 +1208,14 @@ export function WorkoutScreen({
           {status === 'idle' && summary ? (
             <View style={styles.summary}>
               <Text style={styles.summaryTitle}>
-                {summary.kind === 'program'
-                  ? t(summary.dayDone ? 'workout.summaryProgram' : 'workout.summaryProgramPartial', {
-                      week: summary.week,
-                      day: summary.day,
-                    })
-                  : t('workout.summaryTitle')}
+                {summary.kind === 'test'
+                  ? t('program.test.done')
+                  : summary.kind === 'program'
+                    ? t(summary.dayDone ? 'workout.summaryProgram' : 'workout.summaryProgramPartial', {
+                        week: summary.week,
+                        day: summary.day,
+                      })
+                    : t('workout.summaryTitle')}
               </Text>
               <Text style={styles.summaryReps} allowFontScaling={false}>
                 {/* Several exercises: their reps together (holds are not reps), else the sets. */}
@@ -1176,6 +1234,32 @@ export function WorkoutScreen({
                   formatDuration(summary.durationSeconds),
                 ].join(' · ')}
               </Text>
+              {summary.testResult ? (
+                <Text style={styles.summaryMeta}>
+                  {`${t('program.test.result', {
+                    pushup: summary.testResult.results.pushup ?? 0,
+                    squat: summary.testResult.results.squat ?? 0,
+                    glutebridge: summary.testResult.results.glutebridge ?? 0,
+                  })} · ${t(`program.level.${summary.testResult.level}`)}`}
+                </Text>
+              ) : null}
+              {summary.progress?.length ? (
+                <View style={styles.progressList}>
+                  <Text style={styles.progressTitle}>{t('nextTime.title')}</Text>
+                  {summary.progress.slice(0, 5).map((p) => {
+                    const id = p.to.exerciseId;
+                    const unit = isHold(id) ? t('common.secShort') : '';
+                    return (
+                      <Text key={p.slot} style={[styles.progressLine, p.change === 'rung' && styles.progressUp]}>
+                        {t(`nextTime.${p.change}`, {
+                          exercise: t(`exercise.${id}`),
+                          target: `${p.to.target}${unit}`,
+                        })}
+                      </Text>
+                    );
+                  })}
+                </View>
+              ) : null}
               {summary.earnedSeconds ? (
                 <Text style={styles.earnedLine}>
                   {t('workout.earned', { time: formatAmount(summary.earnedSeconds, t) })}
@@ -1281,6 +1365,10 @@ export function WorkoutScreen({
                     <Text style={styles.earnedLine}>
                       {t('workout.earned', { time: formatAmount(workoutCredit, t) })}
                     </Text>
+                  ) : null}
+                  {/* Holds raise blood pressure most when the breath is held. */}
+                  {holdMode && status === 'active' && !besideDock ? (
+                    <Text style={styles.stageHint}>{t('health.breathe')}</Text>
                   ) : null}
                   {tapActive ? (
                     <Text style={styles.stageHint}>
@@ -1691,6 +1779,10 @@ const styles = StyleSheet.create({
   planStrip: { alignSelf: 'stretch', flexGrow: 0 },
   planRest: { ...font('400'), fontSize: 13, color: colors.textDim, marginTop: 2 },
   stageWrap: { flex: 1 },
+  progressList: { alignItems: 'center', marginTop: spacing.sm },
+  progressTitle: { fontSize: 12, color: colors.textFaint, textTransform: 'uppercase', letterSpacing: 1 },
+  progressLine: { fontSize: 14, color: colors.textDim, marginTop: 2, textAlign: 'center' },
+  progressUp: { color: colors.accent, fontWeight: '700' },
   dock: { position: 'absolute', right: spacing.sm },
   planCancel: { ...font('400'), fontSize: 13, color: colors.textFaint, marginTop: spacing.sm },
 

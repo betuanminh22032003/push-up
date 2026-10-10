@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ACHIEVEMENTS, longestStreak } from '../achievements/achievements';
 import { AchievementGrid } from '../components/AchievementGrid';
 import { ExercisePicker } from '../components/ExercisePicker';
+import { ProgressBar } from '../components/ProgressBar';
 import { SessionRow } from '../components/SessionRow';
 import { StatTile } from '../components/StatTile';
 import { WeeklyChart } from '../components/WeeklyChart';
@@ -17,6 +18,7 @@ import { colors, font, spacing, type } from '../theme/theme';
 import { confirm } from '../utils/confirm';
 import { computeStats, dailyTotals } from '../utils/stats';
 import { formatDuration, formatSessionDate } from '../utils/time';
+import { MUSCLE_PARTS, weekTraining } from '../utils/weekly';
 
 /**
  * Chart, records, badges, and every workout — the "why keep going" tab.
@@ -66,6 +68,11 @@ export function ProgressScreen({ onOpenChallenge }) {
   );
   const weekTotal = week.reduce((sum, d) => sum + d.reps, 0);
   const streakRecord = useMemo(() => longestStreak(filtered), [filtered]);
+  const training = useMemo(
+    () => weekTraining(sessions, Date.now()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessions, today],
+  );
 
   const confirmDelete = (session) => {
     confirm({
@@ -131,6 +138,8 @@ export function ProgressScreen({ onOpenChallenge }) {
       </View>
       <WeeklyChart days={week} goal={goal} />
 
+      {all && sessions.length ? <WhoCard training={training} /> : null}
+
       <Text style={styles.sectionLabel}>{t('progress.records')}</Text>
       <View style={styles.statsRow}>
         <StatTile label={t('progress.bestSet')} value={shownStats.bestSet} suffix={unit} />
@@ -194,6 +203,51 @@ export function ProgressScreen({ onOpenChallenge }) {
   );
 }
 
+/**
+ * The last seven days against the WHO guideline, and sets per muscle group
+ * against the evidence-based ranges (src/utils/weekly.js).
+ */
+function WhoCard({ training }) {
+  const t = useT();
+  const maxSets = Math.max(10, ...MUSCLE_PARTS.map((p) => training.sets[p]));
+  return (
+    <View style={styles.whoCard}>
+      <Text style={styles.whoTitle}>{t('who.title')}</Text>
+      <View style={styles.whoRow}>
+        <Text style={styles.whoLabel}>{t('who.strength')}</Text>
+        <Text style={styles.whoValue}>{`${training.strengthDays}/2`}</Text>
+      </View>
+      <ProgressBar value={training.strengthDays} max={2} />
+      <View style={styles.whoRow}>
+        <Text style={styles.whoLabel}>{t('who.minutes')}</Text>
+        <Text style={styles.whoValue}>{`${training.minutes}/150`}</Text>
+      </View>
+      <ProgressBar value={training.minutes} max={150} />
+      <Text style={[styles.whoLabel, styles.whoSets]}>{t('who.sets')}</Text>
+      {MUSCLE_PARTS.map((part) => (
+        <View key={part} style={styles.setRow}>
+          <Text style={styles.setPart}>{t(`part.${part}`)}</Text>
+          <View style={styles.setBar}>
+            <View
+              style={[
+                styles.setFill,
+                { width: `${(training.sets[part] / maxSets) * 100}%` },
+                training.sets[part] >= 4 && styles.setFillOk,
+              ]}
+            />
+            {/* The least that works, and where growth starts. */}
+            <View style={[styles.setMark, { left: `${(4 / maxSets) * 100}%` }]} />
+            <View style={[styles.setMark, { left: `${(10 / maxSets) * 100}%` }]} />
+          </View>
+          <Text style={styles.setCount}>{training.sets[part]}</Text>
+        </View>
+      ))}
+      <Text style={styles.whoNote}>{t('who.setsNote')}</Text>
+      <Text style={styles.whoNote}>{t('who.note')}</Text>
+    </View>
+  );
+}
+
 /** Challenges shown under the badges; the list keeps more. */
 const CHALLENGES_SHOWN = 5;
 
@@ -238,6 +292,20 @@ function ChallengeRow({ record }) {
 }
 
 const styles = StyleSheet.create({
+  whoCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.md, marginTop: spacing.md },
+  whoTitle: { fontSize: 15, ...font('600'), color: colors.text, marginBottom: spacing.xs },
+  whoRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm, marginBottom: 4 },
+  whoLabel: { ...font('500'), fontSize: 13, color: colors.textDim },
+  whoValue: { ...font('600'), fontSize: 13, color: colors.text, fontVariant: ['tabular-nums'] },
+  whoSets: { marginTop: spacing.md, marginBottom: 4 },
+  setRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  setPart: { ...font('400'), fontSize: 12, color: colors.textDim, width: 72 },
+  setBar: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
+  setFill: { height: '100%', backgroundColor: colors.textFaint },
+  setFillOk: { backgroundColor: colors.accent },
+  setMark: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: colors.border },
+  setCount: { ...font('600'), fontSize: 12, color: colors.text, width: 28, textAlign: 'right' },
+  whoNote: { ...font('400'), fontSize: 11, color: colors.textFaint, marginTop: spacing.sm, lineHeight: 15 },
   sectionAction: { fontSize: 13, ...font('600'), color: colors.accent, marginTop: spacing.lg },
   challengeEmpty: { ...font('400'), fontSize: 13, color: colors.textFaint, lineHeight: 19 },
   challengeRow: {

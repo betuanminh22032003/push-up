@@ -106,13 +106,20 @@ export function SessionsProvider({ children }) {
     await saveScheduleEarned(next);
   }, []);
 
-  /** Start (or restart, or change the level of) the training schedule. */
-  const startSchedule = useCallback(async (level, { keepProgress = false } = {}) => {
+  /**
+   * Start (or restart, or change the level of) the training schedule. With
+   * `slots` (a placement test's result) those are where each exercise starts;
+   * otherwise a kept run keeps its own and a new one starts from the level.
+   */
+  const startSchedule = useCallback(async (level, { keepProgress = false, slots, tested } = {}) => {
     const prev = scheduleRef.current;
     const next = {
       level: normalizeLevel(level),
       startedAt: keepProgress && prev ? prev.startedAt : Date.now(),
       completed: keepProgress && prev ? prev.completed : {},
+      slots: slots ?? (keepProgress && prev ? prev.slots ?? null : null),
+      cycle: keepProgress && prev ? prev.cycle ?? 1 : 1,
+      tested: tested ?? (keepProgress && prev ? prev.tested ?? null : null),
     };
     // Swapped in before anything is awaited, so a second tap (Next level
     // twice) finds the new run and cannot keep the old one's badges twice.
@@ -123,10 +130,42 @@ export function SessionsProvider({ children }) {
     return next;
   }, [keepEarned]);
 
-  const completeScheduleDay = useCallback(async (week, day) => {
+  /**
+   * The next cycle of the schedule: the slots carry on from where they are
+   * (strength is not lost between cycles), the days start over, and the first
+   * week is a lighter one.
+   */
+  const startNextCycle = useCallback(async ({ slots, level, tested } = {}) => {
+    const prev = scheduleRef.current;
+    if (!prev) return null;
+    const next = {
+      level: normalizeLevel(level ?? prev.level),
+      startedAt: Date.now(),
+      completed: {},
+      slots: slots ?? prev.slots ?? null,
+      cycle: (prev.cycle ?? 1) + 1,
+      tested: tested ?? prev.tested ?? null,
+    };
+    scheduleRef.current = next;
+    setSchedule(next);
+    await keepEarned(prev);
+    await saveSchedule(next);
+    return next;
+  }, [keepEarned]);
+
+  /**
+   * A schedule day's results: the day marked done when it was finished, and
+   * the slots moved on by what was counted — even on a day cut short, the
+   * exercises that were done count.
+   */
+  const completeScheduleDay = useCallback(async (week, day, { slots, done = true } = {}) => {
     const prev = scheduleRef.current;
     if (!prev) return;
-    const next = { ...prev, completed: { ...prev.completed, [programDayKey(week, day)]: Date.now() } };
+    const next = {
+      ...prev,
+      completed: done ? { ...prev.completed, [programDayKey(week, day)]: Date.now() } : prev.completed,
+      slots: slots ?? prev.slots ?? null,
+    };
     scheduleRef.current = next;
     setSchedule(next);
     await saveSchedule(next);
@@ -179,6 +218,7 @@ export function SessionsProvider({ children }) {
       addSession,
       removeSession,
       startSchedule,
+      startNextCycle,
       completeScheduleDay,
       resetSchedule,
       eraseEverything,
@@ -196,6 +236,7 @@ export function SessionsProvider({ children }) {
       addSession,
       removeSession,
       startSchedule,
+      startNextCycle,
       completeScheduleDay,
       resetSchedule,
       eraseEverything,
