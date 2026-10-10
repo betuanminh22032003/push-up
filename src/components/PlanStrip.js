@@ -16,9 +16,9 @@ export function PlanStrip({ items, style }) {
   return (
     <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={style} contentContainerStyle={styles.row}>
-        {items.map((item) => (
+        {items.map((item, i) => (
           <Pressable
-            key={item.exerciseId}
+            key={`${item.exerciseId}-${i}`}
             onPress={() => setOpen(item.exerciseId)}
             accessibilityRole="button"
             accessibilityLabel={t('guide.open', { name: t(`exercise.${item.exerciseId}`) })}
@@ -26,7 +26,9 @@ export function PlanStrip({ items, style }) {
           >
             <ExerciseGlyph exerciseId={item.exerciseId} size={36} />
             <Text style={styles.target}>
-              {`${item.sets}×${item.target}${item.hold ? t('common.secShort') : ''}`}
+              {item.max
+                ? t('program.maxShort')
+                : `${item.sets}×${item.target}${item.hold ? t('common.secShort') : ''}`}
             </Text>
             <Text style={styles.name} numberOfLines={1}>
               {t(`exercise.${item.exerciseId}`)}

@@ -65,7 +65,11 @@ export const SLOTS = {
   coreHold: { ladder: ['plank', 'sideplank', 'hollowhold'], range: [20, 60], role: 'hold' },
 };
 
-/** Day A leads with the push, day B with the legs; `push2` is a pike once a full push-up is in reach. */
+/**
+ * Day A leads with the push, day B with the legs. `push2` is a pike push-up
+ * once a full push-up is in reach — in odd weeks only, where A comes twice and
+ * already trains the chest twice; in even weeks (B–A–B) it stays a push-up.
+ */
 const DAY_SLOTS = {
   fullA: ['hpush', 'squat', 'back', 'bridge', 'coreHold'],
   fullB: ['squat', 'push2', 'hinge', 'backHold', 'core'],
@@ -369,10 +373,10 @@ function grow(base, week, hold) {
   return hold ? Math.max(5, Math.round(value / 5) * 5) : Math.max(1, Math.round(value));
 }
 
-/** The slot a day position trains: `push2` is the pike once a full push-up is in reach. */
-function resolveSlot(position, slots) {
+/** The slot a day position trains (see DAY_SLOTS for `push2`). */
+function resolveSlot(position, slots, week) {
   if (position !== 'push2') return position;
-  return slots.hpush.rung >= PIKE_FROM_RUNG ? 'vpush' : 'hpush';
+  return slots.hpush.rung >= PIKE_FROM_RUNG && week % 2 === 1 ? 'vpush' : 'hpush';
 }
 
 /**
@@ -411,7 +415,7 @@ export function dayPlan(level, week, day, options = {}) {
 
   const slots = slotsFor(lv, options.slots);
   const strength = DAY_SLOTS[focus].map((position) => {
-    const slot = resolveSlot(position, slots);
+    const slot = resolveSlot(position, slots, w);
     const def = SLOTS[slot];
     const exerciseId = slotExercise(slot, slots[slot]);
     const role = def.role;

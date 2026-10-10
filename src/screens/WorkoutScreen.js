@@ -1057,7 +1057,10 @@ export function WorkoutScreen({
     if (!planSets) return null;
     const target = planSets[planIndex];
     const which = t('workout.set', setOfExercise(planSets, planIndex));
-    const goal = target.hold
+    // A test set has no target to show: it is simply as many (as long) as you can.
+    const goal = target.max && target.target <= 1
+      ? t('program.maxShort')
+      : target.hold
       ? t('workout.holdTarget', { n: target.target })
       : target.max
         ? t('workout.maxSet', { n: target.target })
@@ -1100,7 +1103,9 @@ export function WorkoutScreen({
         </View>
         {planSets ? (
           <Text style={styles.headerPlan}>
-            {t('workout.programDay', { day: activePlan.day, week: activePlan.week })}
+            {activePlan.test
+              ? t('program.test.title')
+              : t('workout.programDay', { day: activePlan.day, week: activePlan.week })}
           </Text>
         ) : earning && status === 'idle' ? (
           <Pressable
@@ -1439,9 +1444,17 @@ export function WorkoutScreen({
 
       {status === 'idle' && planSets ? (
         <View style={styles.planCard}>
-          <PlanStrip items={activePlan.items} style={styles.planStrip} />
+          {/* The warm-up is a line of its own; the strip is the day's real work. */}
+          {activePlan.items.some((item) => item.warmup) ? (
+            <Text style={styles.planRest}>
+              {`${t('program.warmup')}: ${t('program.warmupMeta', {
+                n: activePlan.items.filter((item) => item.warmup).length,
+              })}`}
+            </Text>
+          ) : null}
+          <PlanStrip items={activePlan.items.filter((item) => !item.warmup)} style={styles.planStrip} />
           <Text style={styles.planRest}>
-            {t('program.rest', { seconds: activePlan.restSeconds })}
+            {activePlan.test ? t('program.test.body') : t('program.rest', { seconds: activePlan.restSeconds })}
           </Text>
           <Pressable onPress={() => onClearPlan?.()} hitSlop={8} accessibilityRole="button">
             <Text style={styles.planCancel}>{t('btn.cancelPlan')}</Text>
@@ -1475,7 +1488,9 @@ export function WorkoutScreen({
           <Button
             label={
               planSets
-                ? t('btn.startProgramDay', { week: activePlan.week, day: activePlan.day })
+                ? activePlan.test
+                  ? t('program.test.start')
+                  : t('btn.startProgramDay', { week: activePlan.week, day: activePlan.day })
                 : t('btn.start')
             }
             onPress={() => start()}
